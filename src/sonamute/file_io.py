@@ -16,12 +16,6 @@ from sonamute.db import Author, Platform, Community, PreMessage, KnownPlatforms
 LOG = logging.getLogger()
 
 
-def clean_content(content: str) -> str:
-    content = content.replace("\xad", "")
-    # this is a discretionary hyphen, and orjson loads it as an escape sequence instead
-    return content
-
-
 class PlatformFetcher:
     @abstractmethod
     def get_messages(self) -> Generator[PreMessage, None, None]: ...
@@ -69,10 +63,6 @@ class DiscordFetcher(PlatformFetcher):
                 postdate = datetime.fromisoformat(postdate_str)
 
                 content: str = m["content"]
-                content = clean_content(content)
-                # if "\xad" in content:
-                #     print(content)
-
                 message: PreMessage = {
                     "_id": _id,
                     "content": content,

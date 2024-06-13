@@ -65,6 +65,10 @@ class Message(PreMessage):
 
 def build_url(username: str, password: str, host: str, port: int) -> str:
     return f"edgedb://{username}:{password}@{host}:{port}"
+def clean_string(content: str) -> str:
+    content = content.replace("\xad", "")
+    # this is a discretionary hyphen, and edgedb won't accept it
+    return content
 
 
 def create_client(username: str, password: str, host: str, port: int) -> Client:
@@ -204,6 +208,7 @@ class MessageDB:
         sentences: list[Sentence],
         container: int | None = None,
     ) -> UUID:
+        content = clean_string(content)
         sent_subquery = make_sent_subquery(sentences)
         # print(content)
         # print(repr(content))
