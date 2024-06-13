@@ -3,7 +3,8 @@ module default {
     required _id: int64;
     required name: str;
 
-    constraint exclusive on ((._id))
+    constraint exclusive on ((._id));
+    index on ((._id));
   }
 
   type Community {
@@ -12,6 +13,7 @@ module default {
     required platform: Platform;
 
     constraint exclusive on ((._id, .platform));
+    index on ((._id, .platform));
   }
 
   type Author {
@@ -20,10 +22,14 @@ module default {
     required platform: Platform;
 
     constraint exclusive on ((._id, .platform));
+    index on ((._id, .platform));
   }
 
   type Sentence {
     required words: array<str>;
+    is_toki_pona: bool;
+    # NOTE: Will be pre-tokenized with the **toki pona** tokenizer,
+    # and pre-cleaned by removing consecutive duplicates.
   }
 
   type Message {
@@ -35,8 +41,9 @@ module default {
     required author: Author;
     required postdate: datetime;
     required content: str;
-    required multi sentences: Sentence;
+    multi sentences: Sentence; # can be empty 
 
     constraint exclusive on ((._id, .community));
+    index on ((._id, .community));
   }
 }

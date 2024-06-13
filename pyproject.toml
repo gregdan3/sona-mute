@@ -11,7 +11,6 @@ dependencies = [
     "sqlalchemy-json>=0.7.0",
     "orjson>=3.10.3",
     "edgedb>=1.9.0",
-    "sonamute @ file:///${PROJECT_ROOT}/",
     "pydantic>=2.7.1",
 ]
 requires-python = ">=3.11"
@@ -20,12 +19,13 @@ license = {text = "AGPL-3.0-or-later"}
 
 
 [tool.pdm]
-distribution = false
+distribution = true
 
 
 [tool.pdm.dev-dependencies]
 dev = [
     "snakeviz>=2.2.0",
+    "ipython>=8.25.0",
 ]
 [tool.isort]
 length_sort = "1"

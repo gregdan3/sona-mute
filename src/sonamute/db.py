@@ -1,13 +1,21 @@
 # STL
+import logging
 from enum import IntEnum
 from uuid import UUID
-from typing import TypedDict
+from typing import TypedDict, NotRequired
 from datetime import datetime
 from functools import cache
 
 # PDM
 import edgedb
 from edgedb import Client, RetryOptions
+
+LOG_FORMAT = (
+    "[%(asctime)s] [%(filename)14s:%(lineno)-4s] [%(levelname)8s]   %(message)s"
+)
+logging.basicConfig(format=LOG_FORMAT, level=logging.INFO)
+
+LOG = logging.getLogger()
 
 
 class KnownPlatforms(IntEnum):
@@ -37,6 +45,11 @@ class Author(TypedDict):
     platform: Platform
 
 
+class Sentence(TypedDict):
+    words: list[str]
+    is_toki_pona: NotRequired[bool]
+
+
 class PreMessage(TypedDict):
     _id: int
     community: Community
@@ -47,13 +60,7 @@ class PreMessage(TypedDict):
 
 
 class Message(PreMessage):
-    # _id: int
-    # community: Community
-    # container: int
-    # author: Author
-    # postdate: datetime
-    # content: str
-    sentences: list[list[str]]  # implicitly the Sentence type
+    sentences: list[Sentence]  # implicitly the Sentence type
 
 
 def build_url(username: str, password: str, host: str, port: int) -> str:
@@ -75,46 +82,63 @@ PLAT_INSERT = """
 INSERT Platform {
     _id := <int64>$_id,
     name := <str>$name,
-}
-"""
+} unless conflict on ._id
+else (select Platform filter Platform._id = <int64>$_id)"""
 
 COMM_INSERT = """
 INSERT Community {
     _id := <int64>$_id,
     name := <str>$name,
     platform := <Platform>$platform,
-}
-"""
+} unless conflict on (._id, .platform)
+else (select Community filter Community._id = <int64>$_id)"""
 
 AUTH_INSERT = """
 INSERT Author {
     _id := <int64>$_id,
     name := <str>$name,
     platform := <Platform>$platform,
-}
-"""
+} unless conflict on (._id, .platform)
+else (select Author filter Author._id = <int64>$_id)"""
 
 MSG_INSERT = """
 INSERT Message {
     _id := <int64>$_id,
-    community := <Community>$community_id,
+    community := <Community>$community,
     container := <int64>$container,
-    author := <Author>$author_id,
+    author := <Author>$author,
     postdate := <std::datetime>$postdate,
     content := <str>$content,
-    %s
-}
-"""  # NOTE: sentences must be subbed in
+    sentences := { %s },
+} unless conflict on (._id, .community)
+else (select Message filter Message._id = <int64>$_id)"""
+# NOTE: sentences must be subbed in
 
-SENT_INSERT = """INSERT Sentence {words = <array<str>>%s}"""
+SENT_INSERT = """(INSERT Sentence {words := <array<str>>%s})"""
 # NOTE: would be $sentence, but then we'd have repeat vars
 
 
-def make_sent_subquery(sentences: list[list[str]]) -> str:
+def make_sent_subquery(sentences: list[Sentence]) -> str:
     outputs: list[str] = []
     for s in sentences:
-        outputs.append(SENT_INSERT % s)
+        outputs.append(f"{SENT_INSERT}" % s["words"])
     return ",\n".join(outputs)
+
+
+# ESCAPE_SEQUENCE_RE = re.compile(r'''
+#     ( \\U........      # 8-digit hex escapes
+#     | \\u....          # 4-digit hex escapes
+#     | \\x..            # 2-digit hex escapes
+#     | \\[0-7]{1,3}     # Octal escapes
+#     | \\N\{[^}]+\}     # Unicode characters by name
+#     | \\[\\'"abfnrtv]  # Single-character escapes
+#     )''', re.UNICODE | re.VERBOSE)
+#
+# def decode_escapes(s):
+#     def decode_match(match):
+#         return codecs.decode(match.group(0), 'unicode-escape')
+#
+#     return ESCAPE_SEQUENCE_RE.sub(decode_match, s)
 
 
 class MessageDB:
@@ -131,10 +155,14 @@ class MessageDB:
             _id=_id,
             name=name,
         )
-        return result
+        return result[0].id
 
     def insert_platform(self, platform: Platform) -> UUID:
-        return self.__insert_platform(**platform)
+        if isinstance(platform, UUID):
+            # this is an artifact of insert_platform being called twice
+            return platform
+        result = self.__insert_platform(**platform)
+        return result
 
     @cache
     def __insert_author(self, _id: int, name: str, platform: UUID) -> UUID:
@@ -144,7 +172,7 @@ class MessageDB:
             name=name,
             platform=platform,
         )
-        return result
+        return result[0].id
 
     def insert_author(self, author: Author) -> UUID:
         platform_id = self.insert_platform(author["platform"])
@@ -159,7 +187,7 @@ class MessageDB:
             name=name,
             platform=platform,
         )
-        return result
+        return result[0].id
 
     def insert_community(self, community: Community) -> UUID:
         platform_id = self.insert_platform(community["platform"])
@@ -173,10 +201,12 @@ class MessageDB:
         author: UUID,
         postdate: datetime,
         content: str,
-        sentences: list[list[str]],
+        sentences: list[Sentence],
         container: int | None = None,
     ) -> UUID:
         sent_subquery = make_sent_subquery(sentences)
+        # print(content)
+        # print(repr(content))
         return self.client.query(
             query=MSG_INSERT % sent_subquery,
             _id=_id,
@@ -189,7 +219,9 @@ class MessageDB:
 
     def insert_message(self, message: Message) -> UUID:
         author_id = self.insert_author(message["author"])
-        community_id = self.insert_community(message["community"])
         message["author"] = author_id
+
+        community_id = self.insert_community(message["community"])
         message["community"] = community_id
+
         return self.__insert_message(**message)
