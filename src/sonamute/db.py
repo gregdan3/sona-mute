@@ -49,7 +49,7 @@ class Author(TypedDict):
 
 class Sentence(TypedDict):
     words: list[str]
-    is_toki_pona: NotRequired[bool]
+    score: NotRequired[float]
 
 
 class PreMessage(TypedDict):
@@ -129,14 +129,14 @@ INSERT Message {
 """
 # NOTE: sentences must be subbed in
 
-SENT_INSERT = """(INSERT Sentence {words := <array<str>>%s})"""
+SENT_INSERT = """(INSERT Sentence {words := <array<str>>%(words)s, score := <float64>%(score)s})"""
 # NOTE: would be $sentence, but then we'd have repeat vars
 
 
 def make_sent_subquery(sentences: list[Sentence]) -> str:
     outputs: list[str] = []
     for s in sentences:
-        outputs.append(f"{SENT_INSERT}" % s["words"])
+        outputs.append(f"{SENT_INSERT}" % s)
     return ",\n".join(outputs)
 
 

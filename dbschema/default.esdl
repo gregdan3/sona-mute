@@ -27,7 +27,7 @@ module default {
 
   type Sentence {
     required words: array<str>;
-    is_toki_pona: bool;
+    score: float64;
     # NOTE: Will be pre-tokenized with the **toki pona** tokenizer,
     # and pre-cleaned by removing consecutive duplicates.
   }
@@ -41,7 +41,7 @@ module default {
     required author: Author;
     required postdate: datetime;
     required content: str;
-    multi sentences: Sentence; # can be empty 
+    multi sentences: Sentence;
 
     constraint exclusive on ((._id, .community));
     index on ((._id, .community));

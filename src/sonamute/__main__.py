@@ -105,7 +105,7 @@ def process_msg(msg: PreMessage) -> Message:
             sentence
         )
         if cleaned:  # omit empty sentences
-            sentences.append(Sentence(words=cleaned, is_toki_pona=result))
+            sentences.append(Sentence(words=cleaned, score=score))
 
     # it's okay to have no sentences
     final_msg: Message = {**msg, "sentences": sentences}
