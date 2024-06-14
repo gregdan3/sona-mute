@@ -12,13 +12,20 @@ from edgedb.asyncio_client import AsyncIOIteration
 
 
 class KnownPlatforms(IntEnum):
-    Other = 0
+    Other = 0  # unsortable
     Discord = 1
     Telegram = 2
-    Reddit = 3
-    Forum = 4
-    Publication = 5
-    Twitter = 6
+    Facebook = 3
+    Reddit = 4
+    Twitter = 5
+    Instagram = 6
+    Tumblr = 7
+    YouTube = 8  # somewhat crosses into 'publication'
+    # Threads = 9
+    # Cohost = 10
+    Forum = 100  # generic
+    Publication = 200  # generic
+    Fediverse = 300
 
 
 class Platform(TypedDict):
