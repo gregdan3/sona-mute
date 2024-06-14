@@ -1,23 +1,14 @@
 # STL
-import logging
 from enum import IntEnum
 from uuid import UUID
 from typing import TypedDict, NotRequired, cast
 from datetime import datetime
-from functools import cache
 
 # PDM
 import edgedb
-from edgedb import RetryOptions, AsyncIOClient, IsolationLevel, TransactionOptions
+from edgedb import RetryOptions, AsyncIOClient
 from async_lru import alru_cache
 from edgedb.asyncio_client import AsyncIOIteration
-
-LOG_FORMAT = (
-    "[%(asctime)s] [%(filename)14s:%(lineno)-4s] [%(levelname)8s]   %(message)s"
-)
-logging.basicConfig(format=LOG_FORMAT, level=logging.INFO)
-
-LOG = logging.getLogger()
 
 
 class KnownPlatforms(IntEnum):
@@ -78,8 +69,6 @@ def create_client(username: str, password: str, host: str, port: int) -> AsyncIO
     return client
 
 
-PLAT_SELECT = """select Platform FILTER ._id = <int64>$_id"""
-
 PLAT_INSERT = """
 select (
     INSERT Platform {
@@ -87,11 +76,6 @@ select (
         name := <str>$name,
     } unless conflict on (._id)
 else Platform)"""
-
-COMM_SELECT = """
-select Community FILTER ._id = <int64>$_id and .platform = <Platform>$platform
-"""
-
 
 COMM_INSERT = """
 select (
@@ -101,10 +85,6 @@ select (
         platform := <Platform>$platform,
     } unless conflict on (._id, .platform)
 else Community)"""
-
-AUTH_SELECT = """
-select Author FILTER ._id = <int64>$_id and .platform = <Platform>$platform
-"""
 
 AUTH_INSERT = """
 select (
@@ -154,13 +134,11 @@ class MessageDB:
         name: str,
     ) -> UUID:
         # TODO: this type is a little bit incorrect; it's an edgedb Object
-        result = await self.client.query_required_single(query=PLAT_SELECT, _id=_id)
-        if not result:
-            result = await self.client.query_required_single(
-                query=PLAT_INSERT,
-                _id=_id,
-                name=name,
-            )
+        result = await self.client.query_required_single(
+            query=PLAT_INSERT,
+            _id=_id,
+            name=name,
+        )
         found_id = cast(UUID, result.id)
         return found_id
 
@@ -182,24 +160,16 @@ class MessageDB:
         platform: UUID,
     ) -> UUID:
         result = await self.client.query_required_single(
-            query=AUTH_SELECT,
+            query=AUTH_INSERT,
             _id=_id,
+            name=name,
             platform=platform,
         )
-        if not result:
-            result = await self.client.query_required_single(
-                query=AUTH_INSERT,
-                _id=_id,
-                name=name,
-                platform=platform,
-            )
 
-        # print(f"inserted author <@{_id}>, @{name} with uuid {result[0].id}")
         found_id = cast(UUID, result.id)
         return found_id
 
     async def insert_author(self, author: Author) -> UUID:
-        # print(f"author: {author}")
         if isinstance(author, UUID):
             return author
         platform_id = await self.insert_platform(author["platform"])
@@ -217,17 +187,11 @@ class MessageDB:
         platform: UUID,
     ) -> UUID:
         result = await self.client.query_required_single(
-            query=COMM_SELECT,
+            query=COMM_INSERT,
             _id=_id,
+            name=name,
             platform=platform,
         )
-        if not result:
-            result = await self.client.query_required_single(
-                query=COMM_INSERT,
-                _id=_id,
-                name=name,
-                platform=platform,
-            )
 
         found_id = cast(UUID, result.id)
         return found_id
@@ -236,7 +200,6 @@ class MessageDB:
         self,
         community: Community,
     ) -> UUID:
-        # print(f"community: {community}")
         if isinstance(community, UUID):
             return community
         platform_id = await self.insert_platform(community["platform"])
@@ -269,12 +232,8 @@ class MessageDB:
         )
 
     async def insert_message(self, message: Message):
-        # print(message)
-        author_id = await self.insert_author(message["author"])
-        message["author"] = author_id  # type: ignore [cannotAssign]
-
         community_id = await self.insert_community(message["community"])
-        message["community"] = community_id  # type: ignore [cannotAssign]
+        author_id = await self.insert_author(message["author"])
         return await self.__insert_message(
             _id=message["_id"],
             author=author_id,
@@ -284,8 +243,3 @@ class MessageDB:
             sentences=message["sentences"],
             container=message.get("container", None),
         )
-
-    # async def insert_message(self, message: Message) -> UUID:
-    #     async for tx in self.client.transaction():
-    #         async with tx:
-    #             return await self._insert_message(tx, message)
