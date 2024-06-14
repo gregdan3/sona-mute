@@ -80,7 +80,7 @@ def clean_string(content: str) -> str:
     """
 
     content = content.replace("\xad", "")
-    # `\xad` is the discretionary hyphen, which is a character is optional to print
+    # `\xad` is the discretionary hyphen; optional to print so not semantic
     return content
 
 
