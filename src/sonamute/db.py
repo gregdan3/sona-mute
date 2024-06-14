@@ -2,13 +2,15 @@
 import logging
 from enum import IntEnum
 from uuid import UUID
-from typing import TypedDict, NotRequired
+from typing import TypedDict, NotRequired, cast
 from datetime import datetime
 from functools import cache
 
 # PDM
 import edgedb
-from edgedb import Client, RetryOptions
+from edgedb import RetryOptions, AsyncIOClient, IsolationLevel, TransactionOptions
+from async_lru import alru_cache
+from edgedb.asyncio_client import AsyncIOIteration
 
 LOG_FORMAT = (
     "[%(asctime)s] [%(filename)14s:%(lineno)-4s] [%(levelname)8s]   %(message)s"
@@ -63,47 +65,56 @@ class Message(PreMessage):
     sentences: list[Sentence]  # implicitly the Sentence type
 
 
-def build_url(username: str, password: str, host: str, port: int) -> str:
-    return f"edgedb://{username}:{password}@{host}:{port}"
-def clean_string(content: str) -> str:
-    content = content.replace("\xad", "")
-    # this is a discretionary hyphen, and edgedb won't accept it
-    return content
-
-
-def create_client(username: str, password: str, host: str, port: int) -> Client:
-    url = build_url(username, password, host, port)
-    client = edgedb.create_client(
-        dsn=url,
+def create_client(username: str, password: str, host: str, port: int) -> AsyncIOClient:
+    client = edgedb.create_async_client(
+        host=host,
+        port=port,
+        user=username,
+        password=password,
         tls_security="insecure",
-        timeout=10000,
+        timeout=120,
     )
-    client.with_retry_options(options=RetryOptions(attempts=5))
+    client.with_retry_options(options=RetryOptions(attempts=10))
     return client
 
 
+PLAT_SELECT = """select Platform FILTER ._id = <int64>$_id"""
+
 PLAT_INSERT = """
-INSERT Platform {
-    _id := <int64>$_id,
-    name := <str>$name,
-} unless conflict on ._id
-else (select Platform filter Platform._id = <int64>$_id)"""
+select (
+    INSERT Platform {
+        _id := <int64>$_id,
+        name := <str>$name,
+    } unless conflict on (._id)
+else Platform)"""
+
+COMM_SELECT = """
+select Community FILTER ._id = <int64>$_id and .platform = <Platform>$platform
+"""
+
 
 COMM_INSERT = """
-INSERT Community {
-    _id := <int64>$_id,
-    name := <str>$name,
-    platform := <Platform>$platform,
-} unless conflict on (._id, .platform)
-else (select Community filter Community._id = <int64>$_id)"""
+select (
+    INSERT Community {
+        _id := <int64>$_id,
+        name := <str>$name,
+        platform := <Platform>$platform,
+    } unless conflict on (._id, .platform)
+else Community)"""
+
+AUTH_SELECT = """
+select Author FILTER ._id = <int64>$_id and .platform = <Platform>$platform
+"""
 
 AUTH_INSERT = """
-INSERT Author {
-    _id := <int64>$_id,
-    name := <str>$name,
-    platform := <Platform>$platform,
-} unless conflict on (._id, .platform)
-else (select Author filter Author._id = <int64>$_id)"""
+select (
+    INSERT Author {
+        _id := <int64>$_id,
+        name := <str>$name,
+        platform := <Platform>$platform,
+    } unless conflict on (._id, .platform)
+else Author)
+"""
 
 MSG_INSERT = """
 INSERT Message {
@@ -114,8 +125,8 @@ INSERT Message {
     postdate := <std::datetime>$postdate,
     content := <str>$content,
     sentences := { %s },
-} unless conflict on (._id, .community)
-else (select Message filter Message._id = <int64>$_id)"""
+} unless conflict;
+"""
 # NOTE: sentences must be subbed in
 
 SENT_INSERT = """(INSERT Sentence {words := <array<str>>%s})"""
@@ -129,76 +140,114 @@ def make_sent_subquery(sentences: list[Sentence]) -> str:
     return ",\n".join(outputs)
 
 
-# ESCAPE_SEQUENCE_RE = re.compile(r'''
-#     ( \\U........      # 8-digit hex escapes
-#     | \\u....          # 4-digit hex escapes
-#     | \\x..            # 2-digit hex escapes
-#     | \\[0-7]{1,3}     # Octal escapes
-#     | \\N\{[^}]+\}     # Unicode characters by name
-#     | \\[\\'"abfnrtv]  # Single-character escapes
-#     )''', re.UNICODE | re.VERBOSE)
-#
-# def decode_escapes(s):
-#     def decode_match(match):
-#         return codecs.decode(match.group(0), 'unicode-escape')
-#
-#     return ESCAPE_SEQUENCE_RE.sub(decode_match, s)
-
-
 class MessageDB:
-    client: Client
+    client: AsyncIOClient
 
     def __init__(self, username: str, password: str, host: str, port: int) -> None:
         self.client = create_client(username, password, host, port)
 
     # really just some hot dogshit code.
-    @cache
-    def __insert_platform(self, _id: int, name: str) -> UUID:
-        result = self.client.query(
-            query=PLAT_INSERT,
-            _id=_id,
-            name=name,
-        )
-        return result[0].id
+    @alru_cache
+    async def __insert_platform(
+        self,
+        _id: int,
+        name: str,
+    ) -> UUID:
+        # TODO: this type is a little bit incorrect; it's an edgedb Object
+        result = await self.client.query_required_single(query=PLAT_SELECT, _id=_id)
+        if not result:
+            result = await self.client.query_required_single(
+                query=PLAT_INSERT,
+                _id=_id,
+                name=name,
+            )
+        found_id = cast(UUID, result.id)
+        return found_id
 
-    def insert_platform(self, platform: Platform) -> UUID:
+    async def insert_platform(self, platform: Platform) -> UUID:
         if isinstance(platform, UUID):
-            # this is an artifact of insert_platform being called twice
+            # insert_platform is called twice so we may mutate platform early
             return platform
-        result = self.__insert_platform(**platform)
+        result = await self.__insert_platform(
+            _id=platform["_id"],
+            name=platform["name"],
+        )
         return result
 
-    @cache
-    def __insert_author(self, _id: int, name: str, platform: UUID) -> UUID:
-        result = self.client.query(
-            query=AUTH_INSERT,
+    @alru_cache
+    async def __insert_author(
+        self,
+        _id: int,
+        name: str,
+        platform: UUID,
+    ) -> UUID:
+        result = await self.client.query_required_single(
+            query=AUTH_SELECT,
             _id=_id,
-            name=name,
             platform=platform,
         )
-        return result[0].id
+        if not result:
+            result = await self.client.query_required_single(
+                query=AUTH_INSERT,
+                _id=_id,
+                name=name,
+                platform=platform,
+            )
 
-    def insert_author(self, author: Author) -> UUID:
-        platform_id = self.insert_platform(author["platform"])
-        author["platform"] = platform_id
-        return self.__insert_author(**author)
+        # print(f"inserted author <@{_id}>, @{name} with uuid {result[0].id}")
+        found_id = cast(UUID, result.id)
+        return found_id
 
-    @cache
-    def __insert_community(self, _id: int, name: str, platform: UUID) -> UUID:
-        result = self.client.query(
-            query=COMM_INSERT,
+    async def insert_author(self, author: Author) -> UUID:
+        # print(f"author: {author}")
+        if isinstance(author, UUID):
+            return author
+        platform_id = await self.insert_platform(author["platform"])
+        return await self.__insert_author(
+            _id=author["_id"],
+            name=author["name"],
+            platform=platform_id,
+        )
+
+    @alru_cache
+    async def __insert_community(
+        self,
+        _id: int,
+        name: str,
+        platform: UUID,
+    ) -> UUID:
+        result = await self.client.query_required_single(
+            query=COMM_SELECT,
             _id=_id,
-            name=name,
             platform=platform,
         )
-        return result[0].id
+        if not result:
+            result = await self.client.query_required_single(
+                query=COMM_INSERT,
+                _id=_id,
+                name=name,
+                platform=platform,
+            )
 
-    def insert_community(self, community: Community) -> UUID:
-        platform_id = self.insert_platform(community["platform"])
-        community["platform"] = platform_id
-        return self.__insert_community(**community)
+        found_id = cast(UUID, result.id)
+        return found_id
 
-    def __insert_message(
+    async def insert_community(
+        self,
+        community: Community,
+    ) -> UUID:
+        # print(f"community: {community}")
+        if isinstance(community, UUID):
+            return community
+        platform_id = await self.insert_platform(community["platform"])
+        return await self.__insert_community(
+            # I was ** splatting the dict into this call, but it doesn't work beecause the dicts appear to globally mutate eachother...
+            _id=community["_id"],
+            name=community["name"],
+            platform=platform_id,
+        )
+
+    async def __insert_message(
         self,
         _id: int,
         community: UUID,
@@ -207,12 +256,9 @@ class MessageDB:
         content: str,
         sentences: list[Sentence],
         container: int | None = None,
-    ) -> UUID:
-        content = clean_string(content)
+    ):
         sent_subquery = make_sent_subquery(sentences)
-        # print(content)
-        # print(repr(content))
-        return self.client.query(
+        return await self.client.query(
             query=MSG_INSERT % sent_subquery,
             _id=_id,
             community=community,
@@ -222,11 +268,24 @@ class MessageDB:
             container=container,
         )
 
-    def insert_message(self, message: Message) -> UUID:
-        author_id = self.insert_author(message["author"])
-        message["author"] = author_id
+    async def insert_message(self, message: Message):
+        # print(message)
+        author_id = await self.insert_author(message["author"])
+        message["author"] = author_id  # type: ignore [cannotAssign]
 
-        community_id = self.insert_community(message["community"])
-        message["community"] = community_id
+        community_id = await self.insert_community(message["community"])
+        message["community"] = community_id  # type: ignore [cannotAssign]
+        return await self.__insert_message(
+            _id=message["_id"],
+            author=author_id,
+            community=community_id,
+            postdate=message["postdate"],
+            content=message["content"],
+            sentences=message["sentences"],
+            container=message.get("container", None),
+        )
 
-        return self.__insert_message(**message)
+    # async def insert_message(self, message: Message) -> UUID:
+    #     async for tx in self.client.transaction():
+    #         async with tx:
+    #             return await self._insert_message(tx, message)

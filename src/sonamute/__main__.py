@@ -3,23 +3,29 @@ import os
 import json
 import asyncio
 import argparse
+import itertools
+from uuid import UUID
+from typing import Any, Generic, TypeVar, final
 from collections import Counter
+from collections.abc import Generator
 
 # PDM
 from sonatoki.ilo import Ilo
-from sonatoki.Configs import CorpusConfig, IsipinEpikuConfig
+from sonatoki.Configs import CorpusConfig
 from sonatoki.Scorers import Scaling, SoftScaling
 from sonatoki.Cleaners import Lowercase, ConsecutiveDuplicates
 from sonatoki.Tokenizers import SentTokenizer, WordTokenizer
 
 # LOCAL
-from sonamute.db import Message, Sentence, MessageDB
+from sonamute.db import Message, Sentence, MessageDB, PreMessage
 from sonamute.file_io import DiscordFetcher
+
+T = TypeVar("T")
 
 F = "/home/gregdan3/communities/discord/ma-pona-pi-toki-pona-05-06/"
 
 
-ignored_authors = {
+IGNORED_AUTHORS = {
     159985870458322944,  # mee6
     204255221017214977,  # YAGPDB
     235148962103951360,  # carlbot
@@ -56,51 +62,93 @@ ignored_authors = {
     189702078958927872,  # erisbot
 }
 
-ignored_containers = {
+IGNORED_CONTAINERS = {
     316066233755631616,  # mapona/jaki
     786041291707777034,  # mapona/ako
 }
+ILO = Ilo(**CorpusConfig)
+ILO._Ilo__scoring_filters[0].tokens -= {"we", "i", "u", "ten", "to"}
+
+DB = MessageDB("edgedb", "DXZnIcATtDoSB3mjgfWrm8I4", "localhost", 10700)
+DISCORD = DiscordFetcher(F)
 
 
-def main(argv: argparse.Namespace):
-    ilo = Ilo(**CorpusConfig)
-    ilo._Ilo__scoring_filters[0].tokens -= {"we", "i", "u", "ten", "to"}
+def clean_string(content: str) -> str:
+    """
+    EdgeDB-specific string pre-processing.
+    I note all changes; none of them are semantic.
+    """
+
+    content = content.replace("\xad", "")
+    # `\xad` is the discretionary hyphen, which is a character is optional to print
+    return content
+
+
+def ignorable(msg: PreMessage) -> bool:
+    # TODO: make this per-platform?
+    if not msg["content"]:
+        return True  # ignore empty messages
+    if msg["author"]["_id"] in IGNORED_AUTHORS:
+        return True
+    if msg["container"] in IGNORED_CONTAINERS:
+        return True
+    return False
+
+
+def process_msg(msg: PreMessage) -> Message:
+    msg["content"] = clean_string(msg["content"])
+    content = ILO.preprocess(msg["content"])
+
+    sentences: list[Sentence] = []
+    for sentence in SentTokenizer.tokenize(content):
+        processed, tokenized, filtered, cleaned, score, result = ILO._is_toki_pona(
+            sentence
+        )
+        if cleaned:  # omit empty sentences
+            sentences.append(Sentence(words=cleaned, is_toki_pona=result))
+
+    # it's okay to have no sentences
+    final_msg: Message = {**msg, "sentences": sentences}
+    return final_msg
+
+
+async def insert_raw_msg(msg: PreMessage) -> UUID | None:
+    if ignorable(msg):
+        return
+    # TODO: check early to see if the message is in the DB
+
+    processed = process_msg(msg)
+    try:
+        msg_uuid = await DB.insert_message(processed)
+        return msg_uuid
+    except Exception as e:
+        print(msg)
+        raise (e)
+
+
+def batch_generator(
+    generator: Generator[T, None, None],
+    batch_size: int,
+) -> Generator[list[T], None, None]:
+    while True:
+        batch = list(itertools.islice(generator, batch_size))
+        if not batch:
+            break
+        yield batch
+
+
+async def amain(argv: argparse.Namespace):
 
     # NOTE: i will need to .lower() all inputs to counters later
-    db = MessageDB("edgedb", "DXZnIcATtDoSB3mjgfWrm8I4", "localhost", 10700)
-    discord = DiscordFetcher(F)
-
     # counter: dict[str, int] = Counter()
 
+    BATCH_SIZE = 250
     i = 0
-    for msg in discord.get_messages():
-        # TODO: check early to see if the message is in the DB
+    for batch in batch_generator(DISCORD.get_messages(), BATCH_SIZE):
+        inserts = [insert_raw_msg(msg) for msg in batch]
+        _ = await asyncio.gather(*inserts)
 
-        if not msg["content"]:
-            continue  # ignore empty messages
-        if msg["author"]["_id"] in ignored_authors:
-            continue
-        if msg["container"] in ignored_containers:
-            continue
-
-        content = ilo.preprocess(msg["content"])
-        sentences: list[Sentence] = []
-        for sentence in SentTokenizer.tokenize(content):
-            processed, tokenized, filtered, cleaned, score, result = ilo._is_toki_pona(
-                sentence
-            )
-            if cleaned:  # omit empty sentences
-                sentences.append(Sentence(words=cleaned))
-
-        final_msg: Message = {**msg, "sentences": sentences}
-
-        try:
-            msg_uuid = db.insert_message(final_msg)
-        except Exception as e:
-            print(msg)
-            print(repr(msg))
-            raise (e)
-        i += 1
+        i += BATCH_SIZE
 
         if i % 10000 == 0:
             print("Processed %s messages" % i)
@@ -113,6 +161,10 @@ def main(argv: argparse.Namespace):
     #     if v > 100
     # }
     # print(json.dumps(sorted_counter, indent=2, ensure_ascii=False))
+
+
+def main(argv: argparse.Namespace):
+    asyncio.run(amain(argv))
 
 
 if __name__ == "__main__":
