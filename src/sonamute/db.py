@@ -137,11 +137,12 @@ class MessageDB:
     @alru_cache
     async def __insert_platform(
         self,
+        tx: AsyncIOIteration,
         _id: int,
         name: str,
     ) -> UUID:
         # TODO: this type is a little bit incorrect; it's an edgedb Object
-        result = await self.client.query_required_single(
+        result = await tx.query_required_single(
             query=PLAT_INSERT,
             _id=_id,
             name=name,
@@ -149,11 +150,16 @@ class MessageDB:
         found_id = cast(UUID, result.id)
         return found_id
 
-    async def insert_platform(self, platform: Platform) -> UUID:
+    async def insert_platform(
+        self,
+        tx: AsyncIOIteration,
+        platform: Platform,
+    ) -> UUID:
         if isinstance(platform, UUID):
             # insert_platform is called twice so we may mutate platform early
             return platform
         result = await self.__insert_platform(
+            tx=tx,
             _id=platform["_id"],
             name=platform["name"],
         )
@@ -162,11 +168,12 @@ class MessageDB:
     @alru_cache
     async def __insert_author(
         self,
+        tx: AsyncIOIteration,
         _id: int,
         name: str,
         platform: UUID,
     ) -> UUID:
-        result = await self.client.query_required_single(
+        result = await tx.query_required_single(
             query=AUTH_INSERT,
             _id=_id,
             name=name,
@@ -176,11 +183,16 @@ class MessageDB:
         found_id = cast(UUID, result.id)
         return found_id
 
-    async def insert_author(self, author: Author) -> UUID:
+    async def insert_author(
+        self,
+        tx: AsyncIOIteration,
+        author: Author,
+    ) -> UUID:
         if isinstance(author, UUID):
             return author
-        platform_id = await self.insert_platform(author["platform"])
+        platform_id = await self.insert_platform(tx, author["platform"])
         return await self.__insert_author(
+            tx=tx,
             _id=author["_id"],
             name=author["name"],
             platform=platform_id,
@@ -189,11 +201,12 @@ class MessageDB:
     @alru_cache
     async def __insert_community(
         self,
+        tx: AsyncIOIteration,
         _id: int,
         name: str,
         platform: UUID,
     ) -> UUID:
-        result = await self.client.query_required_single(
+        result = await tx.query_required_single(
             query=COMM_INSERT,
             _id=_id,
             name=name,
@@ -205,13 +218,15 @@ class MessageDB:
 
     async def insert_community(
         self,
+        tx: AsyncIOIteration,
         community: Community,
     ) -> UUID:
         if isinstance(community, UUID):
             return community
-        platform_id = await self.insert_platform(community["platform"])
+        platform_id = await self.insert_platform(tx, community["platform"])
         return await self.__insert_community(
             # I was ** splatting the dict into this call, but it doesn't work beecause the dicts appear to globally mutate eachother...
+            tx=tx,
             _id=community["_id"],
             name=community["name"],
             platform=platform_id,
@@ -219,6 +234,7 @@ class MessageDB:
 
     async def __insert_message(
         self,
+        tx: AsyncIOIteration,
         _id: int,
         community: UUID,
         author: UUID,
@@ -228,7 +244,7 @@ class MessageDB:
         container: int | None = None,
     ):
         sent_subquery = make_sent_subquery(sentences)
-        return await self.client.query(
+        return await tx.query(
             query=MSG_INSERT % sent_subquery,
             _id=_id,
             community=community,
@@ -239,14 +255,18 @@ class MessageDB:
         )
 
     async def insert_message(self, message: Message):
-        community_id = await self.insert_community(message["community"])
-        author_id = await self.insert_author(message["author"])
-        return await self.__insert_message(
-            _id=message["_id"],
-            author=author_id,
-            community=community_id,
-            postdate=message["postdate"],
-            content=message["content"],
-            sentences=message["sentences"],
-            container=message.get("container", None),
-        )
+        async for tx in self.client.transaction():
+            async with tx:
+
+                community_id = await self.insert_community(tx, message["community"])
+                author_id = await self.insert_author(tx, message["author"])
+                return await self.__insert_message(
+                    tx=tx,
+                    _id=message["_id"],
+                    author=author_id,
+                    community=community_id,
+                    postdate=message["postdate"],
+                    content=message["content"],
+                    sentences=message["sentences"],
+                    container=message.get("container", None),
+                )
