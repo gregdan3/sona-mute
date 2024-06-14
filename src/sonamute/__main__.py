@@ -119,8 +119,7 @@ async def insert_raw_msg(msg: PreMessage) -> UUID | None:
 
     processed = process_msg(msg)
     try:
-        msg_uuid = await DB.insert_message(processed)
-        return msg_uuid
+        _ = await DB.insert_message(processed)
     except Exception as e:
         print(msg)
         raise (e)
