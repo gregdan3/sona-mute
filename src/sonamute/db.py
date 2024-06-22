@@ -72,7 +72,7 @@ def create_client(username: str, password: str, host: str, port: int) -> AsyncIO
         tls_security="insecure",
         timeout=120,
     )
-    client.with_retry_options(options=RetryOptions(attempts=10))
+    client = client.with_retry_options(options=RetryOptions(attempts=25))
     return client
 
 
