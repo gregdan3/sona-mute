@@ -26,8 +26,9 @@ module default {
   }
 
   type Sentence {
+    required message: Message;
     required words: array<str>;
-    score: float64;
+    required score: float64;
     # NOTE: Will be pre-tokenized with the **toki pona** tokenizer,
     # and pre-cleaned by removing consecutive duplicates.
   }
@@ -41,7 +42,7 @@ module default {
     required author: Author;
     required postdate: datetime;
     required content: str;
-    multi sentences: Sentence;
+    multi sentences := .<message[is Sentence];
 
     constraint exclusive on ((._id, .community));
     index on ((._id, .community));

@@ -47,7 +47,7 @@ class Author(TypedDict):
 
 class Sentence(TypedDict):
     words: list[str]
-    score: NotRequired[float]
+    score: float
 
 
 class PreMessage(TypedDict):
@@ -104,27 +104,25 @@ else Author)
 """
 
 MSG_INSERT = """
-INSERT Message {
-    _id := <int64>$_id,
-    community := <Community>$community,
-    container := <int64>$container,
-    author := <Author>$author,
-    postdate := <std::datetime>$postdate,
-    content := <str>$content,
-    sentences := { %s },
-} unless conflict;
+select (
+    INSERT Message {
+        _id := <int64>$_id,
+        community := <Community>$community,
+        container := <int64>$container,
+        author := <Author>$author,
+        postdate := <std::datetime>$postdate,
+        content := <str>$content
+    } unless conflict on (._id, .community)
+else Message)
 """
-# NOTE: sentences must be subbed in
 
-SENT_INSERT = """(INSERT Sentence {words := <array<str>>%(words)s, score := <float64>%(score)s})"""
-# NOTE: would be $sentence, but then we'd have repeat vars
-
-
-def make_sent_subquery(sentences: list[Sentence]) -> str:
-    outputs: list[str] = []
-    for s in sentences:
-        outputs.append(f"{SENT_INSERT}" % s)
-    return ",\n".join(outputs)
+SENT_INSERT = """
+INSERT Sentence {
+    message := <Message>$message, 
+    words := <array<str>>$words,
+    score := <float64>$score
+}
+"""
 
 
 class MessageDB:
@@ -232,6 +230,20 @@ class MessageDB:
             platform=platform_id,
         )
 
+    async def __insert_sentence(
+        self,
+        tx: AsyncIOIteration,
+        message: UUID,
+        words: list[str],
+        score: float,
+    ):
+        _ = await tx.query(
+            query=SENT_INSERT,
+            message=message,
+            words=words,
+            score=score,
+        )
+
     async def __insert_message(
         self,
         tx: AsyncIOIteration,
@@ -243,9 +255,8 @@ class MessageDB:
         sentences: list[Sentence],
         container: int | None = None,
     ):
-        sent_subquery = make_sent_subquery(sentences)
-        return await tx.query(
-            query=MSG_INSERT % sent_subquery,
+        result = await tx.query_required_single(
+            query=MSG_INSERT,
             _id=_id,
             community=community,
             author=author,
@@ -253,6 +264,16 @@ class MessageDB:
             content=content,
             container=container,
         )
+        found_id = cast(UUID, result.id)
+
+        for sentence in sentences:
+            await self.__insert_sentence(
+                tx=tx,
+                message=found_id,
+                words=sentence["words"],
+                score=sentence["score"],
+            )
+        return found_id
 
     async def insert_message(self, message: Message):
         async for tx in self.client.transaction():
@@ -260,7 +281,7 @@ class MessageDB:
 
                 community_id = await self.insert_community(tx, message["community"])
                 author_id = await self.insert_author(tx, message["author"])
-                return await self.__insert_message(
+                message_id = await self.__insert_message(
                     tx=tx,
                     _id=message["_id"],
                     author=author_id,
