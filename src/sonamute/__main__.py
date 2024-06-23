@@ -1,24 +1,22 @@
 # STL
 import os
-import json
 import asyncio
 import argparse
 import itertools
 from uuid import UUID
-from typing import Any, Generic, TypeVar, final
+from typing import TypeVar
 from collections import Counter
-from collections.abc import Generator
+from collections.abc import Iterable, Generator
 
 # PDM
 from sonatoki.ilo import Ilo
+from sonatoki.utils import overlapping_ntuples
 from sonatoki.Configs import CorpusConfig
-from sonatoki.Scorers import Scaling, SoftScaling
-from sonatoki.Cleaners import Lowercase, ConsecutiveDuplicates
 from sonatoki.Tokenizers import SentTokenizer, WordTokenizer
 
 # LOCAL
 from sonamute.db import Message, Sentence, MessageDB, PreMessage
-from sonamute.file_io import DiscordFetcher
+from sonamute.file_io import DiscordFetcher, PlatformFetcher
 
 T = TypeVar("T")
 
@@ -112,6 +110,27 @@ def process_msg(msg: PreMessage) -> Message:
     return final_msg
 
 
+def countable_msgs(msgs: Iterable[PreMessage]) -> Generator[Message, None, None]:
+    for msg in msgs:
+        if ignorable(msg):
+            continue
+
+        content = ILO.preprocess(msg["content"])
+
+        sentences: list[Sentence] = []
+        for sentence in SentTokenizer.tokenize(content):
+            processed, tokenized, filtered, cleaned, score, result = ILO._is_toki_pona(
+                sentence
+            )
+            if cleaned and result:  # omit empty/failing sentences
+                sentences.append(Sentence(words=cleaned, score=score))
+
+        if not sentences:
+            continue
+        final_msg: Message = {**msg, "sentences": sentences}
+        yield final_msg
+
+
 async def insert_raw_msg(msg: PreMessage) -> UUID | None:
     if ignorable(msg):
         return
@@ -136,10 +155,52 @@ def batch_generator(
         yield batch
 
 
+def freq_counter(source: PlatformFetcher, _max: int = 0) -> Counter[str]:
+    counter: Counter[str] = Counter()
+    counted = 0
+    for msg in countable_msgs(source.get_messages()):
+        for sentence in msg["sentences"]:
+            counter.update([word.lower() for word in sentence["words"]])
+
+        counted += 1
+        if _max and counted >= _max:
+            break
+
+    return counter
+
+
+def ngram_counter(
+    source: PlatformFetcher, n: int, _max: int = 0
+) -> Counter[tuple[str, str]]:
+    counter: Counter[tuple[str, str]] = Counter()
+    counted = 0
+    for msg in countable_msgs(source.get_messages()):
+        for sentence in msg["sentences"]:
+            sentence = [word.lower() for word in sentence["words"]]
+            counter.update(overlapping_ntuples(sentence, n=n))
+
+        counted += 1
+        if _max and counted >= _max:
+            break
+
+    return counter
+
+
 async def amain(argv: argparse.Namespace):
 
     # NOTE: i will need to .lower() all inputs to counters later
-    # counter: dict[str, int] = Counter()
+    # counter = freq_counter(source=DISCORD)
+    # counter = ngram_counter(source=DISCORD, n=6)
+    #
+    # sorted_counter = {
+    #     k: v
+    #     for k, v in sorted(counter.items(), key=lambda i: i[1], reverse=True)
+    #     if v > 100
+    # }
+    # print(sorted_counter)
+    # TODO: json dump tuples as lists
+    # print(json.dumps(sorted_counter, indent=2, ensure_ascii=False))
+    # exit()
 
     BATCH_SIZE = 250
     i = 0
