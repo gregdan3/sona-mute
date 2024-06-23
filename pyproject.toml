@@ -7,8 +7,6 @@ authors = [
 ]
 dependencies = [
     "sonatoki @ file:///${PROJECT_ROOT}/../sona-toki",
-    "sqlalchemy[asyncio]>=2.0.30",
-    "sqlalchemy-json>=0.7.0",
     "orjson>=3.10.3",
     "edgedb>=1.9.0",
     "pydantic>=2.7.1",
