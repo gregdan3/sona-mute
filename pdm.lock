@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["cross_platform", "inherit_metadata"]
 lock_version = "4.4.1"
-content_hash = "sha256:914d38538da691d9174c794ddd493e9af4489573fdef915d9c490b8f737370e4"
+content_hash = "sha256:7eb3613657e80d62f03ce691d07405af7572546cce0be49587519572127a4aaf"
 
 [[package]]
 name = "annotated-types"
@@ -399,15 +399,18 @@ files = [
 
 [[package]]
 name = "sonatoki"
-version = "0.3.2"
+version = "0.3.3"
 requires_python = ">=3.8"
-path = "../sona-toki"
 summary = "ilo li moku e toki li pana e sona ni: ni li toki ala toki pona?"
 groups = ["default"]
 dependencies = [
     "regex>=2023.12.25",
     "typing-extensions>=4.11.0",
     "unidecode>=1.3.6",
+]
+files = [
+    {file = "sonatoki-0.3.3-py3-none-any.whl", hash = "sha256:310e06a5bdfd57cb87d5d0402f00180af11fb48c9a7a61633097f58cd3b525b0"},
+    {file = "sonatoki-0.3.3.tar.gz", hash = "sha256:8a8b6b630db9520656ef948aa748624393d0cdf1984171d3baf8f108d6217069"},
 ]
 
 [[package]]
