@@ -1,7 +1,7 @@
 # STL
 from enum import IntEnum
 from uuid import UUID
-from typing import TypedDict, NotRequired, cast
+from typing import TypedDict, cast
 from datetime import datetime
 
 # PDM
@@ -112,8 +112,7 @@ select (
         author := <Author>$author,
         postdate := <std::datetime>$postdate,
         content := <str>$content
-    } unless conflict on (._id, .community)
-else Message)
+    } unless conflict on (._id, .community))
 """
 
 SENT_INSERT = """
@@ -255,7 +254,7 @@ class MessageDB:
         sentences: list[Sentence],
         container: int | None = None,
     ):
-        result = await tx.query_required_single(
+        result = await tx.query_single(
             query=MSG_INSERT,
             _id=_id,
             community=community,
@@ -264,6 +263,9 @@ class MessageDB:
             content=content,
             container=container,
         )
+
+        if not result:
+            return
         found_id = cast(UUID, result.id)
 
         for sentence in sentences:
