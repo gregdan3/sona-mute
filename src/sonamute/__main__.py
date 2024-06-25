@@ -161,6 +161,8 @@ def ngram_counter(
     counted = 0
     for msg in countable_msgs(source.get_messages(), force_pass=force_pass):
         for sentence in msg["sentences"]:
+            if len(sentence) < n:
+                continue  # save some time; can't get any data
             sentence = [word.lower() for word in sentence["words"]]
             counter.update(overlapping_ntuples(sentence, n=n))
 
