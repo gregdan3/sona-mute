@@ -2,9 +2,9 @@
 import os
 import logging
 from abc import abstractmethod
-from typing import Any
+from typing import Any, cast
 from datetime import datetime
-from collections.abc import Generator
+from collections.abc import Mapping, Iterable, Generator
 
 # PDM
 import orjson
@@ -15,6 +15,19 @@ from sonamute.db import Author, Platform, Community, PreMessage, KnownPlatforms
 
 LOG = logging.getLogger()
 
+JSON = str | int | float | Mapping["JSON", "JSON"] | Iterable["JSON"]
+DiscordJSON = Mapping[str, Mapping[str, JSON]]  # still inaccurate, but closer
+
+
+def try_load_json(filename: str) -> DiscordJSON | None:
+    with open(filename, "r") as f:
+        content = None
+        try:
+            content = orjson.loads(f.read())
+        except orjson.JSONDecodeError:
+            # TODO: print failing file? log leve?
+            pass
+    return content
 
 class PlatformFetcher:
     @abstractmethod
@@ -28,10 +41,14 @@ class DiscordFetcher(PlatformFetcher):
         self.root = root
 
     def get_discord_file(self):
-        for file in os.listdir(self.root):
-            with open(self.root + file, "r") as f:
-                content: dict[str, Any] = orjson.loads(f.read())
-                yield content
+        for root, _, files in os.walk(self.root):
+            # we don't need dirs
+
+            for filename in files:
+                data = try_load_json(os.path.join(root, filename))
+                if not data:
+                    continue
+                yield data
 
     @override
     def get_messages(self) -> Generator[PreMessage, None, None]:
