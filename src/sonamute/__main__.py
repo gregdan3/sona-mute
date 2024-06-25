@@ -152,9 +152,12 @@ def freq_counter(
 
 
 def ngram_counter(
-    source: PlatformFetcher, n: int, force_pass: bool = False, _max: int = 0
-) -> Counter[tuple[str, str]]:
-    counter: Counter[tuple[str, str]] = Counter()
+    source: PlatformFetcher,
+    n: int,
+    force_pass: bool = False,
+    _max: int = 0,
+) -> Counter[tuple[str, ...]]:
+    counter: Counter[tuple[str, ...]] = Counter()
     counted = 0
     for msg in countable_msgs(source.get_messages(), force_pass=force_pass):
         for sentence in msg["sentences"]:
