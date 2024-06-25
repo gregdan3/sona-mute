@@ -153,7 +153,7 @@ def freq_counter(
     counted = 0
     for msg in countable_msgs(source.get_messages(), force_pass=force_pass):
         for sentence in msg["sentences"]:
-            if len(sentence) < min_len:
+            if len(sentence["words"]) < min_len:
                 continue
             counter.update([word.lower() for word in sentence["words"]])
 
@@ -173,7 +173,7 @@ def ngram_counter(
     counted = 0
     for msg in countable_msgs(source.get_messages(), force_pass=force_pass):
         for sentence in msg["sentences"]:
-            if len(sentence) < n:
+            if len(sentence["words"]) < n:
                 continue  # save some time; can't get any data
             sentence = [word.lower() for word in sentence["words"]]
             counter.update(overlapping_ntuples(sentence, n=n))
