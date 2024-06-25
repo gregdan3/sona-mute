@@ -59,6 +59,7 @@ class PlatformFetcher:
 
 class DiscordFetcher(PlatformFetcher):
     root: str
+    __seen: set[int] = set()
 
     def __init__(self, root: str):
         self.root = root
@@ -103,6 +104,11 @@ class DiscordFetcher(PlatformFetcher):
                     continue
 
                 _id = int(m["id"])
+                # discord IDs are globally unique across all objects
+                if _id in self.__seen:
+                    continue
+                self.__seen.add(_id)
+
                 author_id = int(m["author"]["id"])
                 author_name: str = m["author"]["name"]
                 author: Author = {
