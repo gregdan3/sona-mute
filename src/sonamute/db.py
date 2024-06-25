@@ -76,6 +76,19 @@ def create_client(username: str, password: str, host: str, port: int) -> AsyncIO
     return client
 
 
+PLAT_SELECT = """
+select Platform filter ._id = <int64>$_id
+"""
+
+COMM_SELECT = """
+select Community filter ._id = <int64>$_id and .platform = <Platform>$platform
+"""
+
+MSG_SELECT = """
+select Message filter ._id = <int64>$_id and .community = <Community>$community
+"""
+
+
 PLAT_INSERT = """
 select (
     INSERT Platform {
@@ -130,7 +143,16 @@ class MessageDB:
     def __init__(self, username: str, password: str, host: str, port: int) -> None:
         self.client = create_client(username, password, host, port)
 
-    # really just some hot dogshit code.
+    @alru_cache
+    async def __select_platform(self, _id: int) -> UUID | None:
+        result = await self.client.query_single(PLAT_SELECT, _id=_id)
+        if not result:
+            return
+        return cast(UUID, result.id)
+
+    async def select_platform(self, platform: Platform) -> UUID | None:
+        return await self.__select_platform(_id=platform["_id"])
+
     @alru_cache
     async def __insert_platform(
         self,
@@ -196,6 +218,19 @@ class MessageDB:
         )
 
     @alru_cache
+    async def __select_community(self, _id: int, platform: UUID) -> UUID | None:
+        result = await self.client.query_single(COMM_SELECT, _id=_id, platform=platform)
+        if not result:
+            return
+        return cast(UUID, result.id)
+
+    async def select_community(self, community: Community) -> UUID | None:
+        platform = await self.select_platform(community["platform"])
+        if not platform:
+            return
+        return await self.__select_community(_id=community["_id"], platform=platform)
+
+    @alru_cache
     async def __insert_community(
         self,
         tx: AsyncIOIteration,
@@ -242,6 +277,23 @@ class MessageDB:
             words=words,
             score=score,
         )
+
+    @alru_cache
+    async def __select_message(self, _id: int, community: UUID) -> UUID | None:
+        result = await self.client.query_single(
+            MSG_SELECT,
+            _id=_id,
+            community=community,
+        )
+        if not result:
+            return
+        return cast(UUID, result.id)
+
+    async def select_message(self, message: Message | PreMessage) -> UUID | None:
+        community = await self.select_community(message["community"])
+        if not community:
+            return
+        return await self.__select_message(_id=message["_id"], community=community)
 
     async def __insert_message(
         self,
