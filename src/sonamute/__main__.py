@@ -79,6 +79,8 @@ def clean_string(content: str) -> str:
 
     content = content.replace("\xad", "")
     # `\xad` is the discretionary hyphen; optional to print so not semantic
+    content = content.replace("\0", "")
+    # i have no earthly idea how this could happen; i'm reading json
     return content
 
 
