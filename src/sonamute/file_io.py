@@ -23,9 +23,10 @@ JSONable = JSON | tuple[JSON, ...]
 
 class TupleJSONEncoder(json.JSONEncoder):
     @override
-    def encode(self, o: JSONable) -> str:
-        if isinstance(o, tuple):
-            o = list(o)
+    def encode(self, o: JSONable):
+        if isinstance(o, dict):
+            o_ = {" ".join(key): value for key, value in o.items()}
+            return super().encode(o_)
         return super().encode(o)
 
 
