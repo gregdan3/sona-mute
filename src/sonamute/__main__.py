@@ -133,6 +133,7 @@ def batch_generator(
 
 def freq_counter(
     source: PlatformFetcher,
+    min_len: int = 0,
     force_pass: bool = False,
     _max: int = 0,
 ) -> Counter[str]:
@@ -140,6 +141,8 @@ def freq_counter(
     counted = 0
     for msg in countable_msgs(source.get_messages(), force_pass=force_pass):
         for sentence in msg["sentences"]:
+            if len(sentence) < min_len:
+                continue
             counter.update([word.lower() for word in sentence["words"]])
 
         counted += 1
