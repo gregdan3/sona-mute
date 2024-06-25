@@ -95,6 +95,11 @@ def ignorable(msg: PreMessage) -> bool:
     return False
 
 
+async def in_db(msg: PreMessage) -> bool:
+    maybe_id = await DB.select_message(msg)
+    return not not maybe_id
+
+
 def process_msg(msg: PreMessage) -> Message:
     msg["content"] = clean_string(msg["content"])
     content = ILO.preprocess(msg["content"])
@@ -136,7 +141,8 @@ def countable_msgs(msgs: Iterable[PreMessage]) -> Generator[Message, None, None]
 async def insert_raw_msg(msg: PreMessage) -> UUID | None:
     if ignorable(msg):
         return
-    # TODO: check early to see if the message is in the DB
+    if await in_db(msg):
+        return
 
     processed = process_msg(msg)
     try:
