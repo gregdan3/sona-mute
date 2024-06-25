@@ -186,20 +186,22 @@ def ngram_counter(
 
 
 async def amain(argv: argparse.Namespace):
+    # TODO: this is a huge waste of CPU time but my DB is unusable due to an EdgeDB CLI bug
+    min_lens = [1, 2, 3, 4, 5, 6]
+    for min_len in min_lens:
+        counter = freq_counter(source=DISCORD, min_len=min_len)
+        result = dump(counter)
+        with open(f"word_freq_tpt_min_len_{min_len}.json", "w") as f:
+            _ = f.write(result)
 
-    # NOTE: i will need to .lower() all inputs to counters later
-    # counter = freq_counter(source=DISCORD)
-    # counter = ngram_counter(source=DISCORD, n=6)
+    ngrams = [2, 3, 4, 5, 6]
+    for n in ngrams:
+        counter = ngram_counter(source=DISCORD, n=n)
+        result = dump(counter)
+        with open(f"ngrams_tpt_size_{n}.json", "w") as f:
+            _ = f.write(result)
 
-    # sorted_counter = {
-    #     k: v
-    #     for k, v in sorted(counter.items(), key=lambda i: i[1], reverse=True)
-    #     if v > 100
-    # }
-    # print(sorted_counter)
-    # TODO: json dump tuples as lists
-    # print(json.dumps(sorted_counter, indent=2, ensure_ascii=False))
-    # exit()
+    exit()
 
     BATCH_SIZE = 150
     i = 0
