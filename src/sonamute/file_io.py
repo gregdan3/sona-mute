@@ -58,6 +58,9 @@ class DiscordFetcher(PlatformFetcher):
             # we don't need dirs
 
             for filename in files:
+                if not filename.endswith(".json"):
+                    continue
+
                 data = try_load_json(os.path.join(root, filename))
                 if not data:
                     continue
