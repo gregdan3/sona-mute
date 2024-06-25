@@ -131,3 +131,5 @@ class DiscordFetcher(PlatformFetcher):
                 }
 
                 yield message
+
+        self.__seen = set()
