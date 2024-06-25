@@ -332,6 +332,7 @@ class MessageDB:
     async def insert_message(self, message: Message):
         async for tx in self.client.transaction():
             async with tx:
+                # TX required at message level to not orphan partial inserts when erroring
 
                 community_id = await self.insert_community(tx, message["community"])
                 author_id = await self.insert_author(tx, message["author"])

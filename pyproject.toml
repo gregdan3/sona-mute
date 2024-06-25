@@ -6,7 +6,7 @@ authors = [
     {name = "Gregory Danielson", email = "gregory.danielson3@gmail.com"},
 ]
 dependencies = [
-    "sonatoki>=0.3.3",
+    "sonatoki>=0.4.0",
     "orjson>=3.10.3",
     "edgedb>=1.9.0",
     "pydantic>=2.7.1",

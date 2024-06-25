@@ -1,5 +1,6 @@
 # STL
 import os
+import json
 import asyncio
 import argparse
 import itertools
@@ -10,6 +11,7 @@ from collections.abc import Iterable, Generator
 
 # PDM
 from sonatoki.ilo import Ilo
+from edgedb.errors import EdgeDBError
 from sonatoki.utils import overlapping_ntuples
 from sonatoki.Configs import CorpusConfig
 from sonatoki.Tokenizers import SentTokenizer, WordTokenizer
@@ -20,7 +22,7 @@ from sonamute.file_io import DiscordFetcher, PlatformFetcher
 
 T = TypeVar("T")
 
-F = "/home/gregdan3/communities/discord/ma-pona-pi-toki-pona-05-06/"
+F = "/home/gregdan3/communities/discord/"
 
 
 IGNORED_AUTHORS = {
@@ -67,7 +69,7 @@ IGNORED_CONTAINERS = {
 ILO = Ilo(**CorpusConfig)
 ILO._Ilo__scoring_filters[0].tokens -= {"we", "i", "u", "ten", "to"}
 
-DB = MessageDB("edgedb", "DXZnIcATtDoSB3mjgfWrm8I4", "localhost", 10700)
+DB = MessageDB("edgedb", "cmfc5e73nVQB3JfWPWBBuQ4l", "localhost", 10700)
 DISCORD = DiscordFetcher(F)
 
 
@@ -101,14 +103,14 @@ async def in_db(msg: PreMessage) -> bool:
 
 
 def process_msg(msg: PreMessage) -> Message:
+    """
+    For EdgeDB inserts. Turns a PreMessage into a Message, including all sentences.
+    """
     msg["content"] = clean_string(msg["content"])
     content = ILO.preprocess(msg["content"])
 
     sentences: list[Sentence] = []
-    for sentence in SentTokenizer.tokenize(content):
-        processed, tokenized, filtered, cleaned, score, result = ILO._is_toki_pona(
-            sentence
-        )
+    for _, _, cleaned, score, result in ILO._are_toki_pona(content):
         if cleaned:  # omit empty sentences
             sentences.append(Sentence(words=cleaned, score=score))
 
@@ -118,18 +120,18 @@ def process_msg(msg: PreMessage) -> Message:
 
 
 def countable_msgs(msgs: Iterable[PreMessage]) -> Generator[Message, None, None]:
+    """
+    Prior frequency counting implementation. Yields Messages from PreMessages,
+    but only includes sentences which pass the toki pona filter.
+    """
     for msg in msgs:
         if ignorable(msg):
             continue
-
         content = ILO.preprocess(msg["content"])
 
         sentences: list[Sentence] = []
-        for sentence in SentTokenizer.tokenize(content):
-            processed, tokenized, filtered, cleaned, score, result = ILO._is_toki_pona(
-                sentence
-            )
-            if cleaned and result:  # omit empty/failing sentences
+        for _, _, cleaned, score, result in ILO._are_toki_pona(content):
+            if cleaned and result:  # omit empty sentences
                 sentences.append(Sentence(words=cleaned, score=score))
 
         if not sentences:
@@ -147,7 +149,7 @@ async def insert_raw_msg(msg: PreMessage) -> UUID | None:
     processed = process_msg(msg)
     try:
         _ = await DB.insert_message(processed)
-    except Exception as e:
+    except EdgeDBError as e:
         print(msg)
         raise (e)
 
@@ -173,7 +175,6 @@ def freq_counter(source: PlatformFetcher, _max: int = 0) -> Counter[str]:
         counted += 1
         if _max and counted >= _max:
             break
-
     return counter
 
 
@@ -199,7 +200,7 @@ async def amain(argv: argparse.Namespace):
     # NOTE: i will need to .lower() all inputs to counters later
     # counter = freq_counter(source=DISCORD)
     # counter = ngram_counter(source=DISCORD, n=6)
-    #
+
     # sorted_counter = {
     #     k: v
     #     for k, v in sorted(counter.items(), key=lambda i: i[1], reverse=True)
@@ -210,25 +211,17 @@ async def amain(argv: argparse.Namespace):
     # print(json.dumps(sorted_counter, indent=2, ensure_ascii=False))
     # exit()
 
-    BATCH_SIZE = 250
+    BATCH_SIZE = 150
     i = 0
     for batch in batch_generator(DISCORD.get_messages(), BATCH_SIZE):
         inserts = [insert_raw_msg(msg) for msg in batch]
         _ = await asyncio.gather(*inserts)
 
         i += BATCH_SIZE
-
-        if i % 10000 == 0:
+        if i % 100000 == 0:
             print("Processed %s messages" % i)
 
     print("Final total: %s messages" % i)
-
-    # sorted_counter = {
-    #     k: v
-    #     for k, v in sorted(counter.items(), key=lambda i: i[1], reverse=True)
-    #     if v > 100
-    # }
-    # print(json.dumps(sorted_counter, indent=2, ensure_ascii=False))
 
 
 def main(argv: argparse.Namespace):
