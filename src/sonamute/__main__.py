@@ -14,7 +14,6 @@ from sonatoki.ilo import Ilo
 from edgedb.errors import EdgeDBError
 from sonatoki.utils import overlapping_ntuples
 from sonatoki.Configs import CorpusConfig
-from sonatoki.Tokenizers import SentTokenizer, WordTokenizer
 
 # LOCAL
 from sonamute.db import Message, Sentence, MessageDB, PreMessage
@@ -25,46 +24,12 @@ T = TypeVar("T")
 F = "/home/gregdan3/communities/discord/"
 
 
-IGNORED_AUTHORS = {
-    159985870458322944,  # mee6
-    204255221017214977,  # YAGPDB
-    235148962103951360,  # carlbot
-    239631525350604801,  # pancake.gg
-    242730576195354624,  # autajja
-    268478587651358721,  # rss feeder
-    302050872383242240,  # disboard
-    368362411591204865,  # meljin
-    417529406500896779,  # nadeko
-    426044472078499851,  # tatsu
-    426055530201481236,  # kiwabot
-    429305856241172480,  # esmBot
-    466378653216014359,  # pluralkit
-    507518503813775400,  # ilo pona, ?
-    557628352828014614,  # tickets
-    585271178180952064,  # colorbot
-    633565743103082527,  # discohook
-    655390915325591629,  # starboard
-    657389259149541386,  # barista
-    660591224482168842,  # qbot
-    712086611097157652,  # sala na, old sitelen pona bot
-    775481703028228096,  # ilo pi musi toki, ?
-    790443487912656916,  # ilo musi Ako
-    865485974254911518,  # another minecraft bot
-    870715447136366662,  # thread watcher
-    896482193570938901,  # la zgmii
-    901910020701163522,  # linku
-    911674351248613426,  # bebberkonnie
-    993236979665862806,  # mappo
-    1079265734456250439,  # kose kata
-    1098442116931272866,  # (my) ilo pi toki pona taso
-    1175442172112289923,  # (my) ilo pi kama sona
-    1193285230774202370,  # minecraft bot
-    189702078958927872,  # erisbot
-}
-
 IGNORED_CONTAINERS = {
-    316066233755631616,  # mapona/jaki
-    786041291707777034,  # mapona/ako
+    316066233755631616,  # ma pona/jaki
+    786041291707777034,  # ma pona/ako
+    1128714905932021821,  # ma musi/ako
+    # The acrophobia bot is troublesome, because users trigger it with a phrase in toki pona.
+    # Repeated uses push every word in "ilo o ako" up by >10,000 uses, changing their relative rankings even for o.
 }
 ILO = Ilo(**CorpusConfig)
 ILO._Ilo__scoring_filters[0].tokens -= {"we", "i", "u", "ten", "to"}
@@ -90,8 +55,6 @@ def ignorable(msg: PreMessage) -> bool:
     # TODO: make this per-platform?
     if not msg["content"]:
         return True  # ignore empty messages
-    if msg["author"]["_id"] in IGNORED_AUTHORS:
-        return True
     if msg["container"] in IGNORED_CONTAINERS:
         return True
     return False
