@@ -17,7 +17,7 @@ from sonatoki.Configs import CorpusConfig
 
 # LOCAL
 from sonamute.db import Message, Sentence, MessageDB, PreMessage
-from sonamute.file_io import DiscordFetcher, PlatformFetcher
+from sonamute.file_io import DiscordFetcher, PlatformFetcher, TupleJSONEncoder
 
 T = TypeVar("T")
 
@@ -36,6 +36,18 @@ ILO._Ilo__scoring_filters[0].tokens -= {"we", "i", "u", "ten", "to"}
 
 DB = MessageDB("edgedb", "cmfc5e73nVQB3JfWPWBBuQ4l", "localhost", 10700)
 DISCORD = DiscordFetcher(F)
+
+
+def dump(counter: Counter[str] | Counter[tuple[str, ...]]) -> str:
+    sorted_counter = {
+        k: v for k, v in sorted(counter.items(), key=lambda i: i[1], reverse=True)
+    }
+    return json.dumps(
+        sorted_counter,
+        indent=2,
+        ensure_ascii=False,
+        cls=TupleJSONEncoder,
+    )
 
 
 def clean_string(content: str) -> str:

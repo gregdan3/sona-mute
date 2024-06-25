@@ -1,5 +1,6 @@
 # STL
 import os
+import json
 import logging
 from abc import abstractmethod
 from typing import Any, cast
@@ -17,6 +18,15 @@ LOG = logging.getLogger()
 
 JSON = str | int | float | Mapping["JSON", "JSON"] | Iterable["JSON"]
 DiscordJSON = Mapping[str, Mapping[str, JSON]]  # still inaccurate, but closer
+JSONable = JSON | tuple[JSON, ...]
+
+
+class TupleJSONEncoder(json.JSONEncoder):
+    @override
+    def encode(self, o: JSONable) -> str:
+        if isinstance(o, tuple):
+            o = list(o)
+        return super().encode(o)
 
 
 def try_load_json(filename: str) -> DiscordJSON | None:
