@@ -85,7 +85,8 @@ def process_msg(msg: PreMessage) -> Message:
     content = ILO.preprocess(msg["content"])
 
     sentences: list[Sentence] = []
-    for _, _, cleaned, score, result in ILO._are_toki_pona(content):
+    for scorecard in ILO._are_toki_pona(content):
+        _, _, cleaned, score, _ = scorecard
         if cleaned:  # omit empty sentences
             sentences.append(Sentence(words=cleaned, score=score))
 
@@ -108,7 +109,8 @@ def countable_msgs(
         content = ILO.preprocess(msg["content"])
 
         sentences: list[Sentence] = []
-        for _, _, cleaned, score, result in ILO._are_toki_pona(content):
+        for scorecard in ILO._are_toki_pona(content):
+            _, _, cleaned, score, result = scorecard
             if cleaned and (result or force_pass):  # omit empty sentences
                 sentences.append(Sentence(words=cleaned, score=score))
 
