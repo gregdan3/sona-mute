@@ -64,6 +64,8 @@ class DiscordFetcher(PlatformFetcher):
                 data = try_load_json(os.path.join(root, filename))
                 if not data:
                     continue
+                if "messageCount" not in data:
+                    continue
                 yield data
 
     @override
