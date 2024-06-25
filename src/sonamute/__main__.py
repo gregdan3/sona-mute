@@ -82,10 +82,13 @@ def process_msg(msg: PreMessage) -> Message:
     return final_msg
 
 
-def countable_msgs(msgs: Iterable[PreMessage]) -> Generator[Message, None, None]:
+def countable_msgs(
+    msgs: Iterable[PreMessage],
+    force_pass: bool = False,
+) -> Generator[Message, None, None]:
     """
-    Prior frequency counting implementation. Yields Messages from PreMessages,
-    but only includes sentences which pass the toki pona filter.
+    Prior frequency counting implementation. Yields Messages from PreMessages.
+    Filters to passing sentences unless `force_pass` is True.
     """
     for msg in msgs:
         if ignorable(msg):
@@ -94,7 +97,7 @@ def countable_msgs(msgs: Iterable[PreMessage]) -> Generator[Message, None, None]
 
         sentences: list[Sentence] = []
         for _, _, cleaned, score, result in ILO._are_toki_pona(content):
-            if cleaned and result:  # omit empty sentences
+            if cleaned and (result or force_pass):  # omit empty sentences
                 sentences.append(Sentence(words=cleaned, score=score))
 
         if not sentences:
@@ -128,10 +131,14 @@ def batch_generator(
         yield batch
 
 
-def freq_counter(source: PlatformFetcher, _max: int = 0) -> Counter[str]:
+def freq_counter(
+    source: PlatformFetcher,
+    force_pass: bool = False,
+    _max: int = 0,
+) -> Counter[str]:
     counter: Counter[str] = Counter()
     counted = 0
-    for msg in countable_msgs(source.get_messages()):
+    for msg in countable_msgs(source.get_messages(), force_pass=force_pass):
         for sentence in msg["sentences"]:
             counter.update([word.lower() for word in sentence["words"]])
 
@@ -142,11 +149,11 @@ def freq_counter(source: PlatformFetcher, _max: int = 0) -> Counter[str]:
 
 
 def ngram_counter(
-    source: PlatformFetcher, n: int, _max: int = 0
+    source: PlatformFetcher, n: int, force_pass: bool = False, _max: int = 0
 ) -> Counter[tuple[str, str]]:
     counter: Counter[tuple[str, str]] = Counter()
     counted = 0
-    for msg in countable_msgs(source.get_messages()):
+    for msg in countable_msgs(source.get_messages(), force_pass=force_pass):
         for sentence in msg["sentences"]:
             sentence = [word.lower() for word in sentence["words"]]
             counter.update(overlapping_ntuples(sentence, n=n))
