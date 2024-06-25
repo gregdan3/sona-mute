@@ -29,6 +29,19 @@ def try_load_json(filename: str) -> DiscordJSON | None:
             pass
     return content
 
+
+def is_from_bot(m: DiscordJSON) -> bool:
+    if not m["author"]["isBot"]:
+        return False
+    # must be a bot
+
+    has_roles = not not m["author"]["roles"]
+    has_discrim = m["author"]["discriminator"] != "0000"
+
+    # webhooks cannot have roles or have discrim other than 0000
+    return has_roles or has_discrim
+
+
 class PlatformFetcher:
     @abstractmethod
     def get_messages(self) -> Generator[PreMessage, None, None]: ...
@@ -67,6 +80,13 @@ class DiscordFetcher(PlatformFetcher):
             }
 
             for m in f.get("messages", []):
+                # TODO: ignoring bots should not be the responsibility of file_io
+                # but we would want to ignore bots based on info which it doesn't provide
+                # - plurakit hooks do not have roles or discriminators
+
+                if is_from_bot(m):
+                    continue
+
                 _id = int(m["id"])
                 author_id = int(m["author"]["id"])
                 author_name: str = m["author"]["name"]
@@ -88,4 +108,5 @@ class DiscordFetcher(PlatformFetcher):
                     "author": author,
                     "postdate": postdate,
                 }
+
                 yield message
