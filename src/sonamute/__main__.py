@@ -65,7 +65,9 @@ def clean_string(content: str) -> str:
 
 
 def ignorable(msg: PreMessage) -> bool:
-    # TODO: make this per-platform?
+    # NOTE: using this before, rather than after, databasing was a bad idea
+    # i could have excluded these channels (and previously authors) in the analysis step
+    # doing this before it impossible to ask certain questions in the database
     if not msg["content"]:
         return True  # ignore empty messages
     if msg["container"] in IGNORED_CONTAINERS:
@@ -86,8 +88,7 @@ def process_msg(msg: PreMessage) -> Message:
     content = ILO.preprocess(msg["content"])
 
     sentences: list[Sentence] = []
-    for scorecard in ILO._are_toki_pona(content):
-        _, _, cleaned, score, _ = scorecard
+    for _, _, cleaned, score, _ in ILO._are_toki_pona(content):
         if cleaned:  # omit empty sentences
             sentences.append(Sentence(words=cleaned, score=score))
 
@@ -110,8 +111,7 @@ def countable_msgs(
         content = ILO.preprocess(msg["content"])
 
         sentences: list[Sentence] = []
-        for scorecard in ILO._are_toki_pona(content):
-            _, _, cleaned, score, result = scorecard
+        for _, _, cleaned, score, result in ILO._are_toki_pona(content):
             if cleaned and (result or force_pass):  # omit empty sentences
                 sentences.append(Sentence(words=cleaned, score=score))
 

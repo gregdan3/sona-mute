@@ -332,8 +332,8 @@ class MessageDB:
             content=content,
             container=container,
         )
-
         if not result:
+            # conflict occurred; message exists, so do not write
             return
         found_id = cast(UUID, result.id)
 
