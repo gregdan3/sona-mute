@@ -20,6 +20,8 @@ module default {
     required _id: int64;
     required name: str;
     required platform: Platform;
+    required is_bot: bool;
+    required is_webhook: bool;
 
     constraint exclusive on ((._id, .platform));
     index on ((._id, .platform));

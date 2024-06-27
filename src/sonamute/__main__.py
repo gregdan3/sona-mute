@@ -104,8 +104,8 @@ def countable_msgs(
     Filters to passing sentences unless `force_pass` is True.
     """
     for msg in msgs:
-        if ignorable(msg):
-            continue
+        # if ignorable(msg):
+        #     continue
         content = ILO.preprocess(msg["content"])
 
         sentences: list[Sentence] = []
@@ -121,10 +121,9 @@ def countable_msgs(
 
 
 async def insert_raw_msg(msg: PreMessage) -> UUID | None:
-    if ignorable(msg):
-        return
-    if await in_db(msg):
-        return
+    # NOTE: temporarily taken out for author re-write
+    # if await in_db(msg):
+    #     return
 
     processed = process_msg(msg)
     try:

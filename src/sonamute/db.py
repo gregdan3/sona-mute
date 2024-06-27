@@ -43,6 +43,8 @@ class Author(TypedDict):
     _id: int
     name: str
     platform: Platform
+    is_bot: bool
+    is_webhook: bool
 
 
 class Sentence(TypedDict):
@@ -112,8 +114,17 @@ select (
         _id := <int64>$_id,
         name := <str>$name,
         platform := <Platform>$platform,
+        is_bot := <bool>$is_bot,
+        is_webhook := <bool>$is_webhook,
     } unless conflict on (._id, .platform)
-else Author)
+    else (
+        UPDATE Author
+        SET {
+            is_bot := <bool>$is_bot,
+            is_webhook := <bool>$is_webhook
+        }
+    )
+)
 """
 
 MSG_INSERT = """
@@ -190,6 +201,8 @@ class MessageDB:
         tx: AsyncIOIteration,
         _id: int,
         name: str,
+        is_bot: bool,
+        is_webhook: bool,
         platform: UUID,
     ) -> UUID:
         result = await tx.query_required_single(
@@ -197,6 +210,8 @@ class MessageDB:
             _id=_id,
             name=name,
             platform=platform,
+            is_bot=is_bot,
+            is_webhook=is_webhook,
         )
 
         found_id = cast(UUID, result.id)
@@ -214,6 +229,8 @@ class MessageDB:
             tx=tx,
             _id=author["_id"],
             name=author["name"],
+            is_bot=author["is_bot"],
+            is_webhook=author["is_webhook"],
             platform=platform_id,
         )
 

@@ -47,7 +47,7 @@ def try_load_json(filename: str) -> DiscordJSON | None:
     return content
 
 
-def is_from_bot(m: DiscordJSON) -> bool:
+def is_webhook(m: DiscordJSON) -> bool:
     if not m["author"]["isBot"]:
         return False
     # must be a bot
@@ -56,7 +56,9 @@ def is_from_bot(m: DiscordJSON) -> bool:
     has_discrim = m["author"]["discriminator"] != "0000"
 
     # webhooks cannot have roles or have discrim other than 0000
-    return has_roles or has_discrim
+    # NOTE: some webhooks are still not pk users! discohook for example
+    # NOTE: it is currently unknown whether a bot can omit its discrim
+    return not (has_roles or has_discrim)
 
 
 class PlatformFetcher:
@@ -103,13 +105,6 @@ class DiscordFetcher(PlatformFetcher):
             }
 
             for m in f.get("messages", []):
-                # TODO: ignoring bots should not be the responsibility of file_io
-                # but we would want to ignore bots based on info which it doesn't provide
-                # - plurakit hooks do not have roles or discriminators
-
-                if is_from_bot(m):
-                    continue
-
                 _id = int(m["id"])
                 # discord IDs are globally unique across all objects
                 if _id in self.__seen:
@@ -118,10 +113,15 @@ class DiscordFetcher(PlatformFetcher):
 
                 author_id = int(m["author"]["id"])
                 author_name: str = m["author"]["name"]
+                is_bot: bool = m["author"]["isBot"]
+                is_webhook_: bool = is_webhook(m)
                 author: Author = {
                     "_id": author_id,
                     "name": author_name,
                     "platform": platform,
+                    "is_bot": is_bot,
+                    "is_webhook": is_webhook_,
+                    # NOTE: If an author is a webhook, we know to check it later in PluralKit
                 }
 
                 postdate_str: str = m["timestamp"]
