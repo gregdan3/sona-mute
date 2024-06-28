@@ -2,7 +2,7 @@
 from enum import IntEnum
 from uuid import UUID
 from typing import TypedDict, cast
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 # PDM
 import edgedb
@@ -92,6 +92,12 @@ MSG_SELECT = """
 select Message filter ._id = <int64>$_id and .community = <Community>$community
 """
 
+TP_USER_SENTS_SELECT = """
+SELECT TPUserSentence { words } FILTER
+    .message.postdate >= <std::datetime>$start AND
+    .message.postdate < <std::datetime>$end
+"""
+# NOTE: The boolean filter is also writable as is_bot == is_webhook, but this is *vastly* slower
 
 PLAT_INSERT = """
 select (
@@ -341,11 +347,24 @@ class MessageDB:
             container=message.get("container", None),
         )
 
+    ###########################
+    async def get_msg_date_range(self) -> tuple[datetime, datetime]:
+        """Fetch the earliest and latest date of any message in the DB. Return as a pair `(start, end,)`."""
+        min_date = await self.client.query_required_single(
+            "SELECT min(Message.postdate)"
+        )
+        max_date = await self.client.query_required_single(
+            "SELECT max(Message.postdate)"
+        )
+        return min_date, max_date
 
     async def message_in_db(self, msg: PreMessage) -> bool:
         maybe_id = await self.select_message(msg)
         return not not maybe_id
 
+    async def get_sents_in_range(self, start: date, end: date) -> list[Sentence]:
+        result = await self.client.query(TP_USER_SENTS_SELECT, start=start, end=end)
+        return result
 
 def load_messagedb_from_env() -> MessageDB:
     username = load_envvar("EDGEDB_USER")
