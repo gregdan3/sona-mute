@@ -38,11 +38,6 @@ def clean_string(content: str) -> str:
     return content
 
 
-async def in_db(db: MessageDB, msg: PreMessage) -> bool:
-    maybe_id = await db.select_message(msg)
-    return not not maybe_id
-
-
 def process_msg(msg: PreMessage) -> Message:
     """
     For EdgeDB inserts. Turns a PreMessage into a Message, including all sentences.
@@ -62,7 +57,7 @@ def process_msg(msg: PreMessage) -> Message:
 
 async def insert_raw_msg(db: MessageDB, msg: PreMessage) -> UUID | None:
     # NOTE: temporarily taken out for author re-write
-    if await in_db(db, msg):
+    if await db.message_in_db(msg):
         return
 
     processed = process_msg(msg)

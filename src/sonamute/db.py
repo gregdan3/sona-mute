@@ -342,6 +342,11 @@ class MessageDB:
         )
 
 
+    async def message_in_db(self, msg: PreMessage) -> bool:
+        maybe_id = await self.select_message(msg)
+        return not not maybe_id
+
+
 def load_messagedb_from_env() -> MessageDB:
     username = load_envvar("EDGEDB_USER")
     password = load_envvar("EDGEDB_PASS")
