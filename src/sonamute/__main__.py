@@ -1,54 +1,24 @@
 # STL
 import os
-import json
 import asyncio
 import argparse
 import itertools
 from uuid import UUID
 from typing import TypeVar
-from collections import Counter
-from collections.abc import Iterable, Generator
+from collections.abc import Generator
 
 # PDM
-from sonatoki.ilo import Ilo
 from edgedb.errors import EdgeDBError
-from sonatoki.utils import overlapping_ntuples
-from sonatoki.Configs import CorpusConfig
 
 # LOCAL
 from sonamute.db import Message, Sentence, MessageDB, PreMessage
-from sonamute.file_io import DiscordFetcher, PlatformFetcher, TupleJSONEncoder
+from sonamute.ilo import ILO
+from sonamute.file_io import DiscordFetcher, PlatformFetcher
 
 T = TypeVar("T")
 
-F = "/home/gregdan3/communities/discord/"
-
-
-IGNORED_CONTAINERS = {
-    316066233755631616,  # ma pona/jaki
-    786041291707777034,  # ma pona/ako
-    914305039764426772,  # ma pali/wikipesija
-    1128714905932021821,  # ma musi/ako
-    # The acrophobia bot is troublesome, because users trigger it with a phrase in toki pona.
-    # Repeated uses push every word in "ilo o ako" up by >10,000 uses, changing their relative rankings even for o.
-}
-ILO = Ilo(**CorpusConfig)
-ILO._Ilo__scoring_filters[0].tokens -= {"we", "i", "u", "ten", "to"}
-
 DB = MessageDB("edgedb", "cmfc5e73nVQB3JfWPWBBuQ4l", "localhost", 10700)
-DISCORD = DiscordFetcher(F)
-
-
-def dump(counter: Counter[str] | Counter[tuple[str, ...]]) -> str:
-    sorted_counter = {
-        k: v for k, v in sorted(counter.items(), key=lambda i: i[1], reverse=True)
-    }
-    return json.dumps(
-        sorted_counter,
-        indent=2,
-        ensure_ascii=False,
-        cls=TupleJSONEncoder,
-    )
+SOURCES: dict[str, type[PlatformFetcher]] = {"discord": DiscordFetcher}
 
 
 def clean_string(content: str) -> str:
@@ -62,17 +32,6 @@ def clean_string(content: str) -> str:
     content = content.replace("\0", "")
     # i have no earthly idea how this could happen; i'm reading json
     return content
-
-
-def ignorable(msg: PreMessage) -> bool:
-    # NOTE: using this before, rather than after, databasing was a bad idea
-    # i could have excluded these channels (and previously authors) in the analysis step
-    # doing this before it impossible to ask certain questions in the database
-    if not msg["content"]:
-        return True  # ignore empty messages
-    if msg["container"] in IGNORED_CONTAINERS:
-        return True
-    return False
 
 
 async def in_db(msg: PreMessage) -> bool:
@@ -97,34 +56,10 @@ def process_msg(msg: PreMessage) -> Message:
     return final_msg
 
 
-def countable_msgs(
-    msgs: Iterable[PreMessage],
-    force_pass: bool = False,
-) -> Generator[Message, None, None]:
-    """
-    Prior frequency counting implementation. Yields Messages from PreMessages.
-    Filters to passing sentences unless `force_pass` is True.
-    """
-    for msg in msgs:
-        # if ignorable(msg):
-        #     continue
-        content = ILO.preprocess(msg["content"])
-
-        sentences: list[Sentence] = []
-        for _, _, cleaned, score, result in ILO._are_toki_pona(content):
-            if cleaned and (result or force_pass):  # omit empty sentences
-                sentences.append(Sentence(words=cleaned, score=score))
-
-        if not sentences:
-            continue
-        final_msg: Message = {**msg, "sentences": sentences}
-        yield final_msg
-
-
 async def insert_raw_msg(msg: PreMessage) -> UUID | None:
     # NOTE: temporarily taken out for author re-write
-    # if await in_db(msg):
-    #     return
+    if await in_db(msg):
+        return
 
     processed = process_msg(msg)
     try:
@@ -145,73 +80,11 @@ def batch_generator(
         yield batch
 
 
-def freq_counter(
-    source: PlatformFetcher,
-    min_len: int = 0,
-    force_pass: bool = False,
-    _max: int = 0,
-) -> Counter[str]:
-    counter: Counter[str] = Counter()
-    counted = 0
-    for msg in countable_msgs(source.get_messages(), force_pass=force_pass):
-        for sentence in msg["sentences"]:
-            if len(sentence["words"]) < min_len:
-                continue
-            counter.update([word.lower() for word in sentence["words"]])
-
-        counted += 1
-        if _max and counted >= _max:
-            break
-    return counter
-
-
-def ngram_counter(
-    source: PlatformFetcher,
-    n: int,
-    force_pass: bool = False,
-    _max: int = 0,
-) -> Counter[tuple[str, ...]]:
-    counter: Counter[tuple[str, ...]] = Counter()
-    counted = 0
-    for msg in countable_msgs(source.get_messages(), force_pass=force_pass):
-        for sentence in msg["sentences"]:
-            if len(sentence["words"]) < n:
-                continue  # save some time; can't get any data
-            sentence = [word.lower() for word in sentence["words"]]
-            counter.update(overlapping_ntuples(sentence, n=n))
-
-        counted += 1
-        if _max and counted >= _max:
-            break
-
-    return counter
-
-
 async def amain(argv: argparse.Namespace):
-    # TODO: this is a huge waste of CPU time but my DB is unusable due to an EdgeDB CLI bug
-    min_lens = [1, 2, 3, 4, 5, 6]
-    for min_len in min_lens:
-        print(f"Starting on frequency of min len {min_len}")
-        counter = freq_counter(source=DISCORD, min_len=min_len)
-        result = dump(counter)
-        with open(f"word_freq_tpt_min_len_{min_len}.json", "w") as f:
-            _ = f.write(result)
-        print(f"Finished frequency of min len {min_len}")
-
-    ngrams = [2, 3, 4, 5, 6]
-    for n in ngrams:
-        print(f"Starting on ngrams of len {n}")
-        counter = ngram_counter(source=DISCORD, n=n)
-        result = dump(counter)
-        with open(f"ngrams_tpt_size_{n}.json", "w") as f:
-            _ = f.write(result)
-        print(f"Finished ngrams of len {n}")
-
-    exit()
-
-    BATCH_SIZE = 150
+    SOURCE = SOURCES[argv.platform](argv.dir)
+    BATCH_SIZE = argv.batch_size
     i = 0
-    for batch in batch_generator(DISCORD.get_messages(), BATCH_SIZE):
+    for batch in batch_generator(SOURCE.get_messages(), BATCH_SIZE):
         inserts = [insert_raw_msg(msg) for msg in batch]
         _ = await asyncio.gather(*inserts)
 
@@ -235,22 +108,27 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     _ = parser.add_argument(
-        "--log-level",
-        help="Set the log level",
-        type=str.upper,
-        dest="log_level",
-        default="INFO",
-        choices=["NOTSET", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        "--dir",
+        help="A directory to fetch data from.",
+        dest="dir",
+        required=True,
+        type=existing_directory,
     )
-
-    # LOG_FORMAT = (
-    #     "[%(asctime)s] [%(filename)12s:%(lineno)-4s] [%(levelname)8s] %(message)s"
-    # )
-    LOG_FORMAT = "%(message)s"
-
-    # logging.basicConfig(format=LOG_FORMAT)
-    # logger = logging.getLogger("sonatoki.ilo")
-    # logger.setLevel(logging.DEBUG)
+    _ = parser.add_argument(
+        "--platform",
+        help="The format of the data, specified by its original platform.",
+        dest="platform",
+        required=True,
+        choices=SOURCES.keys(),
+    )
+    _ = parser.add_argument(
+        "--batch-size",
+        help="How many messages to consume at once from the source.",
+        dest="batch_size",
+        required=False,
+        type=int,
+        default=150,
+    )
 
     ARGV = parser.parse_args()
     main(ARGV)

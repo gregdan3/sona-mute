@@ -8,7 +8,6 @@ from datetime import datetime
 import edgedb
 from edgedb import RetryOptions, AsyncIOClient
 from async_lru import alru_cache
-from edgedb.asyncio_client import AsyncIOIteration
 
 
 class KnownPlatforms(IntEnum):
@@ -117,15 +116,7 @@ select (
         is_bot := <bool>$is_bot,
         is_webhook := <bool>$is_webhook,
     } unless conflict on (._id, .platform)
-    else (
-        UPDATE Author
-        SET {
-            is_bot := <bool>$is_bot,
-            is_webhook := <bool>$is_webhook
-        }
-    )
-)
-"""
+else Author)"""
 
 MSG_INSERT = """
 select (
@@ -141,7 +132,7 @@ select (
 
 SENT_INSERT = """
 INSERT Sentence {
-    message := <Message>$message, 
+    message := <Message>$message,
     words := <array<str>>$words,
     score := <float64>$score
 }
