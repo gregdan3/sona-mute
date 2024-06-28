@@ -11,13 +11,17 @@ from collections.abc import Generator
 from edgedb.errors import EdgeDBError
 
 # LOCAL
-from sonamute.db import Message, Sentence, MessageDB, PreMessage
+from sonamute.db import (
+    Message,
+    Sentence,
+    MessageDB,
+    PreMessage,
+    load_messagedb_from_env,
+)
 from sonamute.ilo import ILO
 from sonamute.file_io import DiscordFetcher, PlatformFetcher
 
 T = TypeVar("T")
-
-DB = MessageDB("edgedb", "cmfc5e73nVQB3JfWPWBBuQ4l", "localhost", 10700)
 SOURCES: dict[str, type[PlatformFetcher]] = {"discord": DiscordFetcher}
 
 
@@ -34,8 +38,8 @@ def clean_string(content: str) -> str:
     return content
 
 
-async def in_db(msg: PreMessage) -> bool:
-    maybe_id = await DB.select_message(msg)
+async def in_db(db: MessageDB, msg: PreMessage) -> bool:
+    maybe_id = await db.select_message(msg)
     return not not maybe_id
 
 
@@ -56,14 +60,14 @@ def process_msg(msg: PreMessage) -> Message:
     return final_msg
 
 
-async def insert_raw_msg(msg: PreMessage) -> UUID | None:
+async def insert_raw_msg(db: MessageDB, msg: PreMessage) -> UUID | None:
     # NOTE: temporarily taken out for author re-write
-    if await in_db(msg):
+    if await in_db(db, msg):
         return
 
     processed = process_msg(msg)
     try:
-        _ = await DB.insert_message(processed)
+        _ = await db.insert_message(processed)
     except EdgeDBError as e:
         print(msg)
         raise (e)
@@ -81,14 +85,17 @@ def batch_generator(
 
 
 async def amain(argv: argparse.Namespace):
-    SOURCE = SOURCES[argv.platform](argv.dir)
-    BATCH_SIZE = argv.batch_size
+    source = SOURCES[argv.platform](argv.dir)
+
+    db = load_messagedb_from_env()
+    batch_size: int = argv.batch_size
+
     i = 0
-    for batch in batch_generator(SOURCE.get_messages(), BATCH_SIZE):
-        inserts = [insert_raw_msg(msg) for msg in batch]
+    for batch in batch_generator(source.get_messages(), batch_size):
+        inserts = [insert_raw_msg(db, msg) for msg in batch]
         _ = await asyncio.gather(*inserts)
 
-        i += BATCH_SIZE
+        i += batch_size
         if i % 100000 == 0:
             print("Processed %s messages" % i)
 

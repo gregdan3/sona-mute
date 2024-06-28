@@ -9,6 +9,9 @@ import edgedb
 from edgedb import RetryOptions, AsyncIOClient
 from async_lru import alru_cache
 
+# LOCAL
+from sonamute.utils import load_envvar
+
 
 class KnownPlatforms(IntEnum):
     Other = 0  # unsortable
@@ -337,3 +340,12 @@ class MessageDB:
             sentences=message["sentences"],
             container=message.get("container", None),
         )
+
+
+def load_messagedb_from_env() -> MessageDB:
+    username = load_envvar("EDGEDB_USER")
+    password = load_envvar("EDGEDB_PASS")
+    host = load_envvar("EDGEDB_HOST")
+    port = int(load_envvar("EDGEDB_PORT"))
+    DB = MessageDB(username, password, host, port)
+    return DB

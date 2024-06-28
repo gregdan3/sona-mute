@@ -11,6 +11,10 @@ dependencies = [
     "edgedb>=1.9.0",
     "pydantic>=2.7.1",
     "async-lru>=2.0.4",
+    "sqlalchemy[asyncio]>=2.0.31",
+    "sqlalchemy-utils>=0.41.2",
+    "aiosqlite>=0.20.0",
+    "python-dotenv>=1.0.1",
 ]
 requires-python = ">=3.11"
 readme = "README.md"
