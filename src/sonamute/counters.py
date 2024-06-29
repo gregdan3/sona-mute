@@ -63,7 +63,7 @@ def countable_msgs(
         yield final_msg
 
 
-def ngram_counter(
+def sourced_ngram_counter(
     source: PlatformFetcher,
     n: int,
     force_pass: bool = False,
@@ -85,7 +85,7 @@ def ngram_counter(
     return counter
 
 
-def freq_counter(
+def sourced_freq_counter(
     source: PlatformFetcher,
     min_len: int = 0,
     force_pass: bool = False,
@@ -105,69 +105,58 @@ def freq_counter(
     return counter
 
 
-async def amain(argv: argparse.Namespace):
-    SOURCE = SOURCES[argv.platform](argv.dir)
-
-    # TODO: this is a huge waste of CPU time but my DB is unusable due to an EdgeDB CLI bug
-    # min_lens = [1, 2, 3, 4, 5, 6]
-    # for min_len in min_lens:
-    #     print(f"Starting on frequency of min len {min_len}")
-    #     counter = freq_counter(source=DISCORD, min_len=min_len)
-    #     result = dump(counter)
-    #     with open(f"word_freq_tpt_min_len_{min_len}.json", "w") as f:
-    #         _ = f.write(result)
-    #     print(f"Finished frequency of min len {min_len}")
-    #
-    # ngrams = [2, 3, 4, 5, 6]
-    # for n in ngrams:
-    #     print(f"Starting on ngrams of len {n}")
-    #     counter = ngram_counter(source=DISCORD, n=n)
-    #     result = dump(counter)
-    #     with open(f"ngrams_tpt_size_{n}.json", "w") as f:
-    #         _ = f.write(result)
-    #     print(f"Finished ngrams of len {n}")
-    #
-    # exit()
-
-    BATCH_SIZE = 150
-    i = 0
-    for batch in batch_generator(SOURCE.get_messages(), BATCH_SIZE):
-        inserts = [insert_raw_msg(msg) for msg in batch]
-        _ = await asyncio.gather(*inserts)
-
-        i += BATCH_SIZE
-        if i % 100000 == 0:
-            print("Processed %s messages" % i)
-
-    print("Final total: %s messages" % i)
+def phrase_counter(sents: list[list[str]], n: int):
+    counter: Counter[tuple[str, ...]] = Counter()
+    for sent in sents:
+        if len(sent) < n:
+            continue  # save some time; can't get any data
+        counter.update(overlapping_ntuples(sent, n=n))
+    return counter
 
 
-def main(argv: argparse.Namespace):
-    asyncio.run(amain(argv))
+def word_counter(sents: list[list[str]], min_len: int):
+    counter: Counter[str] = Counter()
+    for sent in sents:
+        sent = [w.lower() for w in sent]
+        if len(sent) < min_len:
+            continue  # save some time; can't get any data
+        counter.update(sent)
+    return counter
 
 
-if __name__ == "__main__":
+def word_counters_by_min_sent_len(
+    sents: list[list[str]],
+    max_min_len: int,  # recommendation: do not exceed 6
+) -> dict[int, Counter[str]]:
+    counters: dict[int, Counter[str]] = {
+        min_len: Counter() for min_len in range(1, max_min_len + 1)
+    }
 
-    def existing_directory(dir_path: str) -> str:
-        if os.path.isdir(dir_path):
-            return dir_path
-        raise NotADirectoryError(dir_path)
+    for sent in sents:
+        sent = [w.lower() for w in sent]
+        sent_len = len(sent)
+        for min_len in range(1, max_min_len + 1):
+            if sent_len >= min_len:
+                counters[min_len].update(sent)
 
-    parser = argparse.ArgumentParser()
-    _ = parser.add_argument(
-        "--dir",
-        help="A directory to fetch data from.",
-        dest="dir",
-        required=True,
-        type=existing_directory,
-    )
-    _ = parser.add_argument(
-        "--platform",
-        help="The format of the data, specified by its original platform.",
-        dest="platform",
-        required=True,
-        choices=SOURCES.keys(),
-    )
+    return counters
 
-    ARGV = parser.parse_args()
-    main(ARGV)
+
+async def meta_counter(sents: list[list[str]]):
+    min_lens = [1, 2, 3, 4, 5, 6]
+    for min_len in min_lens:
+        print(f"Starting on frequency of min len {min_len}")
+        counter = sourced_freq_counter(source=DISCORD, min_len=min_len)
+        result = dump(counter)
+        with open(f"word_freq_tpt_min_len_{min_len}.json", "w") as f:
+            _ = f.write(result)
+        print(f"Finished frequency of min len {min_len}")
+
+    ngrams = [2, 3, 4, 5, 6]
+    for n in ngrams:
+        print(f"Starting on ngrams of len {n}")
+        counter = sourced_ngram_counter(source=DISCORD, n=n)
+        result = dump(counter)
+        with open(f"ngrams_tpt_size_{n}.json", "w") as f:
+            _ = f.write(result)
+        print(f"Finished ngrams of len {n}")
