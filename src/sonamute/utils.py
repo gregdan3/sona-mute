@@ -1,10 +1,14 @@
 # STL
 import os
-from typing import Generator
+import itertools
+from typing import TypeVar
 from datetime import date, datetime, timedelta
+from collections.abc import Generator
 
 # PDM
 import dotenv
+
+T = TypeVar("T")
 
 __has_loaded = False
 
@@ -34,3 +38,14 @@ def dates_in_range(start: datetime, end: datetime) -> Generator[datetime, None, 
     while start <= end:
         yield start
         start += timedelta(days=1)
+
+
+def batch_generator(
+    generator: Generator[T, None, None],
+    batch_size: int,
+) -> Generator[list[T], None, None]:
+    while True:
+        batch = list(itertools.islice(generator, batch_size))
+        if not batch:
+            break
+        yield batch

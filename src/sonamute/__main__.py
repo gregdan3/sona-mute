@@ -2,10 +2,7 @@
 import os
 import asyncio
 import argparse
-import itertools
 from uuid import UUID
-from typing import TypeVar
-from collections.abc import Generator
 
 # PDM
 from edgedb.errors import EdgeDBError
@@ -19,9 +16,9 @@ from sonamute.db import (
     load_messagedb_from_env,
 )
 from sonamute.ilo import ILO
+from sonamute.utils import batch_generator
 from sonamute.file_io import DiscordFetcher, PlatformFetcher
 
-T = TypeVar("T")
 SOURCES: dict[str, type[PlatformFetcher]] = {"discord": DiscordFetcher}
 
 
@@ -66,17 +63,6 @@ async def insert_raw_msg(db: MessageDB, msg: PreMessage) -> UUID | None:
     except EdgeDBError as e:
         print(msg)
         raise (e)
-
-
-def batch_generator(
-    generator: Generator[T, None, None],
-    batch_size: int,
-) -> Generator[list[T], None, None]:
-    while True:
-        batch = list(itertools.islice(generator, batch_size))
-        if not batch:
-            break
-        yield batch
 
 
 async def amain(argv: argparse.Namespace):
