@@ -362,9 +362,10 @@ class MessageDB:
         maybe_id = await self.select_message(msg)
         return not not maybe_id
 
-    async def get_sents_in_range(self, start: date, end: date) -> list[Sentence]:
-        result = await self.client.query(TP_USER_SENTS_SELECT, start=start, end=end)
-        return result
+    async def counted_sents_in_range(self, start: date, end: date) -> list[list[str]]:
+        results = await self.client.query(TP_USER_SENTS_SELECT, start=start, end=end)
+        return [r.words for r in results]
+
 
 def load_messagedb_from_env() -> MessageDB:
     username = load_envvar("EDGEDB_USER")
