@@ -57,7 +57,7 @@ class WordFrequency(Base):
 
     word = Column(Text, nullable=False)
     min_length = Column(Integer, nullable=False)
-    day = Column(Date, nullable=False)
+    day = Column(Integer, nullable=False)
     occurrences = Column(BigInteger, nullable=False)
 
     __table_args__ = (PrimaryKeyConstraint("word", "min_length", "day"),)
@@ -67,7 +67,7 @@ class PhraseFrequency(Base):
     __tablename__ = "phrase_freq"
     word = Column(Text, nullable=False)
     length = Column(Integer, nullable=False)
-    day = Column(Date, nullable=False)
+    day = Column(Integer, nullable=False)
     occurrences = Column(BigInteger, nullable=False)
 
     __table_args__ = (PrimaryKeyConstraint("word", "length", "day"),)
@@ -116,12 +116,13 @@ def format_insertable_freq(
     counters: dict[int, Counter[str]],
     day: datetime,
 ) -> list[WordFreqRow]:
+    timestamp = int(day.timestamp())
     word_freq_rows: list[WordFreqRow] = list()
     for min_length, counter in counters.items():
         for word, occurrences in counter.items():
             result = WordFreqRow(
                 {
-                    "day": day,
+                    "day": timestamp,
                     "word": word,
                     "min_length": min_length,
                     "occurrences": occurrences,
@@ -134,11 +135,9 @@ def format_insertable_freq(
 async def amain(argv: argparse.Namespace):
     edgedb = load_messagedb_from_env()
     sqlite_db = await freqdb_factory(argv.db)
-    start_datetime, end_datetime = await edgedb.get_msg_date_range()
+    first_msg_dt, last_msg_dt = await edgedb.get_msg_date_range()
 
-    dates = days_in_range(start_datetime, end_datetime)
-    start = next(dates)
-    for end in dates:
+    for start, end in months_in_range(first_msg_dt, last_msg_dt):
         print(start)
         result = await edgedb.counted_sents_in_range(start, end)
 
