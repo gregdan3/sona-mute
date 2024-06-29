@@ -1,22 +1,16 @@
 # STL
 import asyncio
-import sqlite3
 import argparse
-from typing import Generator, TypedDict
-from datetime import date, datetime
+from typing import Literal, TypedDict
+from datetime import datetime
 from contextlib import asynccontextmanager
 from collections import Counter
 
 # PDM
 from sqlalchemy import (
-    Date,
-    Enum,
     Text,
     Column,
-    String,
-    Boolean,
     Integer,
-    BigInteger,
     ForeignKey,
     CheckConstraint,
     PrimaryKeyConstraint,
@@ -40,8 +34,8 @@ Base = declarative_base()
 
 class WordFreqRow(TypedDict):
     word: str
-    min_length: int
-    day: datetime  # TODO
+    min_len: int
+    day: int  # timestamp
     occurrences: int
 
 
@@ -52,25 +46,36 @@ class PhraseFreqRow(TypedDict):
     occurrences: int
 
 
+class Word(Base):
+    # NOTE: misnomer since it will also contain phrases
+    __tablename__ = "word"
+
+    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
+    word = Column(Text, unique=True, nullable=False)
+
+
 class WordFrequency(Base):
     __tablename__ = "word_freq"
 
-    word = Column(Text, nullable=False)
-    min_length = Column(Integer, nullable=False)
+    # word = Column(Text, nullable=False)
+    word_id = Column(Integer, ForeignKey("word.id"), nullable=False)
+    min_len = Column(Integer, nullable=False)
     day = Column(Integer, nullable=False)
-    occurrences = Column(BigInteger, nullable=False)
+    occurrences = Column(Integer, nullable=False)
 
-    __table_args__ = (PrimaryKeyConstraint("word", "min_length", "day"),)
+    # __table_args__ = (PrimaryKeyConstraint("word", "min_len", "day"),)
+    __table_args__ = (PrimaryKeyConstraint("word_id", "min_len", "day"),)
 
 
 class PhraseFrequency(Base):
     __tablename__ = "phrase_freq"
-    word = Column(Text, nullable=False)
+    # word = Column(Text, nullable=False)
+    word_id = Column(Integer, ForeignKey("word.id"), nullable=False)
     length = Column(Integer, nullable=False)
     day = Column(Integer, nullable=False)
-    occurrences = Column(BigInteger, nullable=False)
+    occurrences = Column(Integer, nullable=False)
 
-    __table_args__ = (PrimaryKeyConstraint("word", "length", "day"),)
+    __table_args__ = (PrimaryKeyConstraint("word_id", "length", "day"),)
 
 
 class FreqDB:
@@ -93,13 +98,36 @@ class FreqDB:
         async with self.sgen() as s:
             yield s
 
-    async def insert_word(self, data: WordFreqRow | list[WordFreqRow]):
+    async def upsert_word(self, data: list[dict[Literal["word"], str]]):
+        async with self.session() as s:
+            stmt = insert(Word).values(data)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["word"],
+                set_={"word": stmt.excluded.word},
+            ).returning(Word.word, Word.id)
+            # Can't `do_nothing` because it will cause no rows to return
+            result = await s.execute(stmt)
+            await s.commit()
+
+        word_id_map: dict[str, int] = dict()
+        for word, id in result:
+            word_id_map[word] = id
+        return word_id_map
+
+    async def insert_word_freq(self, data: list[WordFreqRow]):
+        words = [{"word": d["word"]} for d in data]
+        word_id_map = await self.upsert_word(words)
+        for d in data:
+            # TODO: typing
+            d["word_id"] = word_id_map[d["word"]]
+            _ = d.pop("word")
+
         async with self.session() as s:
             stmt = insert(WordFrequency).values(data)
             _ = await s.execute(stmt)
             await s.commit()
 
-    async def insert_phrase(self, data: PhraseFreqRow | list[PhraseFreqRow]):
+    async def insert_phrase_freq(self, data: list[PhraseFreqRow]):
         async with self.session() as s:
             stmt = insert(PhraseFrequency).values(data)
             _ = await s.execute(stmt)
@@ -118,13 +146,13 @@ def format_insertable_freq(
 ) -> list[WordFreqRow]:
     timestamp = int(day.timestamp())
     word_freq_rows: list[WordFreqRow] = list()
-    for min_length, counter in counters.items():
+    for min_len, counter in counters.items():
         for word, occurrences in counter.items():
             result = WordFreqRow(
                 {
                     "day": timestamp,
                     "word": word,
-                    "min_length": min_length,
+                    "min_len": min_len,
                     "occurrences": occurrences,
                 }
             )
@@ -146,7 +174,7 @@ async def amain(argv: argparse.Namespace):
         if formatted:
             for batch in batch_list(formatted, 249):
                 # we insert 4 items per row; max sql variables is 999 for, reasons,
-                await sqlite_db.insert_word(batch)
+                await sqlite_db.insert_word_freq(batch)
 
         # phrase_lens = [2, 3, 4, 5, 6]
         # for n in phrase_lens:
