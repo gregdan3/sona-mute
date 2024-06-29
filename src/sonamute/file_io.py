@@ -1,9 +1,7 @@
 # STL
 import os
 import json
-import logging
 from abc import abstractmethod
-from typing import Any, cast
 from datetime import datetime
 from collections.abc import Mapping, Iterable, Generator
 
@@ -13,8 +11,6 @@ from typing_extensions import override
 
 # LOCAL
 from sonamute.db import Author, Platform, Community, PreMessage, KnownPlatforms
-
-LOG = logging.getLogger()
 
 JSON = str | int | float | Mapping["JSON", "JSON"] | Iterable["JSON"]
 DiscordJSON = Mapping[str, Mapping[str, JSON]]  # still inaccurate, but closer
