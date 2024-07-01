@@ -1,12 +1,14 @@
 # STL
 import os
+import asyncio
 import itertools
-from typing import TypeVar
+from typing import Any, TypeVar, Callable, Coroutine
 from datetime import datetime, timedelta
-from collections.abc import Generator
+from collections.abc import Iterable, Iterator, Generator
 
 # PDM
 import dotenv
+from sonatoki.utils import overlapping_ntuples
 
 T = TypeVar("T")
 
@@ -100,17 +102,29 @@ def epochs_in_range(
         step = round_to_next_epoch(start)
 
 
-def batch_generator(
-    generator: Generator[T, None, None],
-    batch_size: int,
-) -> Generator[list[T], None, None]:
+def batch_iter(iterator: Iterable[T], batch_size: int) -> Iterator[list[T]]:
+    it = iter(iterator)
     while True:
-        batch = list(itertools.islice(generator, batch_size))
+        batch = list(itertools.islice(it, batch_size))
         if not batch:
             break
         yield batch
 
 
-def batch_list(lst: list[T], batch_size: int) -> Generator[list[T], None, None]:
-    for i in range(0, len(lst), batch_size):
-        yield lst[i : i + batch_size]
+async def gather_batch(
+    callable: Callable[[Any], Coroutine[Any, Any, None]],
+    to_batch: Generator[T, None, None],
+    batch_size: int,
+    *args: Any,
+    **kwargs: Any,
+):
+    results = list()
+    for batch in batch_iter(to_batch, batch_size):
+        gatherables = [callable(item, *args, **kwargs) for item in batch]
+        result = await asyncio.gather(*gatherables)
+        results.extend(result)
+    return results
+
+
+def overlapping_phrases(iterable: Iterable[str], n: int) -> Iterable[str]:
+    return [" ".join(item) for item in overlapping_ntuples(iterable, n)]

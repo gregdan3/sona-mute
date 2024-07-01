@@ -26,8 +26,8 @@ from sqlalchemy.dialects.sqlite import Insert as insert
 
 # LOCAL
 from sonamute.db import load_messagedb_from_env
-from sonamute.utils import batch_list, days_in_range, epochs_in_range, months_in_range
 from sonamute.counters import word_counters_by_min_sent_len
+from sonamute.utils import batch_iter, days_in_range, epochs_in_range, months_in_range
 
 Base = declarative_base()
 
@@ -172,7 +172,7 @@ async def amain(argv: argparse.Namespace):
         counters = word_counters_by_min_sent_len(result, 6)
         formatted = format_insertable_freq(counters, start)
         if formatted:
-            for batch in batch_list(formatted, 249):
+            for batch in batch_iter(formatted, 249):
                 # we insert 4 items per row; max sql variables is 999 for, reasons,
                 await sqlite_db.insert_word_freq(batch)
 
@@ -197,3 +197,4 @@ if __name__ == "__main__":
     )
     ARGV = parser.parse_args()
     main(ARGV)
+

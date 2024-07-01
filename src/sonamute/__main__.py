@@ -16,7 +16,7 @@ from sonamute.db import (
     load_messagedb_from_env,
 )
 from sonamute.ilo import ILO
-from sonamute.utils import batch_generator
+from sonamute.utils import batch_iter, gather_batch, months_in_range
 from sonamute.file_io import DiscordFetcher, PlatformFetcher
 
 SOURCES: dict[str, type[PlatformFetcher]] = {"discord": DiscordFetcher}
@@ -72,7 +72,7 @@ async def amain(argv: argparse.Namespace):
     batch_size: int = argv.batch_size
 
     i = 0
-    for batch in batch_generator(source.get_messages(), batch_size):
+    for batch in batch_iter(source.get_messages(), batch_size):
         inserts = [insert_raw_msg(db, msg) for msg in batch]
         _ = await asyncio.gather(*inserts)
 

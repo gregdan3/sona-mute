@@ -28,7 +28,9 @@ distribution = true
 [tool.pdm.dev-dependencies]
 dev = [
     "snakeviz>=2.2.0",
-    "ipython>=8.25.0",
+    "ipython>=8.26.0",
+    "pytest>=8.2.2",
+    "pytest-asyncio>=0.23.7",
 ]
 [tool.isort]
 length_sort = "1"
