@@ -1,7 +1,7 @@
 # STL
 from enum import IntEnum
 from uuid import UUID
-from typing import Literal, TypedDict, cast
+from typing import Counter, Literal, TypedDict, cast
 from datetime import date, datetime, timedelta
 
 # PDM
@@ -101,12 +101,20 @@ MSG_SELECT = """
 select Message filter ._id = <int64>$_id and .community = <Community>$community
 """
 
-TP_USER_SENTS_SELECT = """
-SELECT TPUserSentence { community := .message.community.id, words } FILTER
+USER_SENTS_SELECT = """
+SELECT %s { community := .message.community.id, words } FILTER
     .message.postdate >= <std::datetime>$start AND
     .message.postdate < <std::datetime>$end
 """
-# NOTE: The boolean filter is also writable as is_bot == is_webhook, but this is *vastly* slower
+PASSING_USER_SENTS_SELECT = USER_SENTS_SELECT % "TPUserSentence"
+FAILING_USER_SENTS_SELECT = USER_SENTS_SELECT % "NonTPUserSentence"
+
+
+FREQ_SELECT = """
+SELECT Frequency { text, length, day, occurrences, is_word } FILTER
+    .day >= <std::datetime>$start AND
+    .day < <std::datetime>$end
+"""
 
 PLAT_INSERT = """
 select (
@@ -369,15 +377,7 @@ class MessageDB:
         )
 
     async def insert_frequency(self, freq: Frequency):
-        _ = await self.client.query(
-            FREQ_INSERT,
-            **freq,
-            # text=freq["text"],
-            # length=freq["length"],
-            # day=freq["day"],
-            # occurrences=freq["occurrences"],
-            # is_word=freq["is_word"],
-        )
+        _ = await self.client.query(FREQ_INSERT, **freq)
 
     ###########################
     async def get_msg_date_range(self) -> tuple[datetime, datetime]:
@@ -394,9 +394,41 @@ class MessageDB:
         maybe_id = await self.select_message(msg)
         return not not maybe_id
 
-    async def counted_sents_in_range(self, start: date, end: date):
-        results = await self.client.query(TP_USER_SENTS_SELECT, start=start, end=end)
+    async def counted_sents_in_range(
+        self,
+        start: date,
+        end: date,
+        passing: bool = True,
+    ):
+        query = FAILING_USER_SENTS_SELECT
+        if passing:
+            query = PASSING_USER_SENTS_SELECT
+
+        results = await self.client.query(query, start=start, end=end)
         return results  # has .words and .community
+
+
+def make_insertable_freq(
+    counters: dict[int, Counter[str]],
+    community: UUID,
+    day: datetime,
+    is_word: bool,
+) -> list[Frequency]:
+    word_freq_rows: list[Frequency] = list()
+    for length, counter in counters.items():
+        for text, occurrences in counter.items():
+            result = Frequency(
+                {
+                    "text": text,
+                    "length": length,
+                    "day": day,
+                    "occurrences": occurrences,
+                    "is_word": is_word,
+                    "community": community,
+                }
+            )
+            word_freq_rows.append(result)
+    return word_freq_rows
 
 
 def load_messagedb_from_env() -> MessageDB:

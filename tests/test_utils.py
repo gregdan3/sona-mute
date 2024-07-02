@@ -33,6 +33,34 @@ def test_batch_generator():
         assert batch == sorted(batch)
 
 
+def test_batch_size_mismatch():
+    ex = list(range(1, 101))
+    batch_size = 17
+
+    batches: list[list[int]] = list()
+    for batch in batch_iter(ex, batch_size):
+        batches.append(batch)
+        assert batch == sorted(batch)
+
+    assert batches[-1][-1] == ex[-1]
+
+
+def test_batch_iter():
+    data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    batch_size = 3
+    expected_batches = [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10]]
+    result_batches = list(batch_iter(data, batch_size))
+    assert (
+        result_batches == expected_batches
+    ), f"Expected {expected_batches}, but got {result_batches}"
+    batch_size = 4
+    expected_batches = [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10]]
+    result_batches = list(batch_iter(data, batch_size))
+    assert (
+        result_batches == expected_batches
+    ), f"Expected {expected_batches}, but got {result_batches}"
+
+
 @pytest.mark.asyncio
 async def test_gather_batch():
     async def square(a: int) -> int:

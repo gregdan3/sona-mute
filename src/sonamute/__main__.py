@@ -14,13 +14,13 @@ from sonamute.db import (
     Frequency,
     MessageDB,
     PreMessage,
+    make_insertable_freq,
     load_messagedb_from_env,
 )
 from sonamute.ilo import ILO
-from sonamute.utils import batch_iter, gather_batch, months_in_range
+from sonamute.utils import batch_iter, gather_batch, days_in_range, months_in_range
 from sonamute.file_io import DiscordFetcher, PlatformFetcher
 from sonamute.counters import phrases_by_length, word_counters_by_min_sent_len
-from sonamute.gen_sqlite import make_insertable_freq
 
 SOURCES: dict[str, type[PlatformFetcher]] = {"discord": DiscordFetcher}
 
@@ -76,40 +76,46 @@ def sort_by_community(tagged_sents: list) -> dict[UUID, list[list[str]]]:
     return output
 
 
+async def source_to_db(db: MessageDB, source: PlatformFetcher, batch_size: int):
+    i = 0
+    for batch in batch_iter(source.get_messages(), batch_size):
+        inserts = [insert_raw_msg(db, msg) for msg in batch]
+        _ = await asyncio.gather(*inserts)
+
+        i += len(inserts)
+        if i % 100000 == 0:
+            print("Processed %s messages" % i)
+
+    print("Final total: %s messages" % i)
+
+
+async def sentences_to_frequencies(db: MessageDB, batch_size: int, passing: bool):
+    first_msg_dt, last_msg_dt = await db.get_msg_date_range()
+    for start, end in days_in_range(first_msg_dt, last_msg_dt):
+        print(start)
+        result = await db.counted_sents_in_range(start, end, passing)
+        by_community = sort_by_community(result)
+
+        for community, sents in by_community.items():
+            counters = word_counters_by_min_sent_len(sents, 6)
+            formatted = make_insertable_freq(counters, community, start, True)
+            await gather_batch(db.insert_frequency, formatted, batch_size)
+
+            counters = phrases_by_length(sents, 6)
+            formatted = make_insertable_freq(counters, community, start, False)
+            await gather_batch(db.insert_frequency, formatted, batch_size)
+
+
 async def amain(argv: argparse.Namespace):
     source = SOURCES[argv.platform](argv.dir)
 
     db = load_messagedb_from_env()
     batch_size: int = argv.batch_size
 
-    for batch in batch_iter(source.get_messages(), batch_size):
-        inserts = [insert_raw_msg(db, msg) for msg in batch]
-        _ = await asyncio.gather(*inserts)
-
-        i += batch_size
-        if i % 100000 == 0:
-            print("Processed %s messages" % i)
-
-    print("Final total: %s messages" % i)
-    first_msg_dt, last_msg_dt = await db.get_msg_date_range()
-    for start, end in months_in_range(first_msg_dt, last_msg_dt):
-        print(start)
-        result = await db.counted_sents_in_range(start, end)
-        by_community = sort_by_community(result)
-
-        for community, sents in by_community.items():
-            counters = word_counters_by_min_sent_len(sents, 6)
-            formatted = make_insertable_freq(
-                counters,
-                community,
-                start,
-                True,
-            )
-            await gather_batch(db.insert_frequency, formatted, batch_size)
-
-        # phrase_counters = phrases_by_length(result, 6)
-        # formatted = make_insertable_freq(phrase_counters, start, False)
-        # await gather_batch(insert_freq, formatted, batch_size, db)
+    # await source_to_db(db, source, batch_size)
+    await sentences_to_frequencies(db, batch_size, True)
+    # await sentences_to_frequencies(db, batch_size, False)
+    # there is so much more non-tp data than tp data that i think this is irresponsible
 
 
 def main(argv: argparse.Namespace):
