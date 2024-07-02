@@ -68,7 +68,7 @@ module default {
     index on ((.postdate));
   }
 
-  # This table exists for the purpose of frequency analysis, 
+  # This table exists for the purpose of frequency analysis,
   # performing all desirable filters such that the entire alias is wanted.
   alias TPUserSentence := (
     SELECT Sentence FILTER
@@ -78,21 +78,29 @@ module default {
       #  mapona/jaki, mapona/ako, mapali/wikipesija, mamusi/ako
   );
 
-  # type Frequency {
-  #   # TODO: this is generally calculated with a variety of exceptions.
-  #   # excluded channels, authors, etc.
-  #   # how do i represent that here?
-  #   required word: str;
-  #   required min_sent_len: int64;
-  #   required date: cal::local_date;
-  #   required occurrences: int64;
-  #   # TODO: all/tok split?
-  # }
+  alias NonTPUserSentence := (
+    SELECT Sentence FILTER
+      .score < 0.8 AND
+      (NOT .message.author.is_bot OR .message.author.is_webhook) AND
+      NOT (.message.container in {316066233755631616, 786041291707777034, 914305039764426772, 1128714905932021821})
+  );
 
-  # type Phrase {
-  #   required phrase: str;
-  #   required length: int64;
-  #   required date: cal::local_date;
-  #   required occurrences: int64;
-  # }
+  type Frequency {
+    # This entire table is essentially computed stats from the rest of the database.
+    # I'd like to go back and add the commented out community field and tpt (toki pona taso) field,
+    # but for now these are not a priority.
+
+    required community: Community;  # what community the sentence was taken from
+    required text: str;
+    required length: int64;
+    # if .is_word, the minimum length of counted sentences
+    # if not .is_word, the length of the phrase
+    # yes this is silly, but splitting would produce two nearly identical tables
+    required day: datetime; # the day, starting at UTC midnight, of the measured frequency
+    required occurrences: int64;
+    required is_word: bool;  # whether .text is a word or phrase
+    # required tpt: bool;  # whether the frequency was measured with toki pona sentences (score >=0.8) or all sentences
+
+    constraint exclusive on ((.text, .length, .community, .day, .is_word));
+  }
 }

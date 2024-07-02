@@ -40,9 +40,9 @@ class WordFreqRow(TypedDict):
 
 
 class PhraseFreqRow(TypedDict):
-    phrase: str
+    word: str
     length: int
-    day: datetime  # TODO
+    day: int  # timestamp
     occurrences: int
 
 
@@ -69,7 +69,7 @@ class WordFrequency(Base):
 
 class PhraseFrequency(Base):
     __tablename__ = "phrase_freq"
-    # word = Column(Text, nullable=False)
+    # phrase = Column(Text, nullable=False)
     word_id = Column(Integer, ForeignKey("word.id"), nullable=False)
     length = Column(Integer, nullable=False)
     day = Column(Integer, nullable=False)

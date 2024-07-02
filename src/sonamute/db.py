@@ -1,7 +1,7 @@
 # STL
 from enum import IntEnum
 from uuid import UUID
-from typing import TypedDict, cast
+from typing import Literal, TypedDict, cast
 from datetime import date, datetime, timedelta
 
 # PDM
@@ -67,6 +67,15 @@ class Message(PreMessage):
     sentences: list[Sentence]  # implicitly the Sentence type
 
 
+class Frequency(TypedDict):
+    text: str
+    length: int
+    community: UUID
+    day: datetime
+    is_word: bool
+    occurrences: int
+
+
 def create_client(username: str, password: str, host: str, port: int) -> AsyncIOClient:
     client = edgedb.create_async_client(
         host=host,
@@ -93,7 +102,7 @@ select Message filter ._id = <int64>$_id and .community = <Community>$community
 """
 
 TP_USER_SENTS_SELECT = """
-SELECT TPUserSentence { words } FILTER
+SELECT TPUserSentence { community := .message.community.id, words } FILTER
     .message.postdate >= <std::datetime>$start AND
     .message.postdate < <std::datetime>$end
 """
@@ -145,6 +154,18 @@ INSERT Sentence {
     words := <array<str>>$words,
     score := <float64>$score
 }
+"""
+
+FREQ_INSERT = """
+INSERT Frequency {
+    text := <str>$text,
+    length := <int64>$length,
+    community := <Community>$community,
+    day := <datetime>$day,
+    is_word := <bool>$is_word,
+    occurrences := <int64>$occurrences,
+} unless conflict on (.text, .length, .community, .day, .is_word)
+else (update Frequency set { occurrences := <int64>$occurrences });
 """
 
 
@@ -347,6 +368,17 @@ class MessageDB:
             container=message.get("container", None),
         )
 
+    async def insert_frequency(self, freq: Frequency):
+        _ = await self.client.query(
+            FREQ_INSERT,
+            **freq,
+            # text=freq["text"],
+            # length=freq["length"],
+            # day=freq["day"],
+            # occurrences=freq["occurrences"],
+            # is_word=freq["is_word"],
+        )
+
     ###########################
     async def get_msg_date_range(self) -> tuple[datetime, datetime]:
         """Fetch the earliest and latest date of any message in the DB. Return as a pair `(start, end,)`."""
@@ -362,9 +394,9 @@ class MessageDB:
         maybe_id = await self.select_message(msg)
         return not not maybe_id
 
-    async def counted_sents_in_range(self, start: date, end: date) -> list[list[str]]:
+    async def counted_sents_in_range(self, start: date, end: date):
         results = await self.client.query(TP_USER_SENTS_SELECT, start=start, end=end)
-        return [r.words for r in results]
+        return results  # has .words and .community
 
 
 def load_messagedb_from_env() -> MessageDB:

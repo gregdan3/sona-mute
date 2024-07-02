@@ -12,6 +12,7 @@ from sonatoki.utils import overlapping_ntuples
 # LOCAL
 from sonamute.db import Message, Sentence, PreMessage
 from sonamute.ilo import ILO
+from sonamute.utils import overlapping_phrases
 from sonamute.file_io import PlatformFetcher, TupleJSONEncoder
 from sonamute.constants import IGNORED_CONTAINERS
 
@@ -122,6 +123,23 @@ def word_counter(sents: list[list[str]], min_len: int):
             continue  # save some time; can't get any data
         counter.update(sent)
     return counter
+
+
+def phrases_by_length(
+    sents: list[list[str]], max_phrase_len: int
+) -> dict[int, Counter[str]]:
+    counters: dict[int, Counter[str]] = {
+        phrase_len: Counter() for phrase_len in range(2, max_phrase_len + 1)
+    }
+    for sent in sents:
+        sent = [w.lower() for w in sent]
+
+        sent_len = len(sent)
+        for phrase_len in range(2, max_phrase_len + 1):
+            if sent_len < phrase_len:
+                continue
+            counters[phrase_len].update(overlapping_phrases(sent, phrase_len))
+    return counters
 
 
 def word_counters_by_min_sent_len(

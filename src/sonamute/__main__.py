@@ -11,6 +11,7 @@ from edgedb.errors import EdgeDBError
 from sonamute.db import (
     Message,
     Sentence,
+    Frequency,
     MessageDB,
     PreMessage,
     load_messagedb_from_env,
@@ -18,6 +19,8 @@ from sonamute.db import (
 from sonamute.ilo import ILO
 from sonamute.utils import batch_iter, gather_batch, months_in_range
 from sonamute.file_io import DiscordFetcher, PlatformFetcher
+from sonamute.counters import phrases_by_length, word_counters_by_min_sent_len
+from sonamute.gen_sqlite import make_insertable_freq
 
 SOURCES: dict[str, type[PlatformFetcher]] = {"discord": DiscordFetcher}
 
@@ -53,7 +56,6 @@ def process_msg(msg: PreMessage) -> Message:
 
 
 async def insert_raw_msg(db: MessageDB, msg: PreMessage) -> UUID | None:
-    # NOTE: temporarily taken out for author re-write
     if await db.message_in_db(msg):
         return
 
@@ -65,13 +67,21 @@ async def insert_raw_msg(db: MessageDB, msg: PreMessage) -> UUID | None:
         raise (e)
 
 
+def sort_by_community(tagged_sents: list) -> dict[UUID, list[list[str]]]:
+    output: dict[UUID, list[list[str]]] = dict()
+    for s in tagged_sents:
+        if s.community not in output:
+            output[s.community] = list()
+        output[s.community].append(s.words)
+    return output
+
+
 async def amain(argv: argparse.Namespace):
     source = SOURCES[argv.platform](argv.dir)
 
     db = load_messagedb_from_env()
     batch_size: int = argv.batch_size
 
-    i = 0
     for batch in batch_iter(source.get_messages(), batch_size):
         inserts = [insert_raw_msg(db, msg) for msg in batch]
         _ = await asyncio.gather(*inserts)
@@ -81,6 +91,25 @@ async def amain(argv: argparse.Namespace):
             print("Processed %s messages" % i)
 
     print("Final total: %s messages" % i)
+    first_msg_dt, last_msg_dt = await db.get_msg_date_range()
+    for start, end in months_in_range(first_msg_dt, last_msg_dt):
+        print(start)
+        result = await db.counted_sents_in_range(start, end)
+        by_community = sort_by_community(result)
+
+        for community, sents in by_community.items():
+            counters = word_counters_by_min_sent_len(sents, 6)
+            formatted = make_insertable_freq(
+                counters,
+                community,
+                start,
+                True,
+            )
+            await gather_batch(db.insert_frequency, formatted, batch_size)
+
+        # phrase_counters = phrases_by_length(result, 6)
+        # formatted = make_insertable_freq(phrase_counters, start, False)
+        # await gather_batch(insert_freq, formatted, batch_size, db)
 
 
 def main(argv: argparse.Namespace):
