@@ -20,7 +20,12 @@ from sonamute.db import (
 from sonamute.ilo import ILO
 from sonamute.utils import batch_iter, gather_batch, days_in_range, months_in_range
 from sonamute.file_io import DiscordFetcher, PlatformFetcher
-from sonamute.counters import phrases_by_length, word_counters_by_min_sent_len
+from sonamute.counters import (
+    dump,
+    phrases_by_length,
+    sourced_freq_counter,
+    word_counters_by_min_sent_len,
+)
 
 SOURCES: dict[str, type[PlatformFetcher]] = {"discord": DiscordFetcher}
 
@@ -109,11 +114,15 @@ async def sentences_to_frequencies(db: MessageDB, batch_size: int, passing: bool
 async def amain(argv: argparse.Namespace):
     source = SOURCES[argv.platform](argv.dir)
 
+    # counter = sourced_freq_counter(source)
+    # print(dump(counter))
+
     db = load_messagedb_from_env()
     batch_size: int = argv.batch_size
 
-    # await source_to_db(db, source, batch_size)
+    await source_to_db(db, source, batch_size)
     await sentences_to_frequencies(db, batch_size, True)
+
     # await sentences_to_frequencies(db, batch_size, False)
     # there is so much more non-tp data than tp data that i think this is irresponsible
 
