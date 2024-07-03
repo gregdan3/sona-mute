@@ -33,6 +33,8 @@ def ignorable(msg: PreMessage) -> bool:
     # NOTE: using this before, rather than after, databasing was a bad idea
     # i could have excluded these channels (and previously authors) in the analysis step
     # doing this before it impossible to ask certain questions in the database
+    if msg["author"]["is_bot"] and not msg["author"]["is_webhook"]:
+        return True
     if not msg["content"]:
         return True  # ignore empty messages
     if msg["container"] in IGNORED_CONTAINERS:
@@ -49,8 +51,8 @@ def countable_msgs(
     Filters to passing sentences unless `force_pass` is True.
     """
     for msg in msgs:
-        # if ignorable(msg):
-        #     continue
+        if ignorable(msg):
+            continue
         content = ILO.preprocess(msg["content"])
 
         sentences: list[Sentence] = []
