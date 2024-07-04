@@ -102,5 +102,10 @@ module default {
     # required tpt: bool;  # whether the frequency was measured with toki pona sentences (score >=0.8) or all sentences
 
     constraint exclusive on ((.text, .length, .community, .day, .is_word));
+
+    index on ((.community));
+    index on ((.length));
+    index on ((.is_word));
+    index on ((.day));
   }
 }
