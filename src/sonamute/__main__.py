@@ -102,10 +102,13 @@ async def sentences_to_frequencies(db: MessageDB, batch_size: int, passing: bool
         by_community = sort_by_community(result)
 
         for community, sents in by_community.items():
+            # occurrence of individual words with min sent length
             counters = word_counters_by_min_sent_len(sents, 6)
             formatted = make_insertable_freq(counters, community, start, True)
             await gather_batch(db.insert_frequency, formatted, batch_size)
 
+            # occurrence of phrases
+            # TODO: set length to 1 for all phrases, because Holy Fuck otherwise
             counters = phrases_by_length(sents, 6)
             formatted = make_insertable_freq(counters, community, start, False)
             await gather_batch(db.insert_frequency, formatted, batch_size)

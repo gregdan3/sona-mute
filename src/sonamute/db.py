@@ -1,8 +1,9 @@
 # STL
 from enum import IntEnum
 from uuid import UUID
-from typing import Counter, Literal, TypedDict, cast
-from datetime import date, datetime, timedelta
+from typing import TypedDict, cast
+from datetime import datetime
+from collections import Counter
 
 # PDM
 import edgedb
@@ -64,7 +65,7 @@ class PreMessage(TypedDict):
 
 
 class Message(PreMessage):
-    sentences: list[Sentence]  # implicitly the Sentence type
+    sentences: list[Sentence]
 
 
 class Frequency(TypedDict):
@@ -111,10 +112,32 @@ FAILING_USER_SENTS_SELECT = USER_SENTS_SELECT % "NonTPUserSentence"
 
 
 FREQ_SELECT = """
-SELECT Frequency { text, length, day, occurrences, is_word } FILTER
-    .day >= <std::datetime>$start AND
-    .day < <std::datetime>$end
+with
+  F := (
+    select Frequency {text}
+    filter
+      .length = <int64>$length
+      and %s .is_word
+      and .day >= <std::datetime>$start
+      and .day < <std::datetime>$end
+  ),
+  groups := (
+    group F {text, occurrences}
+    using text := .text
+    by text
+  )
+  select groups {
+    text := .key.text,
+    total := sum(.elements.occurrences)
+  }
+  filter .total >= 40
+  order by .total desc;
 """
+# NOTE: filtered total is borrowed from google ngrams and could be reconsidered
+# theirs is for performance/space reasons. mine is also for anonymity
+# i'd prefer to filter by global occurrences rather than within the given range
+# but that requires knowing the global total
+# although i could calculate that in another table and filter my words based on that?
 
 PLAT_INSERT = """
 select (
@@ -396,8 +419,8 @@ class MessageDB:
 
     async def counted_sents_in_range(
         self,
-        start: date,
-        end: date,
+        start: datetime,
+        end: datetime,
         passing: bool = True,
     ):
         query = FAILING_USER_SENTS_SELECT
@@ -406,6 +429,26 @@ class MessageDB:
 
         results = await self.client.query(query, start=start, end=end)
         return results  # has .words and .community
+
+    async def occurrences_in_range(
+        self,
+        length: int,
+        is_word: bool,
+        start: datetime,
+        end: datetime,
+        # word: str | None = None,
+    ) -> dict[str, int]:
+        query = FREQ_SELECT
+        if is_word:
+            query = query % ""
+        else:
+            query = query % "not"
+
+        results = await self.client.query(query, length=length, start=start, end=end)
+        # results = [
+        #     Occurrence({"occurrences": c.total, "text": c.text}) for c in results
+        # ]
+        return results
 
 
 def make_insertable_freq(

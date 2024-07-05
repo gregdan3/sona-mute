@@ -2,6 +2,7 @@
 import asyncio
 import argparse
 from typing import Literal
+from datetime import datetime
 from contextlib import asynccontextmanager
 
 # PDM
@@ -25,9 +26,8 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.dialects.sqlite import Insert as insert
 
 # LOCAL
-from sonamute.db import Frequency, make_insertable_freq, load_messagedb_from_env
+from sonamute.db import Frequency, load_messagedb_from_env
 from sonamute.utils import batch_iter, days_in_range, epochs_in_range, months_in_range
-from sonamute.counters import phrases_by_length, word_counters_by_min_sent_len
 
 Base = declarative_base()
 
@@ -38,25 +38,25 @@ Base = declarative_base()
 #     name: Column(Text, nullable=False)
 
 
-class Word(Base):
+class Phrase(Base):
     # NOTE: misnomer since it will also contain phrases
-    __tablename__ = "word"
+    __tablename__ = "phrase"
 
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
-    word = Column(Text, unique=True, nullable=False)
+    text = Column(Text, unique=True, nullable=False)
 
 
-class WordFrequency(Base):
-    __tablename__ = "word_freq"
+class Freq(Base):
+    __tablename__ = "frequency"
 
-    word_id = Column(Integer, ForeignKey("word.id"), nullable=False)
+    phrase_id = Column(Integer, ForeignKey("phrase.id"), nullable=False)
     # community = Column(Uuid, ForeignKey("community.id"), nullable=False)
-    length = Column(Integer, nullable=False)
+    length = Column(Integer, nullable=False)  # number of words in sentence
     day = Column(Integer, nullable=False)
-    is_word = Column(Boolean, nullable=False)
+    is_word = Column(Boolean, nullable=False)  # whether it's a single word or not
     occurrences = Column(Integer, nullable=False)
 
-    __table_args__ = (PrimaryKeyConstraint("word_id", "length", "day", "is_word"),)
+    __table_args__ = (PrimaryKeyConstraint("phrase_id", "length", "day", "is_word"),)
 
 
 class FreqDB:
@@ -79,14 +79,14 @@ class FreqDB:
         async with self.sgen() as s:
             yield s
 
-    async def upsert_word(self, data: list[dict[Literal["word"], str]]):
+    async def upsert_word(self, data: list[dict[Literal["text"], str]]):
         async with self.session() as s:
-            stmt = insert(Word).values(data)
+            stmt = insert(Phrase).values(data)
             stmt = stmt.on_conflict_do_update(
-                index_elements=["word"],
-                set_={"word": stmt.excluded.word},
-            ).returning(Word.word, Word.id)
-            # Can't `do_nothing` because it will cause no rows to return
+                index_elements=["text"],
+                set_={"text": stmt.excluded.text},
+            ).returning(Phrase.text, Phrase.id)
+            # Can't `do_nothing` because that would return no rows
             result = await s.execute(stmt)
             await s.commit()
 
@@ -96,19 +96,14 @@ class FreqDB:
         return word_id_map
 
     async def insert_word_freq(self, data: list[Frequency]):
-        words = [{"word": d["word"]} for d in data]
-        word_id_map = await self.upsert_word(words)
+        words: list[dict[Literal["text"], str]] = [{"text": d["text"]} for d in data]
+        phrase_id_map = await self.upsert_word(words)
         for d in data:  # TODO: typing
-            d["word_id"] = word_id_map[d["word"]]
-            _ = d.pop("word")
+            d["phrase_id"] = phrase_id_map[d["text"]]
+            _ = d.pop("text")
 
         async with self.session() as s:
-            stmt = insert(WordFrequency).values(data)
-            _ = await s.execute(stmt)
-            await s.commit()
-
-        async with self.session() as s:
-            stmt = insert(PhraseFrequency).values(data)
+            stmt = insert(Freq).values(data)
             _ = await s.execute(stmt)
             await s.commit()
 
@@ -119,30 +114,48 @@ async def freqdb_factory(database_file: str) -> FreqDB:
     return t
 
 
+def make_insertable_occurrence(
+    data, length: int, day: int, is_word: bool
+) -> list[Frequency]:
+    output: list[Frequency] = list()
+    for item in data:
+        d: Frequency = {
+            "text": item.text,
+            "occurrences": item.total,
+            "length": length,
+            "day": day,
+            "is_word": is_word,
+        }
+        output.append(d)
+    return output
+
+
 async def amain(argv: argparse.Namespace):
     edgedb = load_messagedb_from_env()
     sqlite_db = await freqdb_factory(argv.db)
     first_msg_dt, last_msg_dt = await edgedb.get_msg_date_range()
 
-    for start, end in months_in_range(first_msg_dt, last_msg_dt):
-        print(start)
-        result = await edgedb.counted_sents_in_range(start, end, True)
+    # TODO: parametrize
+    length = 1
+    is_word = True
 
-        word_counters = word_counters_by_min_sent_len(result, 6)
-        formatted = make_insertable_word_freq(word_counters, start)
+    for start, end in months_in_range(first_msg_dt, last_msg_dt):
+        # limited to months bc that's much more Sensible:tm:
+        print(start)
+
+        result = await edgedb.occurrences_in_range(length, is_word, start, end)
+        formatted = make_insertable_occurrence(
+            result,
+            length,
+            int(start.timestamp()),
+            is_word,
+        )
         if not formatted:
             continue
 
         for batch in batch_iter(formatted, 249):
             # we insert 4 items per row; max sql variables is 999 for, reasons,
             await sqlite_db.insert_word_freq(batch)
-
-        phrase_counters = phrases_by_length(result, 6)
-        formatted = make_insertable_phrase_freq(phrase_counters, start)
-        if not formatted:
-            continue
-        for batch in batch_iter(formatted, 249):
-            await sqlite_db.insert_phrase_freq(batch)
 
 
 def main(argv: argparse.Namespace):
