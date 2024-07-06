@@ -51,12 +51,12 @@ class Freq(Base):
 
     phrase_id = Column(Integer, ForeignKey("phrase.id"), nullable=False)
     # community = Column(Uuid, ForeignKey("community.id"), nullable=False)
-    length = Column(Integer, nullable=False)  # number of words in sentence
+    phrase_len = Column(Integer, nullable=False)  # words in text
+    min_sent_len = Column(Integer, nullable=False)  # min words in source sentences
     day = Column(Integer, nullable=False)
-    is_word = Column(Boolean, nullable=False)  # whether it's a single word or not
     occurrences = Column(Integer, nullable=False)
 
-    __table_args__ = (PrimaryKeyConstraint("phrase_id", "length", "day", "is_word"),)
+    __table_args__ = (PrimaryKeyConstraint("phrase_id", "phrase_len", "day"),)
 
 
 class FreqDB:
@@ -115,16 +115,17 @@ async def freqdb_factory(database_file: str) -> FreqDB:
 
 
 def make_insertable_occurrence(
-    data, length: int, day: int, is_word: bool
+    data, phrase_len: int, min_sent_len: int, day: int
 ) -> list[Frequency]:
     output: list[Frequency] = list()
     for item in data:
         d: Frequency = {
+            # NOTE: this is intently reduced from EdgeDB's Frequency
             "text": item.text,
             "occurrences": item.total,
-            "length": length,
+            "phrase_len": phrase_len,
+            "min_sent_len": min_sent_len,
             "day": day,
-            "is_word": is_word,
         }
         output.append(d)
     return output
@@ -136,19 +137,20 @@ async def amain(argv: argparse.Namespace):
     first_msg_dt, last_msg_dt = await edgedb.get_msg_date_range()
 
     # TODO: parametrize
-    length = 1
+    phrase_len = 1
+    min_sent_len = 1
     is_word = True
 
     for start, end in months_in_range(first_msg_dt, last_msg_dt):
         # limited to months bc that's much more Sensible:tm:
         print(start)
 
-        result = await edgedb.occurrences_in_range(length, is_word, start, end)
+        result = await edgedb.occurrences_in_range(phrase_len, min_sent_len, start, end)
         formatted = make_insertable_occurrence(
             result,
-            length,
+            phrase_len,
+            min_sent_len,
             int(start.timestamp()),
-            is_word,
         )
         if not formatted:
             continue

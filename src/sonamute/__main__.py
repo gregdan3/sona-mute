@@ -2,7 +2,9 @@
 import os
 import asyncio
 import argparse
+import operator
 from uuid import UUID
+from functools import reduce
 
 # PDM
 from edgedb.errors import EdgeDBError
@@ -14,7 +16,7 @@ from sonamute.db import (
     Frequency,
     MessageDB,
     PreMessage,
-    make_insertable_freq,
+    make_insertable_freqs,
     load_messagedb_from_env,
 )
 from sonamute.ilo import ILO
@@ -22,6 +24,8 @@ from sonamute.utils import batch_iter, gather_batch, days_in_range, months_in_ra
 from sonamute.file_io import DiscordFetcher, PlatformFetcher
 from sonamute.counters import (
     dump,
+    word_counter,
+    phrase_counter,
     phrases_by_length,
     sourced_freq_counter,
     word_counters_by_min_sent_len,
@@ -96,22 +100,27 @@ async def source_to_db(db: MessageDB, source: PlatformFetcher, batch_size: int):
 
 async def sentences_to_frequencies(db: MessageDB, batch_size: int, passing: bool):
     first_msg_dt, last_msg_dt = await db.get_msg_date_range()
-    for start, end in days_in_range(first_msg_dt, last_msg_dt):
+    for start, end in months_in_range(first_msg_dt, last_msg_dt):
+        # NOTE: I originally used days, but this turned out to be excessive effort and impossible to graph usefully
         print(start)
         result = await db.counted_sents_in_range(start, end, passing)
         by_community = sort_by_community(result)
 
         for community, sents in by_community.items():
-            # occurrence of individual words with min sent length
-            counters = word_counters_by_min_sent_len(sents, 6)
-            formatted = make_insertable_freq(counters, community, start, True)
-            await gather_batch(db.insert_frequency, formatted, batch_size)
 
-            # occurrence of phrases
-            # TODO: set length to 1 for all phrases, because Holy Fuck otherwise
-            counters = phrases_by_length(sents, 6)
-            formatted = make_insertable_freq(counters, community, start, False)
-            await gather_batch(db.insert_frequency, formatted, batch_size)
+            for min_sent_len in range(1, 7):
+                counter = word_counter(sents, min_sent_len)
+                formatted = make_insertable_freqs(
+                    counter, community, 1, min_sent_len, start
+                )
+                _ = await gather_batch(db.insert_frequency, formatted, batch_size)
+
+            for phrase_len in range(2, 7):
+                counter = phrase_counter(sents, phrase_len)
+                formatted = make_insertable_freqs(
+                    counter, community, phrase_len, phrase_len, start
+                )
+                _ = await gather_batch(db.insert_frequency, formatted, batch_size)
 
 
 async def amain(argv: argparse.Namespace):
@@ -123,8 +132,9 @@ async def amain(argv: argparse.Namespace):
     db = load_messagedb_from_env()
     batch_size: int = argv.batch_size
 
-    await source_to_db(db, source, batch_size)
+    # await source_to_db(db, source, batch_size)
     await sentences_to_frequencies(db, batch_size, True)
+    # TODO: get total occurrences of all phrases within phrase lengths
 
     # await sentences_to_frequencies(db, batch_size, False)
     # there is so much more non-tp data than tp data that i think this is irresponsible

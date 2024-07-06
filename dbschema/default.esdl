@@ -92,20 +92,17 @@ module default {
 
     required community: Community;  # what community the sentence was taken from
     required text: str;
-    required length: int64;
-    # if .is_word, the minimum length of counted sentences
-    # if not .is_word, the length of the phrase
-    # yes this is silly, but splitting would produce two nearly identical tables
+    required phrase_len: int64;
+    required min_sent_len: int64;
     required day: datetime; # the day, starting at UTC midnight, of the measured frequency
     required occurrences: int64;
-    required is_word: bool;  # whether .text is a word or phrase
     # required tpt: bool;  # whether the frequency was measured with toki pona sentences (score >=0.8) or all sentences
 
-    constraint exclusive on ((.text, .length, .community, .day, .is_word));
+    constraint exclusive on ((.text, .min_sent_len, .community, .day));
 
     index on ((.community));
-    index on ((.length));
-    index on ((.is_word));
+    index on ((.phrase_len));
+    index on ((.min_sent_len));
     index on ((.day));
   }
 }

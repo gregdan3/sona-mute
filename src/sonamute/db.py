@@ -70,10 +70,10 @@ class Message(PreMessage):
 
 class Frequency(TypedDict):
     text: str
-    length: int
+    phrase_len: int
+    min_sent_len: int
     community: UUID
     day: datetime
-    is_word: bool
     occurrences: int
 
 
@@ -116,8 +116,8 @@ with
   F := (
     select Frequency {text}
     filter
-      .length = <int64>$length
-      and %s .is_word
+      .phrase_len = <int64>$phrase_len
+      and .min_sent_len = <int64>$min_sent_len
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
   ),
@@ -129,15 +129,8 @@ with
   select groups {
     text := .key.text,
     total := sum(.elements.occurrences)
-  }
-  filter .total >= 40
-  order by .total desc;
+  } order by .total desc;
 """
-# NOTE: filtered total is borrowed from google ngrams and could be reconsidered
-# theirs is for performance/space reasons. mine is also for anonymity
-# i'd prefer to filter by global occurrences rather than within the given range
-# but that requires knowing the global total
-# although i could calculate that in another table and filter my words based on that?
 
 PLAT_INSERT = """
 select (
@@ -190,12 +183,12 @@ INSERT Sentence {
 FREQ_INSERT = """
 INSERT Frequency {
     text := <str>$text,
-    length := <int64>$length,
     community := <Community>$community,
+    phrase_len := <int64>$phrase_len,
+    min_sent_len := <int64>$min_sent_len,
     day := <datetime>$day,
-    is_word := <bool>$is_word,
     occurrences := <int64>$occurrences,
-} unless conflict on (.text, .length, .community, .day, .is_word)
+} unless conflict on (.text, .min_sent_len, .community, .day)
 else (update Frequency set { occurrences := <int64>$occurrences });
 """
 
@@ -432,45 +425,45 @@ class MessageDB:
 
     async def occurrences_in_range(
         self,
-        length: int,
-        is_word: bool,
+        phrase_len: int,
+        min_sent_len: int,
         start: datetime,
         end: datetime,
         # word: str | None = None,
-    ) -> dict[str, int]:
+    ):
         query = FREQ_SELECT
-        if is_word:
-            query = query % ""
-        else:
-            query = query % "not"
 
-        results = await self.client.query(query, length=length, start=start, end=end)
-        # results = [
-        #     Occurrence({"occurrences": c.total, "text": c.text}) for c in results
-        # ]
+        results = await self.client.query(
+            query,
+            phrase_len=phrase_len,
+            min_sent_len=min_sent_len,
+            start=start,
+            end=end,
+        )
+        # result has .text and .total
         return results
 
 
-def make_insertable_freq(
-    counters: dict[int, Counter[str]],
+def make_insertable_freqs(
+    counter: Counter[str],
     community: UUID,
+    phrase_len: int,
+    min_sent_len: int,
     day: datetime,
-    is_word: bool,
 ) -> list[Frequency]:
     word_freq_rows: list[Frequency] = list()
-    for length, counter in counters.items():
-        for text, occurrences in counter.items():
-            result = Frequency(
-                {
-                    "text": text,
-                    "length": length,
-                    "day": day,
-                    "occurrences": occurrences,
-                    "is_word": is_word,
-                    "community": community,
-                }
-            )
-            word_freq_rows.append(result)
+    for text, occurrences in counter.items():
+        result = Frequency(
+            {
+                "text": text,
+                "community": community,
+                "phrase_len": phrase_len,
+                "min_sent_len": min_sent_len,
+                "day": day,
+                "occurrences": occurrences,
+            }
+        )
+        word_freq_rows.append(result)
     return word_freq_rows
 
 
