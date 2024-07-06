@@ -2,20 +2,10 @@
 import asyncio
 import argparse
 from typing import Literal
-from datetime import datetime
 from contextlib import asynccontextmanager
 
 # PDM
-from sqlalchemy import (
-    Text,
-    Uuid,
-    Column,
-    Boolean,
-    Integer,
-    ForeignKey,
-    CheckConstraint,
-    PrimaryKeyConstraint,
-)
+from sqlalchemy import Text, Column, Integer, ForeignKey, PrimaryKeyConstraint
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -27,7 +17,7 @@ from sqlalchemy.dialects.sqlite import Insert as insert
 
 # LOCAL
 from sonamute.db import Frequency, load_messagedb_from_env
-from sonamute.utils import batch_iter, days_in_range, epochs_in_range, months_in_range
+from sonamute.utils import batch_iter, months_in_range
 
 Base = declarative_base()
 
@@ -56,7 +46,7 @@ class Freq(Base):
     day = Column(Integer, nullable=False)
     occurrences = Column(Integer, nullable=False)
 
-    __table_args__ = (PrimaryKeyConstraint("phrase_id", "phrase_len", "day"),)
+    __table_args__ = (PrimaryKeyConstraint("phrase_id", "min_sent_len", "day"),)
 
 
 class FreqDB:
@@ -136,28 +126,26 @@ async def amain(argv: argparse.Namespace):
     sqlite_db = await freqdb_factory(argv.db)
     first_msg_dt, last_msg_dt = await edgedb.get_msg_date_range()
 
-    # TODO: parametrize
-    phrase_len = 1
-    min_sent_len = 1
-    is_word = True
-
+    # limited to months bc that's much more Sensible:tm:
     for start, end in months_in_range(first_msg_dt, last_msg_dt):
-        # limited to months bc that's much more Sensible:tm:
         print(start)
+        for phrase_len in range(1, 7):
+            for min_sent_len in range(phrase_len, 7):
+                result = await edgedb.occurrences_in_range(
+                    phrase_len, min_sent_len, start, end
+                )
+                formatted = make_insertable_occurrence(
+                    result,
+                    phrase_len,
+                    min_sent_len,
+                    int(start.timestamp()),
+                )
+                if not formatted:
+                    continue
 
-        result = await edgedb.occurrences_in_range(phrase_len, min_sent_len, start, end)
-        formatted = make_insertable_occurrence(
-            result,
-            phrase_len,
-            min_sent_len,
-            int(start.timestamp()),
-        )
-        if not formatted:
-            continue
-
-        for batch in batch_iter(formatted, 249):
-            # we insert 4 items per row; max sql variables is 999 for, reasons,
-            await sqlite_db.insert_word_freq(batch)
+                for batch in batch_iter(formatted, 249):
+                    # we insert 4 items per row; max sql variables is 999 for, reasons,
+                    await sqlite_db.insert_word_freq(batch)
 
 
 def main(argv: argparse.Namespace):

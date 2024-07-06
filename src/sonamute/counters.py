@@ -108,11 +108,19 @@ def sourced_freq_counter(
     return counter
 
 
-def phrase_counter(sents: list[list[str]], phrase_len: int):
-    counter: Counter[tuple[str, ...]] = Counter()
+def phrase_counter(
+    sents: list[list[str]],
+    phrase_len: int,
+    min_sent_len: int,
+) -> Counter[str]:
+    # save a comparison; sentences shorter than phrase_len can't be counted anyway
+    if phrase_len > min_sent_len:
+        min_sent_len = phrase_len
+
+    counter: Counter[str] = Counter()
     for sent in sents:
-        if len(sent) < phrase_len:
-            continue  # save some time; can't get any data
+        if len(sent) < min_sent_len:
+            continue
         counter.update(overlapping_phrases(sent, n=phrase_len))
     return counter
 
@@ -141,24 +149,6 @@ def phrases_by_length(
             if sent_len < phrase_len:
                 continue
             counters[1].update(overlapping_phrases(sent, phrase_len))
-    return counters
-
-
-def word_counters_by_min_sent_len(
-    sents: list[list[str]],
-    max_min_len: int,  # recommendation: do not exceed 6
-) -> dict[int, Counter[str]]:
-    counters: dict[int, Counter[str]] = {
-        min_len: Counter() for min_len in range(1, max_min_len + 1)
-    }
-
-    for sent in sents:
-        sent = [w.lower() for w in sent]
-        sent_len = len(sent)
-        for min_len in range(1, max_min_len + 1):
-            if sent_len >= min_len:
-                counters[min_len].update(sent)
-
     return counters
 
 

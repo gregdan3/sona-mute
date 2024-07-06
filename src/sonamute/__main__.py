@@ -2,9 +2,7 @@
 import os
 import asyncio
 import argparse
-import operator
 from uuid import UUID
-from functools import reduce
 
 # PDM
 from edgedb.errors import EdgeDBError
@@ -13,23 +11,15 @@ from edgedb.errors import EdgeDBError
 from sonamute.db import (
     Message,
     Sentence,
-    Frequency,
     MessageDB,
     PreMessage,
     make_insertable_freqs,
     load_messagedb_from_env,
 )
 from sonamute.ilo import ILO
-from sonamute.utils import batch_iter, gather_batch, days_in_range, months_in_range
+from sonamute.utils import batch_iter, gather_batch, months_in_range
 from sonamute.file_io import DiscordFetcher, PlatformFetcher
-from sonamute.counters import (
-    dump,
-    word_counter,
-    phrase_counter,
-    phrases_by_length,
-    sourced_freq_counter,
-    word_counters_by_min_sent_len,
-)
+from sonamute.counters import dump, phrase_counter, sourced_freq_counter
 
 SOURCES: dict[str, type[PlatformFetcher]] = {"discord": DiscordFetcher}
 
@@ -107,20 +97,13 @@ async def sentences_to_frequencies(db: MessageDB, batch_size: int, passing: bool
         by_community = sort_by_community(result)
 
         for community, sents in by_community.items():
-
-            for min_sent_len in range(1, 7):
-                counter = word_counter(sents, min_sent_len)
-                formatted = make_insertable_freqs(
-                    counter, community, 1, min_sent_len, start
-                )
-                _ = await gather_batch(db.insert_frequency, formatted, batch_size)
-
-            for phrase_len in range(2, 7):
-                counter = phrase_counter(sents, phrase_len)
-                formatted = make_insertable_freqs(
-                    counter, community, phrase_len, phrase_len, start
-                )
-                _ = await gather_batch(db.insert_frequency, formatted, batch_size)
+            for phrase_len in range(1, 7):
+                for min_sent_len in range(phrase_len, 7):
+                    counter = phrase_counter(sents, phrase_len, min_sent_len)
+                    formatted = make_insertable_freqs(
+                        counter, community, phrase_len, min_sent_len, start
+                    )
+                    _ = await gather_batch(db.insert_frequency, formatted, batch_size)
 
 
 async def amain(argv: argparse.Namespace):

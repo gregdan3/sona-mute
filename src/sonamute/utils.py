@@ -102,7 +102,7 @@ def epochs_in_range(
         step = round_to_next_epoch(start)
 
 
-def batch_iter(iterator: Iterable[T], batch_size: int) -> Iterator[list[T]]:
+def batch_iter(iterator: Iterable[T], batch_size: int) -> Iterable[list[T]]:
     it = iter(iterator)
     while True:
         batch = list(itertools.islice(it, batch_size))
@@ -113,11 +113,11 @@ def batch_iter(iterator: Iterable[T], batch_size: int) -> Iterator[list[T]]:
 
 async def gather_batch(
     callable: Callable[[Any], Coroutine[Any, Any, None]],
-    to_batch: Generator[T, None, None],
+    to_batch: Iterable[T],
     batch_size: int,
     *args: Any,
     **kwargs: Any,
-):
+) -> list[Any]:
     results = list()
     for batch in batch_iter(to_batch, batch_size):
         gatherables = [callable(item, *args, **kwargs) for item in batch]

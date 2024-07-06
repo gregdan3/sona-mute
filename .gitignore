@@ -1,6 +1,8 @@
 # my additions
 *.json
 *.perf
+*.sqlite
+*.db
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
