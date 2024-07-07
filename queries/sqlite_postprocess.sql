@@ -38,6 +38,8 @@ WHERE
 
 CREATE INDEX FreqCovering on frequency (phrase_id, min_sent_len, day, occurrences);
 
+CREATE INDEX TotalCovering on total (phrase_len, min_sent_len, day, occurrences);
+
 pragma journal_mode = delete;
 
 pragma page_size = 1024;
