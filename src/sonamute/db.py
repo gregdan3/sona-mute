@@ -132,6 +132,18 @@ with
   } order by .total desc;
 """
 
+GLOBAL_FREQ_SELECT = """
+with
+  F := (
+    select Frequency {occurrences}
+    filter
+      .phrase_len = <int64>$phrase_len
+      and .min_sent_len = <int64>$min_sent_len
+      and .day >= <std::datetime>$start
+      and .day < <std::datetime>$end
+  ) select sum(F.occurrences);
+"""
+
 PLAT_INSERT = """
 select (
     INSERT Platform {
@@ -431,16 +443,32 @@ class MessageDB:
         end: datetime,
         # word: str | None = None,
     ):
-        query = FREQ_SELECT
-
         results = await self.client.query(
-            query,
+            FREQ_SELECT,
             phrase_len=phrase_len,
             min_sent_len=min_sent_len,
             start=start,
             end=end,
         )
         # result has .text and .total
+        return results
+
+    async def global_occurrences_in_range(
+        self,
+        phrase_len: int,
+        min_sent_len: int,
+        start: datetime,
+        end: datetime,
+        # word: str | None = None,
+    ) -> int:
+        results = await self.client.query_required_single(
+            GLOBAL_FREQ_SELECT,
+            phrase_len=phrase_len,
+            min_sent_len=min_sent_len,
+            start=start,
+            end=end,
+        )
+        # result should be just an integer
         return results
 
 

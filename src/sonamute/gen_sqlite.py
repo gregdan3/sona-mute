@@ -49,6 +49,15 @@ class Freq(Base):
     __table_args__ = (PrimaryKeyConstraint("phrase_id", "min_sent_len", "day"),)
 
 
+class Total(Base):
+    __tablename__ = "total"
+    day = Column(Integer, nullable=False)
+    phrase_len = Column(Integer, nullable=False)
+    min_sent_len = Column(Integer, nullable=False)
+    occurrences = Column(Integer, nullable=False)
+    __table_args__ = (PrimaryKeyConstraint("day", "phrase_len", "min_sent_len"),)
+
+
 class FreqDB:
     engine: AsyncEngine
     sgen: async_sessionmaker[AsyncSession]
@@ -97,6 +106,23 @@ class FreqDB:
             _ = await s.execute(stmt)
             await s.commit()
 
+    async def insert_total_freq(
+        self,
+        phrase_len: int,
+        min_sent_len: int,
+        day: int,
+        occurrences: int,
+    ):
+        async with self.session() as s:
+            stmt = insert(Total).values(
+                phrase_len=phrase_len,
+                min_sent_len=min_sent_len,
+                day=day,
+                occurrences=occurrences,
+            )
+            _ = await s.execute(stmt)
+            await s.commit()
+
 
 async def freqdb_factory(database_file: str) -> FreqDB:
     t = FreqDB(database_file=database_file)
@@ -129,23 +155,38 @@ async def amain(argv: argparse.Namespace):
     # limited to months bc that's much more Sensible:tm:
     for start, end in months_in_range(first_msg_dt, last_msg_dt):
         print(start)
+        start_ts = int(start.timestamp())
         for phrase_len in range(1, 7):
             for min_sent_len in range(phrase_len, 7):
                 result = await edgedb.occurrences_in_range(
-                    phrase_len, min_sent_len, start, end
+                    phrase_len,
+                    min_sent_len,
+                    start,
+                    end,
                 )
                 formatted = make_insertable_occurrence(
                     result,
                     phrase_len,
                     min_sent_len,
-                    int(start.timestamp()),
+                    start_ts,
                 )
-                if not formatted:
-                    continue
 
                 for batch in batch_iter(formatted, 249):
                     # we insert 4 items per row; max sql variables is 999 for, reasons,
                     await sqlite_db.insert_word_freq(batch)
+
+                total_occurrences = await edgedb.global_occurrences_in_range(
+                    phrase_len,
+                    min_sent_len,
+                    start,
+                    end,
+                )
+                await sqlite_db.insert_total_freq(
+                    phrase_len,
+                    min_sent_len,
+                    start_ts,
+                    total_occurrences,
+                )
 
 
 def main(argv: argparse.Namespace):

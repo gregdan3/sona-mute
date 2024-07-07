@@ -117,10 +117,7 @@ async def amain(argv: argparse.Namespace):
 
     # await source_to_db(db, source, batch_size)
     await sentences_to_frequencies(db, batch_size, True)
-    # TODO: get total occurrences of all phrases within phrase lengths
-
-    # await sentences_to_frequencies(db, batch_size, False)
-    # there is so much more non-tp data than tp data that i think this is irresponsible
+    # TODO: fetch the same data for failin sentences?
 
 
 def main(argv: argparse.Namespace):
