@@ -110,6 +110,7 @@ async def sentences_to_frequencies(db: MessageDB, batch_size: int, passing: bool
 async def amain(argv: argparse.Namespace):
     source = SOURCES[argv.platform](argv.dir)
 
+    # TODO: lower elsewhere?
     # counter = sourced_freq_counter(source)
     # print(dump(counter))
 
