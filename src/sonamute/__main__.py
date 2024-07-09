@@ -13,6 +13,7 @@ from sonamute.db import (
     Sentence,
     MessageDB,
     PreMessage,
+    CommSentence,
     make_insertable_freqs,
     load_messagedb_from_env,
 )
@@ -66,12 +67,12 @@ async def insert_raw_msg(db: MessageDB, msg: PreMessage) -> UUID | None:
         raise (e)
 
 
-def sort_by_community(tagged_sents: list) -> dict[UUID, list[list[str]]]:
+def sort_by_community(tagged_sents: list[CommSentence]) -> dict[UUID, list[list[str]]]:
     output: dict[UUID, list[list[str]]] = dict()
     for s in tagged_sents:
-        if s.community not in output:
-            output[s.community] = list()
-        output[s.community].append(s.words)
+        if s["community"] not in output:
+            output[s["community"]] = list()
+        output[s["community"]].append(s["words"])
     return output
 
 

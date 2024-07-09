@@ -55,6 +55,11 @@ class Sentence(TypedDict):
     score: float
 
 
+class CommSentence(TypedDict):
+    words: list[str]
+    community: UUID
+
+
 class PreMessage(TypedDict):
     _id: int
     community: Community
@@ -427,13 +432,21 @@ class MessageDB:
         start: datetime,
         end: datetime,
         passing: bool = True,
-    ):
+    ) -> list[CommSentence]:
         query = FAILING_USER_SENTS_SELECT
         if passing:
             query = PASSING_USER_SENTS_SELECT
 
         results = await self.client.query(query, start=start, end=end)
-        return results  # has .words and .community
+        output: list[CommSentence] = list()
+
+        for result in results:
+            out: CommSentence = {
+                "words": [word.lower() for word in result.words],
+                "community": result.community,
+            }
+            output.append(out)
+        return output
 
     async def occurrences_in_range(
         self,

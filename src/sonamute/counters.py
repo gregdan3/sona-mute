@@ -128,7 +128,6 @@ def phrase_counter(
 def word_counter(sents: list[list[str]], min_len: int):
     counter: Counter[str] = Counter()
     for sent in sents:
-        sent = [w.lower() for w in sent]
         if len(sent) < min_len:
             continue  # save some time; can't get any data
         counter.update(sent)
@@ -142,8 +141,6 @@ def phrases_by_length(
     counters: dict[int, Counter[str]] = {1: Counter()}
     # this silliness maintains the contract for word_counters_by_min_sent_len
     for sent in sents:
-        sent = [w.lower() for w in sent]
-
         sent_len = len(sent)
         for phrase_len in range(2, max_phrase_len + 1):
             if sent_len < phrase_len:
