@@ -1,8 +1,5 @@
 # STL
-import os
 import json
-import asyncio
-import argparse
 from collections import Counter
 from collections.abc import Iterable, Generator
 
@@ -13,8 +10,9 @@ from sonatoki.utils import overlapping_ntuples
 from sonamute.db import Message, Sentence, PreMessage
 from sonamute.ilo import ILO
 from sonamute.utils import overlapping_phrases
-from sonamute.file_io import PlatformFetcher, TupleJSONEncoder
+from sonamute.file_io import TupleJSONEncoder
 from sonamute.constants import IGNORED_CONTAINERS
+from sonamute.sources.generic import PlatformFetcher
 
 
 def dump(counter: Counter[str] | Counter[tuple[str, ...]]) -> str:
@@ -78,7 +76,6 @@ def sourced_ngram_counter(
         for sentence in msg["sentences"]:
             if len(sentence["words"]) < n:
                 continue  # save some time; can't get any data
-            sentence = [word.lower() for word in sentence["words"]]
             counter.update(overlapping_ntuples(sentence, n=n))
 
         counted += 1
@@ -100,7 +97,7 @@ def sourced_freq_counter(
         for sentence in msg["sentences"]:
             if len(sentence["words"]) < min_len:
                 continue
-            counter.update([word.lower() for word in sentence["words"]])
+            counter.update(sentence["words"])
 
         counted += 1
         if _max and counted >= _max:

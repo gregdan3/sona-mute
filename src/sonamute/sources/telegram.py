@@ -1,0 +1,262 @@
+# STL
+import os
+from typing import Tuple, Literal, TypedDict, NotRequired, cast
+from datetime import datetime
+from collections.abc import Generator
+
+# PDM
+from typing_extensions import override
+
+# LOCAL
+from sonamute.db import Author, Platform, Community, PreMessage, KnownPlatforms
+from sonamute.file_io import try_load_json
+from sonamute.sources.generic import FileFetcher
+
+# TODO: special handling?
+ONECHAT_BRIDGE_ID = 128026086
+MATRIX_BRIDGE_ID = 1447411261
+
+FMT_TEXT_MAP = {
+    "bold": "*",
+    "italic": "_",
+    "underline": "__",
+    "strikethrough": "~",
+    "code": "```",
+    "spoiler": "||",
+    "blockquote": ">",
+}
+
+TelegramDialogType = Literal["public_supergroup", "private_supergroup"]
+
+TelegramMessageType = Literal["message", "service"]
+
+TelegramActorType = Literal["user", "channel"]
+
+TelegramTextEntityType = Literal[
+    "bold",
+    "code",
+    "custom_emoji",
+    "email",
+    "hashtag",
+    "italic",
+    "link",
+    "mention",
+    "plain",
+    "spoiler",
+    "strikethrough",
+    "text_link",
+    "underline",
+]
+
+TelegramActionType = Literal[
+    "create_channel",
+    "boost_apply",
+    "edit_group_title",
+    "edit_group_photo",
+    "group_call",
+    "group_call_scheduled",
+    "invite_members",
+    "join_group_by_link",
+    "remove_members",
+    "migrate_from_group",
+    "pin_message",
+    "set_messages_ttl",
+]
+
+
+class TelegramTextEntity(TypedDict):
+    type: TelegramTextEntityType
+    text: str
+
+
+class TelegramMessageJSON(TypedDict):
+    id: int
+    type: TelegramMessageType
+    date: str
+    date_unixtime: str
+    text: str | list[str | TelegramTextEntity]
+    text_entities: list[TelegramTextEntity]
+
+
+class TelegramServiceMessageJSON(TelegramMessageJSON):
+    type: Literal["service"]  # type: ignore[i can overwrite with a more specific type]
+    actor: str | None
+    actor_id: str
+    action: TelegramActionType
+    title: str
+
+
+class __TelegramPlainMessageJSON(TelegramMessageJSON):
+    type: Literal["message"]  # type: ignore[i can overwrite with a more specific type]
+    # from: str
+    from_id: str
+    forwarded_from: NotRequired[str]
+
+    via_bot: NotRequired[str]
+
+    photo: NotRequired[str]
+    width: NotRequired[int]
+    height: NotRequired[int]
+
+    file: NotRequired[str]
+    filename: NotRequired[str]
+    mime_type: NotRequired[str]
+    media_type: NotRequired[str]
+
+    performer: NotRequired[str]
+    duration_seconds: NotRequired[int]
+
+
+# This nonsense is just to add a "from" attr despite "from" being reserved
+class TelegramPlainMessageJSON(
+    __TelegramPlainMessageJSON, TypedDict("FromAdder", {"from": str | None})
+): ...
+
+
+class TelegramJSON(TypedDict):
+    name: str
+    type: TelegramDialogType
+    id: int
+    messages: list[TelegramPlainMessageJSON | TelegramServiceMessageJSON]
+
+
+def split_type_id(id: str) -> tuple[TelegramActorType, int]:
+    if id.startswith("user"):
+        return "user", int(id[4:])
+    if id.startswith("channel"):
+        return "channel", int(id[7:])
+
+    raise ValueError("Received unknown actor id %s" % id)
+
+
+def get_actor_type_id(
+    m: TelegramServiceMessageJSON | TelegramPlainMessageJSON,
+) -> tuple[TelegramActorType, int]:
+    if m["type"] == "service":
+        author_type, author_id = split_type_id(m["actor_id"])
+        return author_type, author_id
+    if m["type"] == "message":
+        author_type, author_id = split_type_id(m["from_id"])
+        return author_type, author_id
+
+    raise ValueError("Received unknown message type %s" % m["type"])  # type: ignore[basedpyright is right except that my types could be incomplete]
+
+
+def get_actor_metadata(
+    m: TelegramServiceMessageJSON | TelegramPlainMessageJSON,
+) -> tuple[TelegramActorType, int, str | None]:
+
+    if m["type"] == "service":
+        actor_type, actor_id = split_type_id(m["actor_id"])
+        actor_name = m["actor"]
+    elif m["type"] == "message":
+        actor_type, actor_id = split_type_id(m["from_id"])
+        actor_name = m["from"]
+    else:
+        raise ValueError("Received unknown message type %s" % m["type"])  # type: ignore[basedpyright is right except that my types could be incomplete]
+
+    return actor_type, actor_id, actor_name
+
+
+def format(ent: TelegramTextEntity) -> str:
+    return ent["text"]
+
+
+def coalesce_text(
+    text_entities: list[TelegramTextEntity], do_format: bool = False
+) -> str:
+    output = ""
+    for ent in text_entities:
+        if do_format:
+            output += format(ent)
+        output += ent["text"]
+    return output
+
+
+class TelegramFetcher(FileFetcher):
+    platform: Platform = {
+        "_id": KnownPlatforms.Telegram.value,
+        "name": KnownPlatforms.Telegram.name,
+    }
+    __seen: set[str] = set()
+
+    @override
+    def get_files(self) -> Generator[TelegramJSON, None, None]:
+        for root, _, files in os.walk(self.root):
+            # we don't need dirs
+
+            for filename in files:
+                if not filename.endswith(".json"):
+                    continue
+
+                data = cast(TelegramJSON, try_load_json(os.path.join(root, filename)))
+                if not data:
+                    continue
+                if "name" not in data and "type" not in data:
+                    continue
+                yield data
+
+    @override
+    def get_community(self, raw_src: TelegramJSON) -> Community:
+        community_id = raw_src["id"]
+        community_name = raw_src["name"]
+
+        community: Community = {
+            "_id": community_id,
+            "name": community_name,
+            "platform": self.platform,
+        }
+        return community
+
+    @override
+    def get_author(
+        self, raw_msg: TelegramPlainMessageJSON | TelegramServiceMessageJSON
+    ) -> Author:
+        author_type, author_id, author_name = get_actor_metadata(raw_msg)
+
+        is_bot: bool = raw_msg["type"] == "service"
+        is_webhook_: bool = False  # telegram has no analogue
+        author: Author = {
+            "_id": author_id,
+            "name": author_name,
+            "platform": self.platform,
+            "is_bot": is_bot,
+            "is_webhook": is_webhook_,
+        }
+        return author
+
+    @override
+    def get_messages(self) -> Generator[PreMessage, None, None]:
+        for f in self.get_files():
+            community = self.get_community(f)
+
+            for m in f.get("messages", []):
+                _id = int(m["id"])  # i don't trust it
+                _seen_id = f"{community['_id']}_{_id}"
+                # telegram IDs are per-chat, so we tack on community_id
+                if _seen_id in self.__seen:
+                    continue
+                self.__seen.add(_seen_id)
+
+                if "forwarded_from" in m:
+                    # ignore forwards entirely
+                    continue
+
+                author = self.get_author(m)
+
+                timestamp: int = int(m["date_unixtime"])
+                postdate = datetime.fromtimestamp(timestamp)
+
+                content: str = coalesce_text(m["text_entities"])
+                message: PreMessage = {
+                    "_id": _id,
+                    "content": content,
+                    "container": None,
+                    "community": community,
+                    "author": author,
+                    "postdate": postdate,
+                }
+
+                yield message
+
+        self.__seen = set()

@@ -19,10 +19,20 @@ from sonamute.db import (
 )
 from sonamute.ilo import ILO
 from sonamute.utils import batch_iter, gather_batch, months_in_range
-from sonamute.file_io import DiscordFetcher, PlatformFetcher
-from sonamute.counters import dump, phrase_counter, sourced_freq_counter
+from sonamute.counters import (
+    dump,
+    phrase_counter,
+    sourced_freq_counter,
+    sourced_ngram_counter,
+)
+from sonamute.sources.discord import DiscordFetcher
+from sonamute.sources.generic import PlatformFetcher
+from sonamute.sources.telegram import TelegramFetcher
 
-SOURCES: dict[str, type[PlatformFetcher]] = {"discord": DiscordFetcher}
+SOURCES: dict[str, type[PlatformFetcher]] = {
+    "discord": DiscordFetcher,
+    "telegram": TelegramFetcher,
+}
 
 
 def clean_string(content: str) -> str:
@@ -111,14 +121,14 @@ async def amain(argv: argparse.Namespace):
     source = SOURCES[argv.platform](argv.dir)
 
     # TODO: lower elsewhere?
-    # counter = sourced_freq_counter(source)
-    # print(dump(counter))
+    counter = sourced_freq_counter(source)
+    print(dump(counter))
 
     db = load_messagedb_from_env()
     batch_size: int = argv.batch_size
 
     # await source_to_db(db, source, batch_size)
-    await sentences_to_frequencies(db, batch_size, True)
+    # await sentences_to_frequencies(db, batch_size, True)
     # TODO: fetch the same data for failin sentences?
 
 

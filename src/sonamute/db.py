@@ -1,7 +1,7 @@
 # STL
 from enum import IntEnum
 from uuid import UUID
-from typing import TypedDict, cast
+from typing import TypedDict, NotRequired, cast
 from datetime import datetime
 from collections import Counter
 
@@ -44,7 +44,7 @@ class Community(TypedDict):
 
 class Author(TypedDict):
     _id: int
-    name: str
+    name: str | None
     platform: Platform
     is_bot: bool
     is_webhook: bool
@@ -63,7 +63,7 @@ class CommSentence(TypedDict):
 class PreMessage(TypedDict):
     _id: int
     community: Community
-    container: int
+    container: int | None
     author: Author
     postdate: datetime
     content: str
