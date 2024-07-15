@@ -23,7 +23,7 @@ module default {
 
   type Author {
     required _id: int64;
-    required name: str;
+    name: str;
     required platform: Platform;
     required is_bot: bool;
     required is_webhook: bool;
