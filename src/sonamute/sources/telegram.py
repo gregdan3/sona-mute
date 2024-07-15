@@ -10,7 +10,7 @@ from typing_extensions import override
 # LOCAL
 from sonamute.db import Author, Platform, Community, PreMessage, KnownPlatforms
 from sonamute.file_io import try_load_json
-from sonamute.sources.generic import FileFetcher
+from sonamute.sources.generic import NULL_CONTAINER, FileFetcher
 
 # TODO: special handling?
 ONECHAT_BRIDGE_ID = 128026086
@@ -266,7 +266,7 @@ class TelegramFetcher(FileFetcher):
                 message: PreMessage = {
                     "_id": _id,
                     "content": content,
-                    "container": None,
+                    "container": NULL_CONTAINER,
                     "community": community,
                     "author": author,
                     "postdate": postdate,

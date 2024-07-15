@@ -52,7 +52,9 @@ module default {
   type Message {
     required _id: int64;
     required community: Community;
-    container: int64;
+    required container: int64 {
+      default := 0;
+    };
     # if there is some further level of organization, put it here
     # e.g. discord channels, reddit flairs
     required author: Author;

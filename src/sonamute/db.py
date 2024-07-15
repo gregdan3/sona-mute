@@ -63,7 +63,7 @@ class CommSentence(TypedDict):
 class PreMessage(TypedDict):
     _id: int
     community: Community
-    container: int | None
+    container: int
     author: Author
     postdate: datetime
     content: str
@@ -182,7 +182,7 @@ select (
     INSERT Message {
         _id := <int64>$_id,
         community := <Community>$community,
-        container := <optional int64>$container,
+        container := <int64>$container,
         author := <Author>$author,
         postdate := <std::datetime>$postdate,
         content := <str>$content

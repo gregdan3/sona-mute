@@ -6,6 +6,14 @@ from collections.abc import Generator
 # LOCAL
 from sonamute.db import Author, Community, PreMessage
 
+NULL_CONTAINER = 0
+# I know this is a sin.
+# But EdgeDB is doing that thing where nulls are implicitly omitted from any `filter`,
+# even `NOT` filters for which nulls should intuitively match.
+# Tacking on an `OR exists` made the query significantly slower,
+# so now I'm using 0 for null.
+# May god have mercy on my soul.
+
 
 class PlatformFetcher:
     @abstractmethod
