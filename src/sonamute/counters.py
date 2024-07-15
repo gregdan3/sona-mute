@@ -97,6 +97,7 @@ def sourced_freq_counter(
         for sentence in msg["sentences"]:
             if len(sentence["words"]) < min_len:
                 continue
+            sentence["words"] = [word.lower() for word in sentence["words"]]
             counter.update(sentence["words"])
 
         counted += 1
