@@ -21,9 +21,8 @@ FMT_TEXT_MAP = {
     "italic": "_",
     "underline": "__",
     "strikethrough": "~",
-    "code": "```",
+    # "code": "`",
     "spoiler": "||",
-    "blockquote": ">",
 }
 
 TelegramDialogType = Literal["public_supergroup", "private_supergroup"]
@@ -33,6 +32,7 @@ TelegramMessageType = Literal["message", "service"]
 TelegramActorType = Literal["user", "channel"]
 
 TelegramTextEntityType = Literal[
+    "blockquote",
     "bold",
     "code",
     "custom_emoji",
@@ -41,6 +41,7 @@ TelegramTextEntityType = Literal[
     "italic",
     "link",
     "mention",
+    "mention_name",
     "plain",
     "spoiler",
     "strikethrough",
@@ -129,27 +130,10 @@ def split_type_id(id: str) -> tuple[TelegramActorType, int]:
     raise ValueError("Received unknown actor id %s" % id)
 
 
-def get_actor_type_id(
-    m: TelegramServiceMessageJSON | TelegramPlainMessageJSON,
-) -> tuple[TelegramActorType, int]:
-    if m["type"] == "service":
-        author_type, author_id = split_type_id(m["actor_id"])
-        return author_type, author_id
-    if m["type"] == "message":
-        author_type, author_id = split_type_id(m["from_id"])
-        return author_type, author_id
-
-    raise ValueError("Received unknown message type %s" % m["type"])  # type: ignore[basedpyright is right except that my types could be incomplete]
-
-
 def get_actor_metadata(
-    m: TelegramServiceMessageJSON | TelegramPlainMessageJSON,
+    m: TelegramPlainMessageJSON,
 ) -> tuple[TelegramActorType, int, str | None]:
-
-    if m["type"] == "service":
-        actor_type, actor_id = split_type_id(m["actor_id"])
-        actor_name = m["actor"]
-    elif m["type"] == "message":
+    if m["type"] == "message":
         actor_type, actor_id = split_type_id(m["from_id"])
         actor_name = m["from"]
     else:
@@ -158,7 +142,23 @@ def get_actor_metadata(
     return actor_type, actor_id, actor_name
 
 
-def format(ent: TelegramTextEntity) -> str:
+def format_tg_markdown_v2(ent: TelegramTextEntity) -> str:
+    text = ent["text"]
+    if ent["type"] == "mention":
+        return f"<{text}>"
+    if ent["type"] == "mention_name":
+        return f"<@{text}>"
+    if ent["type"] == "blockquote":
+        return f"> {text}"
+    if ent["type"] == "code":
+        if "\n" in text:
+            return f"```\n{text}\n```"
+        return f"`{text}`"
+
+    if ent["type"] in FMT_TEXT_MAP:
+        quoter = FMT_TEXT_MAP[ent["type"]]
+        return f"{quoter}{text}{quoter}"
+
     return ent["text"]
 
 
@@ -168,8 +168,9 @@ def coalesce_text(
     output = ""
     for ent in text_entities:
         if do_format:
-            output += format(ent)
-        output += ent["text"]
+            output += format_tg_markdown_v2(ent)
+        else:
+            output += ent["text"]
     return output
 
 
@@ -209,12 +210,10 @@ class TelegramFetcher(FileFetcher):
         return community
 
     @override
-    def get_author(
-        self, raw_msg: TelegramPlainMessageJSON | TelegramServiceMessageJSON
-    ) -> Author:
+    def get_author(self, raw_msg: TelegramPlainMessageJSON) -> Author:
         author_type, author_id, author_name = get_actor_metadata(raw_msg)
 
-        is_bot: bool = raw_msg["type"] == "service"
+        is_bot: bool = False  # we skip service messages, and otherwise can't know
         is_webhook_: bool = False  # telegram has no analogue
         author: Author = {
             "_id": author_id,
@@ -231,6 +230,9 @@ class TelegramFetcher(FileFetcher):
             community = self.get_community(f)
 
             for m in f.get("messages", []):
+                if m["type"] == "service":
+                    continue  # join notifs, channel edits, etc.
+
                 _id = int(m["id"])  # i don't trust it
                 _seen_id = f"{community['_id']}_{_id}"
                 # telegram IDs are per-chat, so we tack on community_id
@@ -242,12 +244,25 @@ class TelegramFetcher(FileFetcher):
                     # ignore forwards entirely
                     continue
 
+                # TODO: if author is ONECHAT_BRIDGE_ID, first part of message is `word:` and must be cut
                 author = self.get_author(m)
+                if author["_id"] == ONECHAT_BRIDGE_ID and len(m["text_entities"]) > 1:
+                    # telegram's closest analogue of webhooks is bridges
+                    author["is_bot"] = True
+                    author["is_webhook"] = True
 
-                timestamp: int = int(m["date_unixtime"])
+                    m["text_entities"] = m["text_entities"][1:]
+                    # omit name, which is always bold
+                    m["text_entities"][0]["text"] = m["text_entities"][0]["text"][2:]
+                    # and following colon+space
+                    # NOTE: one guy in 2018 broke the bot's formatting
+                    # his message is len=1
+                    # ... oh well idc
+
+                timestamp = int(m["date_unixtime"])
                 postdate = datetime.fromtimestamp(timestamp)
 
-                content: str = coalesce_text(m["text_entities"])
+                content: str = coalesce_text(m["text_entities"], do_format=True)
                 message: PreMessage = {
                     "_id": _id,
                     "content": content,
