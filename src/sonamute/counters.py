@@ -76,6 +76,7 @@ def sourced_ngram_counter(
         for sentence in msg["sentences"]:
             if len(sentence["words"]) < n:
                 continue  # save some time; can't get any data
+            sentence["words"] = [word.lower() for word in sentence["words"]]
             counter.update(overlapping_ntuples(sentence, n=n))
 
         counted += 1
