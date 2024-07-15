@@ -170,7 +170,7 @@ AUTH_INSERT = """
 select (
     INSERT Author {
         _id := <int64>$_id,
-        name := <str>$name,
+        name := <optional str>$name,
         platform := <Platform>$platform,
         is_bot := <bool>$is_bot,
         is_webhook := <bool>$is_webhook,
@@ -182,7 +182,7 @@ select (
     INSERT Message {
         _id := <int64>$_id,
         community := <Community>$community,
-        container := <int64>$container,
+        container := <optional int64>$container,
         author := <Author>$author,
         postdate := <std::datetime>$postdate,
         content := <str>$content
