@@ -1,7 +1,7 @@
 # STL
 import os
 from typing import Tuple, Literal, TypedDict, NotRequired, cast
-from datetime import datetime
+from datetime import UTC, datetime
 from collections.abc import Generator
 
 # PDM
@@ -260,7 +260,7 @@ class TelegramFetcher(FileFetcher):
                     # ... oh well idc
 
                 timestamp = int(m["date_unixtime"])
-                postdate = datetime.fromtimestamp(timestamp)
+                postdate = datetime.fromtimestamp(timestamp, tz=UTC)
 
                 content: str = coalesce_text(m["text_entities"], do_format=True)
                 message: PreMessage = {
