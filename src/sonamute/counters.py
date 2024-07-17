@@ -28,9 +28,6 @@ def dump(counter: Counter[str] | Counter[tuple[str, ...]]) -> str:
 
 
 def ignorable(msg: PreMessage) -> bool:
-    # NOTE: using this before, rather than after, databasing was a bad idea
-    # i could have excluded these channels (and previously authors) in the analysis step
-    # doing this before it impossible to ask certain questions in the database
     if msg["author"]["is_bot"] and not msg["author"]["is_webhook"]:
         return True
     if not msg["content"]:
@@ -40,50 +37,77 @@ def ignorable(msg: PreMessage) -> bool:
     return False
 
 
-def countable_msgs(
-    msgs: Iterable[PreMessage],
-    force_pass: bool = False,
-) -> Generator[Message, None, None]:
-    """
-    Prior frequency counting implementation. Yields Messages from PreMessages.
-    Filters to passing sentences unless `force_pass` is True.
-    """
+def by_users(msgs: Iterable[PreMessage]) -> Generator[PreMessage, None, None]:
     for msg in msgs:
-        if ignorable(msg):
+        if msg["author"]["is_bot"] and not msg["author"]["is_webhook"]:
             continue
+        if not msg["content"]:
+            continue
+        if msg["container"] in IGNORED_CONTAINERS:
+            continue
+        yield msg
+
+
+def populate_sents(msgs: Iterable[PreMessage]) -> Generator[Message, None, None]:
+    for msg in msgs:
         content = ILO.preprocess(msg["content"])
 
         sentences: list[Sentence] = []
         for _, _, cleaned, score, result in ILO._are_toki_pona(content):
-            if cleaned and (result or force_pass):  # omit empty sentences
+            if cleaned:  # omit empty sentences
                 sentences.append(Sentence(words=cleaned, score=score))
 
-        if not sentences:
-            continue
         final_msg: Message = {**msg, "sentences": sentences}
         yield final_msg
 
 
-def sourced_ngram_counter(
+def sentences_of(
+    msgs: Generator[Message, None, None]
+) -> Generator[Sentence, None, None]:
+    for msg in msgs:
+        for sent in msg["sentences"]:
+            yield sent
+
+
+def with_score(
+    sents: Generator[Sentence, None, None], score: float = 0.8
+) -> Generator[Sentence, None, None]:
+    for sent in sents:
+        if sent["score"] >= score:
+            yield sent
+
+
+def words_of(
+    sents: Generator[Sentence, None, None]
+) -> Generator[list[str], None, None]:
+    for sent in sents:
+        yield sent["words"]
+
+
+def lowered(
+    sents: Generator[list[str], None, None]
+) -> Generator[list[str], None, None]:
+    for sent in sents:
+        sent = [word.lower() for word in sent]
+        yield sent
+
+
+def countables(
     source: PlatformFetcher,
-    n: int,
-    force_pass: bool = False,
-    _max: int = 0,
-) -> Counter[tuple[str, ...]]:
-    counter: Counter[tuple[str, ...]] = Counter()
-    counted = 0
-    for msg in countable_msgs(source.get_messages(), force_pass=force_pass):
-        for sentence in msg["sentences"]:
-            if len(sentence["words"]) < n:
-                continue  # save some time; can't get any data
-            sentence["words"] = [word.lower() for word in sentence["words"]]
-            counter.update(overlapping_ntuples(sentence, n=n))
+) -> Generator[list[str], None, None]:
 
-        counted += 1
-        if _max and counted >= _max:
-            break
+    # why did i write this
+    msgs = source.get_messages()
+    msgs = by_users(msgs)
+    msgs = populate_sents(msgs)
+    sents = sentences_of(msgs)
+    sents = with_score(sents, 0.8)
+    sents = words_of(sents)
+    sents = lowered(sents)
+    for sent in sents:
+        yield sent
 
-    return counter
+    # metacounter = metacount_frequencies(sents, 6, 6)
 
 
 def sourced_freq_counter(
@@ -94,7 +118,7 @@ def sourced_freq_counter(
 ) -> Counter[str]:
     counter: Counter[str] = Counter()
     counted = 0
-    for msg in countable_msgs(source.get_messages(), force_pass=force_pass):
+    for msg in populate_sents(source.get_messages(), force_pass=force_pass):
         for sentence in msg["sentences"]:
             if len(sentence["words"]) < min_len:
                 continue
@@ -108,7 +132,7 @@ def sourced_freq_counter(
 
 
 def phrase_counter(
-    sents: list[list[str]],
+    sents: Iterable[list[str]],
     phrase_len: int,
     min_sent_len: int,
 ) -> Counter[str]:
@@ -124,45 +148,31 @@ def phrase_counter(
     return counter
 
 
-def word_counter(sents: list[list[str]], min_len: int):
-    counter: Counter[str] = Counter()
-    for sent in sents:
-        if len(sent) < min_len:
-            continue  # save some time; can't get any data
-        counter.update(sent)
-    return counter
+def metacount_frequencies(
+    sents: Iterable[list[str]],
+    max_phrase_len: int,
+    max_min_sent_len: int,
+) -> dict[int, dict[int, Counter[str]]]:
+    metacounter: dict[int, dict[int, Counter[str]]] = {
+        phrase_len: {
+            min_sent_len: Counter()
+            for min_sent_len in range(phrase_len, max_min_sent_len + 1)
+        }
+        for phrase_len in range(1, max_phrase_len + 1)
+    }
 
-
-def phrases_by_length(
-    sents: list[list[str]],
-    max_phrase_len: int,  # don't go past 6 ever
-) -> dict[int, Counter[str]]:
-    counters: dict[int, Counter[str]] = {1: Counter()}
-    # this silliness maintains the contract for word_counters_by_min_sent_len
     for sent in sents:
         sent_len = len(sent)
-        for phrase_len in range(2, max_phrase_len + 1):
+        if not sent_len:
+            continue
+
+        for phrase_len in range(1, max_phrase_len + 1):
             if sent_len < phrase_len:
                 continue
-            counters[1].update(overlapping_phrases(sent, phrase_len))
-    return counters
 
+            phrases = overlapping_phrases(sent, phrase_len)
+            for min_sent_len in range(phrase_len, max_min_sent_len + 1):
+                if sent_len >= min_sent_len:
+                    metacounter[phrase_len][min_sent_len].update(phrases)
 
-async def meta_counter(sents: list[list[str]]):
-    min_lens = [1, 2, 3, 4, 5, 6]
-    for min_len in min_lens:
-        print(f"Starting on frequency of min len {min_len}")
-        counter = sourced_freq_counter(source=DISCORD, min_len=min_len)
-        result = dump(counter)
-        with open(f"word_freq_tpt_min_len_{min_len}.json", "w") as f:
-            _ = f.write(result)
-        print(f"Finished frequency of min len {min_len}")
-
-    ngrams = [2, 3, 4, 5, 6]
-    for n in ngrams:
-        print(f"Starting on ngrams of len {n}")
-        counter = sourced_ngram_counter(source=DISCORD, n=n)
-        result = dump(counter)
-        with open(f"ngrams_tpt_size_{n}.json", "w") as f:
-            _ = f.write(result)
-        print(f"Finished ngrams of len {n}")
+    return metacounter

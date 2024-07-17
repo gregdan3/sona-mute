@@ -1,8 +1,10 @@
 # STL
 import os
+import json
 import asyncio
 import argparse
 from uuid import UUID
+from typing import Any, Counter
 
 # PDM
 from edgedb.errors import EdgeDBError
@@ -18,12 +20,14 @@ from sonamute.db import (
     load_messagedb_from_env,
 )
 from sonamute.ilo import ILO
-from sonamute.utils import batch_iter, gather_batch, months_in_range
+from sonamute.utils import T, batch_iter, gather_batch, months_in_range
 from sonamute.counters import (
     dump,
+    countables,
     phrase_counter,
+    populate_sents,
     sourced_freq_counter,
-    sourced_ngram_counter,
+    metacount_frequencies,
 )
 from sonamute.sources.discord import DiscordFetcher
 from sonamute.sources.generic import PlatformFetcher
@@ -117,8 +121,30 @@ async def sentences_to_frequencies(db: MessageDB, batch_size: int, passing: bool
                     _ = await gather_batch(db.insert_frequency, formatted, batch_size)
 
 
+def source_to_frequencies(source: PlatformFetcher):
+    metacounter = metacount_frequencies(countables(source), 5, 6)
+    return metacounter
+
+
+def filter_counter(counter: Counter[T], min_val: int = 40) -> Counter[T]:
+    return Counter({k: v for k, v in counter.items() if v >= min_val})
+
+
+def filter_nested_counter(
+    counter: dict[int, dict[int, Counter[T]]], min_val: int
+) -> dict[int, dict[int, Counter[T]]]:
+    for i, counter_i in counter.items():
+        for j, counter_j in counter_i.items():
+            counter[i][j] = filter_counter(counter_j, min_val)
+    return counter
+
+
 async def amain(argv: argparse.Namespace):
     source = SOURCES[argv.platform](argv.dir)
+    metacounter = source_to_frequencies(source)
+    metacounter = filter_nested_counter(metacounter, 40)
+    dumped = json.dumps(metacounter, indent=2, ensure_ascii=False)
+    print(dumped)
 
     # TODO: lower elsewhere?
     counter = sourced_freq_counter(source)
