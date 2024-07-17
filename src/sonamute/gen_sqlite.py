@@ -1,7 +1,7 @@
 # STL
 import asyncio
 import argparse
-from typing import Literal, TypedDict
+from typing import TypedDict
 from contextlib import asynccontextmanager
 
 # PDM
@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.dialects.sqlite import Insert as insert
 
 # LOCAL
-from sonamute.db import Frequency, load_messagedb_from_env
+from sonamute.db import Frequency, MessageDB, load_messagedb_from_env
 from sonamute.utils import batch_iter, months_in_range
 
 Base = declarative_base()
@@ -155,10 +155,9 @@ def make_insertable_occurrence(
     return output
 
 
-async def amain(argv: argparse.Namespace):
-    edgedb = load_messagedb_from_env()
-    sqlite_db = await freqdb_factory(argv.db)
-    first_msg_dt, last_msg_dt = await edgedb.get_msg_date_range()
+async def generate_sqlite(edb: MessageDB, filename: str):
+    sdb = await freqdb_factory(filename)
+    first_msg_dt, last_msg_dt = await edb.get_msg_date_range()
 
     # limited to months bc that's much more Sensible:tm:
     for start, end in months_in_range(first_msg_dt, last_msg_dt):
@@ -166,7 +165,7 @@ async def amain(argv: argparse.Namespace):
         start_ts = int(start.timestamp())
         for phrase_len in range(1, 7):
             for min_sent_len in range(phrase_len, 7):
-                result = await edgedb.occurrences_in_range(
+                result = await edb.occurrences_in_range(
                     phrase_len,
                     min_sent_len,
                     start,
@@ -181,33 +180,17 @@ async def amain(argv: argparse.Namespace):
 
                 for batch in batch_iter(formatted, 249):
                     # we insert 4 items per row; max sql variables is 999 for, reasons,
-                    await sqlite_db.insert_word_freq(batch)
+                    await sdb.insert_word_freq(batch)
 
-                total_occurrences = await edgedb.global_occurrences_in_range(
+                total_occurrences = await edb.global_occurrences_in_range(
                     phrase_len,
                     min_sent_len,
                     start,
                     end,
                 )
-                await sqlite_db.insert_total_freq(
+                await sdb.insert_total_freq(
                     phrase_len,
                     min_sent_len,
                     start_ts,
                     total_occurrences,
                 )
-
-
-def main(argv: argparse.Namespace):
-    asyncio.run(amain(argv))
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    _ = parser.add_argument(
-        "--db",
-        help="The SQLite DB file to create or update.",
-        dest="db",
-        required=True,
-    )
-    ARGV = parser.parse_args()
-    main(ARGV)

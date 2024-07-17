@@ -19,6 +19,7 @@ from sonamute.db import (
     make_insertable_freqs,
     load_messagedb_from_env,
 )
+from sonamute.cli import SOURCES, menu_handler
 from sonamute.ilo import ILO
 from sonamute.utils import T, batch_iter, gather_batch, months_in_range
 from sonamute.counters import (
@@ -29,14 +30,10 @@ from sonamute.counters import (
     sourced_freq_counter,
     metacount_frequencies,
 )
+from sonamute.gen_sqlite import generate_sqlite
 from sonamute.sources.discord import DiscordFetcher
 from sonamute.sources.generic import PlatformFetcher
 from sonamute.sources.telegram import TelegramFetcher
-
-SOURCES: dict[str, type[PlatformFetcher]] = {
-    "discord": DiscordFetcher,
-    "telegram": TelegramFetcher,
-}
 
 
 def clean_string(content: str) -> str:
@@ -140,22 +137,29 @@ def filter_nested_counter(
 
 
 async def amain(argv: argparse.Namespace):
-    source = SOURCES[argv.platform](argv.dir)
+    actions = menu_handler()
+
+    batch_size: int = argv.batch_size
+    db = load_messagedb_from_env()
+    for sourcedata in actions["sources"]:
+        platform = sourcedata["source"]
+        root = sourcedata["root"]
+        source = SOURCES[platform](root)
+        await source_to_db(db, source, batch_size)
+
+    if actions["frequency"]:
+        await sentences_to_frequencies(db, batch_size, True)
+
+    if actions["sqlite"]:
+        root = actions["sqlite"]["root"]
+        filename = actions["sqlite"]["filename"]
+        dbpath = os.path.join(root, filename)
+        await generate_sqlite(db, dbpath)
+
     metacounter = source_to_frequencies(source)
     metacounter = filter_nested_counter(metacounter, 40)
     dumped = json.dumps(metacounter, indent=2, ensure_ascii=False)
     print(dumped)
-
-    # TODO: lower elsewhere?
-    counter = sourced_freq_counter(source)
-    print(dump(counter))
-
-    db = load_messagedb_from_env()
-    batch_size: int = argv.batch_size
-
-    # await source_to_db(db, source, batch_size)
-    # await sentences_to_frequencies(db, batch_size, True)
-    # TODO: fetch the same data for failin sentences?
 
 
 def main(argv: argparse.Namespace):
@@ -163,27 +167,7 @@ def main(argv: argparse.Namespace):
 
 
 if __name__ == "__main__":
-
-    def existing_directory(dir_path: str) -> str:
-        if os.path.isdir(dir_path):
-            return dir_path
-        raise NotADirectoryError(dir_path)
-
     parser = argparse.ArgumentParser()
-    _ = parser.add_argument(
-        "--dir",
-        help="A directory to fetch data from.",
-        dest="dir",
-        required=True,
-        type=existing_directory,
-    )
-    _ = parser.add_argument(
-        "--platform",
-        help="The format of the data, specified by its original platform.",
-        dest="platform",
-        required=True,
-        choices=SOURCES.keys(),
-    )
     _ = parser.add_argument(
         "--batch-size",
         help="How many messages to consume at once from the source.",
@@ -192,6 +176,5 @@ if __name__ == "__main__":
         type=int,
         default=150,
     )
-
     ARGV = parser.parse_args()
     main(ARGV)
