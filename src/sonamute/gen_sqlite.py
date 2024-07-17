@@ -1,7 +1,7 @@
 # STL
 import asyncio
 import argparse
-from typing import Literal
+from typing import Literal, TypedDict
 from contextlib import asynccontextmanager
 
 # PDM
@@ -33,6 +33,7 @@ class Phrase(Base):
     __tablename__ = "phrase"
 
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
+    len = Column(Integer, nullable=False)
     text = Column(Text, unique=True, nullable=False)
 
 
@@ -41,7 +42,6 @@ class Freq(Base):
 
     phrase_id = Column(Integer, ForeignKey("phrase.id"), nullable=False)
     # community = Column(Uuid, ForeignKey("community.id"), nullable=False)
-    phrase_len = Column(Integer, nullable=False)  # words in text
     min_sent_len = Column(Integer, nullable=False)  # min words in source sentences
     day = Column(Integer, nullable=False)
     occurrences = Column(Integer, nullable=False)
@@ -56,6 +56,11 @@ class Total(Base):
     min_sent_len = Column(Integer, nullable=False)
     occurrences = Column(Integer, nullable=False)
     __table_args__ = (PrimaryKeyConstraint("day", "phrase_len", "min_sent_len"),)
+
+
+class InsertablePhrase(TypedDict):
+    text: str
+    len: int
 
 
 class FreqDB:
@@ -78,7 +83,7 @@ class FreqDB:
         async with self.sgen() as s:
             yield s
 
-    async def upsert_word(self, data: list[dict[Literal["text"], str]]):
+    async def upsert_word(self, data: list[InsertablePhrase]):
         async with self.session() as s:
             stmt = insert(Phrase).values(data)
             stmt = stmt.on_conflict_do_update(
@@ -95,11 +100,14 @@ class FreqDB:
         return word_id_map
 
     async def insert_word_freq(self, data: list[Frequency]):
-        words: list[dict[Literal["text"], str]] = [{"text": d["text"]} for d in data]
+        words: list[InsertablePhrase] = [
+            {"text": d["text"], "len": d["phrase_len"]} for d in data
+        ]
         phrase_id_map = await self.upsert_word(words)
         for d in data:  # TODO: typing
             d["phrase_id"] = phrase_id_map[d["text"]]
             _ = d.pop("text")
+            _ = d.pop("phrase_len")
 
         async with self.session() as s:
             stmt = insert(Freq).values(data)
