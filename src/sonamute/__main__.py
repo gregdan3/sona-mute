@@ -145,15 +145,21 @@ async def amain(argv: argparse.Namespace):
         platform = sourcedata["source"]
         root = sourcedata["root"]
         source = SOURCES[platform](root)
+
+        print(f"Fetching {platform} data from {root}")
         await source_to_db(db, source, batch_size)
 
     if actions["frequency"]:
+
+        print("Regenerating frequency data")
         await sentences_to_frequencies(db, batch_size, True)
 
     if actions["sqlite"]:
         root = actions["sqlite"]["root"]
         filename = actions["sqlite"]["filename"]
         dbpath = os.path.join(root, filename)
+
+        print(f"Dumping frequency data to {dbpath}")
         await generate_sqlite(db, dbpath)
 
     metacounter = source_to_frequencies(source)
