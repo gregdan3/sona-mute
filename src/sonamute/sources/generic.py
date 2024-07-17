@@ -17,6 +17,9 @@ NULL_CONTAINER = 0
 
 class PlatformFetcher:
     @abstractmethod
+    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+
+    @abstractmethod
     def get_community(self, raw_src: Any) -> Community: ...
 
     @abstractmethod
