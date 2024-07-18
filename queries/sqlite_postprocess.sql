@@ -3,14 +3,39 @@
 WITH
   summed_occurrences AS (
     SELECT
-      phrase_id,
-      min_sent_len,
-      SUM(occurrences) AS total_occurrences
+      f.phrase_id,
+      SUM(f.occurrences) AS total_occurrences
     FROM
-      frequency
+      frequency f
+      JOIN phrase p ON f.phrase_id = p.id
+    WHERE
+      /* yes this is nonsense */
+      (
+        f.min_sent_len = 1
+        AND p.phrase_len = 1
+      )
+      OR (
+        f.min_sent_len = 2
+        AND p.phrase_len = 2
+      )
+      OR (
+        f.min_sent_len = 3
+        AND p.phrase_len = 3
+      )
+      OR (
+        f.min_sent_len = 4
+        AND p.phrase_len = 4
+      )
+      OR (
+        f.min_sent_len = 5
+        AND p.phrase_len = 5
+      )
+      OR (
+        f.min_sent_len = 6
+        AND p.phrase_len = 6
+      )
     GROUP BY
-      phrase_id,
-      min_sent_len
+      phrase_id
   ),
   phrases_to_delete AS (
     SELECT
