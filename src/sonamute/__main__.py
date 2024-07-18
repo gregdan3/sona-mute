@@ -1,10 +1,10 @@
 # STL
 import os
-import json
 import asyncio
 import argparse
 from uuid import UUID
-from typing import Any, Counter
+from datetime import datetime
+from collections import Counter
 
 # PDM
 from edgedb.errors import EdgeDBError
@@ -13,6 +13,7 @@ from edgedb.errors import EdgeDBError
 from sonamute.db import (
     Message,
     Sentence,
+    Frequency,
     MessageDB,
     PreMessage,
     CommSentence,
@@ -22,18 +23,9 @@ from sonamute.db import (
 from sonamute.cli import SOURCES, menu_handler
 from sonamute.ilo import ILO
 from sonamute.utils import T, batch_iter, gather_batch, months_in_range
-from sonamute.counters import (
-    dump,
-    countables,
-    phrase_counter,
-    populate_sents,
-    sourced_freq_counter,
-    metacount_frequencies,
-)
+from sonamute.counters import countables, metacount_frequencies
 from sonamute.gen_sqlite import generate_sqlite
-from sonamute.sources.discord import DiscordFetcher
 from sonamute.sources.generic import PlatformFetcher
-from sonamute.sources.telegram import TelegramFetcher
 
 
 def clean_string(content: str) -> str:
@@ -100,6 +92,20 @@ async def source_to_db(db: MessageDB, source: PlatformFetcher, batch_size: int):
     print("Final total: %s messages" % i)
 
 
+def metacounter_to_insertable_freqs(
+    metacounter: dict[int, dict[int, Counter[str]]], community: UUID, day: datetime
+) -> list[Frequency]:
+    output: list[Frequency] = list()
+    for phrase_len, inner in metacounter.items():
+        for min_sent_len, counter in inner.items():
+            formatted = make_insertable_freqs(
+                counter, community, phrase_len, min_sent_len, day
+            )
+            output.extend(formatted)
+
+    return output
+
+
 async def sentences_to_frequencies(db: MessageDB, batch_size: int, passing: bool):
     first_msg_dt, last_msg_dt = await db.get_msg_date_range()
     for start, end in months_in_range(first_msg_dt, last_msg_dt):
@@ -107,19 +113,17 @@ async def sentences_to_frequencies(db: MessageDB, batch_size: int, passing: bool
         print(start)
         result = await db.counted_sents_in_range(start, end, passing)
         by_community = sort_by_community(result)
+        # TODO: remove community? ehhhhhh
 
         for community, sents in by_community.items():
-            for phrase_len in range(1, 7):
-                for min_sent_len in range(phrase_len, 7):
-                    counter = phrase_counter(sents, phrase_len, min_sent_len)
-                    formatted = make_insertable_freqs(
-                        counter, community, phrase_len, min_sent_len, start
-                    )
-                    _ = await gather_batch(db.insert_frequency, formatted, batch_size)
+            metacounter = metacount_frequencies(sents, 6, 6)
+            formatted = metacounter_to_insertable_freqs(metacounter, community, start)
+            # await db.insert_frequencies(formatted)
+            _ = await gather_batch(db.insert_frequency, formatted, batch_size)
 
 
 def source_to_frequencies(source: PlatformFetcher):
-    metacounter = metacount_frequencies(countables(source), 5, 6)
+    metacounter = metacount_frequencies(countables(source), 6, 6)
     return metacounter
 
 
@@ -162,10 +166,11 @@ async def amain(argv: argparse.Namespace):
         print(f"Dumping frequency data to {dbpath}")
         await generate_sqlite(db, dbpath)
 
-    metacounter = source_to_frequencies(source)
-    metacounter = filter_nested_counter(metacounter, 40)
-    dumped = json.dumps(metacounter, indent=2, ensure_ascii=False)
-    print(dumped)
+    # metacounter = source_to_frequencies(source)
+    # metacounter = filter_nested_counter(metacounter, 40)
+    # dumped = json.dumps(metacounter, indent=2, ensure_ascii=False)
+    # print(dumped)
+    print("")
 
 
 def main(argv: argparse.Namespace):
