@@ -1,6 +1,8 @@
 # STL
 import json
+from uuid import UUID
 from typing import cast
+from datetime import datetime
 from collections.abc import Mapping, Iterable
 
 # PDM
@@ -24,6 +26,16 @@ class TupleJSONEncoder(json.JSONEncoder):
                     new_o[k] = v
             return super().encode(new_o)
         return super().encode(o)
+
+
+class EdgeDBEncoder(json.JSONEncoder):
+    @override
+    def default(self, o: JSONable) -> str:
+        if isinstance(o, UUID):
+            return str(o)
+        if isinstance(o, datetime):
+            return o.isoformat()
+        return super(EdgeDBEncoder, self).default(o)
 
 
 def try_load_json(filename: str) -> JSON | None:

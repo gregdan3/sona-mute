@@ -118,8 +118,8 @@ async def sentences_to_frequencies(db: MessageDB, batch_size: int, passing: bool
         for community, sents in by_community.items():
             metacounter = metacount_frequencies(sents, 6, 6)
             formatted = metacounter_to_insertable_freqs(metacounter, community, start)
-            # await db.insert_frequencies(formatted)
-            _ = await gather_batch(db.insert_frequency, formatted, batch_size)
+            await db.insert_frequencies(formatted)
+            # _ = await gather_batch(db.insert_frequency, formatted, batch_size)
 
 
 def source_to_frequencies(source: PlatformFetcher):
