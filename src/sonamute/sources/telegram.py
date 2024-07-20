@@ -9,7 +9,7 @@ from typing_extensions import override
 
 # LOCAL
 from sonamute.db import Author, Platform, Community, PreMessage, KnownPlatforms
-from sonamute.file_io import try_load_json
+from sonamute.file_io import try_load_json_file
 from sonamute.sources.generic import NULL_CONTAINER, FileFetcher
 
 # TODO: special handling?
@@ -190,7 +190,9 @@ class TelegramFetcher(FileFetcher):
                 if not filename.endswith(".json"):
                     continue
 
-                data = cast(TelegramJSON, try_load_json(os.path.join(root, filename)))
+                data = cast(
+                    TelegramJSON, try_load_json_file(os.path.join(root, filename))
+                )
                 if not data:
                     continue
                 if "name" not in data and "type" not in data:

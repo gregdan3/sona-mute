@@ -38,13 +38,18 @@ class EdgeDBEncoder(json.JSONEncoder):
         return super(EdgeDBEncoder, self).default(o)
 
 
-def try_load_json(filename: str) -> JSON | None:
+def try_load_json(data: str) -> JSON | None:
+    content = None
+    try:
+        content = cast(JSON, orjson.loads(data))
+    except orjson.JSONDecodeError:
+        # TODO: print failing file? log leve?
+        pass
+    return content
+
+
+def try_load_json_file(filename: str) -> JSON | None:
     # TODO: what if the file is too large?
     with open(filename, "r") as f:
-        content = None
-        try:
-            content = cast(JSON, orjson.loads(f.read()))
-        except orjson.JSONDecodeError:
-            # TODO: print failing file? log leve?
-            pass
+        content = try_load_json(f.read())
     return content

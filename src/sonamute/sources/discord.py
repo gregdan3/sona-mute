@@ -9,7 +9,7 @@ from typing_extensions import override
 
 # LOCAL
 from sonamute.db import Author, Platform, Community, PreMessage, KnownPlatforms
-from sonamute.file_io import try_load_json
+from sonamute.file_io import try_load_json_file
 from sonamute.sources.generic import FileFetcher
 
 
@@ -90,7 +90,9 @@ class DiscordFetcher(FileFetcher):
                 if not filename.endswith(".json"):
                     continue
 
-                data = cast(DiscordJSON, try_load_json(os.path.join(root, filename)))
+                data = cast(
+                    DiscordJSON, try_load_json_file(os.path.join(root, filename))
+                )
                 if not data:
                     continue
                 if "messageCount" not in data:
