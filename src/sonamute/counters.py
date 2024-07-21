@@ -14,6 +14,10 @@ from sonamute.file_io import TupleJSONEncoder
 from sonamute.constants import IGNORED_CONTAINERS
 from sonamute.sources.generic import PlatformFetcher
 
+AVG_SENT_LEN = 4.13557
+AVG_SENT_LEN_10X = 10 * AVG_SENT_LEN
+MED_SENT_LEN = 3
+
 
 def dump(counter: Counter[str] | Counter[tuple[str, ...]]) -> str:
     sorted_counter = {
@@ -148,6 +152,38 @@ def phrase_counter(
     return counter
 
 
+def is_nonsense(sent_len: int, sent: list[str]) -> bool:
+    """
+    Skip a sentence if it is "nonsense," which means "longer than 10x the average" and "mostly a single word"
+
+    This is intentionally a very weak filter.
+    As of writing, there are fewer than 1000 sentences of more than 40 words,
+    and barely over 100 sentences with over 400 words.
+
+    Given:
+    - The average sentence length is ~4.13 (with outliers)
+    - The median sentence length is 3,
+    - There are nearly 4 million sentences total
+    these being "real sentences" worth counting is... unlikely.
+
+    I can't totally dismiss the possibility without manual inspection,
+    and manually inspecting all of them isn't an option.
+    But I think we can say with extremely high confidence
+    that a 40+ word sentence which is >50% one word is nonsense.
+
+    So, we omit them.
+    """
+
+    if sent_len <= AVG_SENT_LEN_10X:
+        return False
+
+    counter = Counter(sent)
+    _, count = counter.most_common(n=1)[0]
+    # we don't care what the term is
+
+    return (count / sent_len) > 0.5
+
+
 def metacount_frequencies(
     sents: Iterable[list[str]],
     max_phrase_len: int,
@@ -164,6 +200,9 @@ def metacount_frequencies(
     for sent in sents:
         sent_len = len(sent)
         if not sent_len:
+            continue
+
+        if is_nonsense(sent_len, sent):
             continue
 
         for phrase_len in range(1, max_phrase_len + 1):
