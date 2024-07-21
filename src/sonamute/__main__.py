@@ -1,5 +1,6 @@
 # STL
 import os
+import json
 import asyncio
 import argparse
 from uuid import UUID
@@ -147,10 +148,22 @@ async def amain(argv: argparse.Namespace):
     for sourcedata in actions["sources"]:
         platform = sourcedata["source"]
         root = sourcedata["root"]
+        to_db = sourcedata["to_db"]
+        output = sourcedata["output"]
+
         source = SOURCES[platform](root)
 
         print(f"Fetching {platform} data from {root}")
-        await source_to_db(db, source, batch_size)
+        if to_db:
+            await source_to_db(db, source, batch_size)
+        else:
+            assert output  # cli guarantees it exists
+            metacounter = source_to_frequencies(source)
+            # TODO: this is a bit misleading since i'm really generating frequency data to a file
+            metacounter = filter_nested_counter(metacounter, 40)
+            dumped = json.dumps(metacounter, indent=2, ensure_ascii=False)
+            with open(output, "w") as f:
+                _ = f.write(dumped)
 
     if actions["frequency"]:
 
@@ -164,12 +177,6 @@ async def amain(argv: argparse.Namespace):
 
         print(f"Dumping frequency data to {dbpath}")
         await generate_sqlite(db, dbpath)
-
-    # metacounter = source_to_frequencies(source)
-    # metacounter = filter_nested_counter(metacounter, 40)
-    # dumped = json.dumps(metacounter, indent=2, ensure_ascii=False)
-    # print(dumped)
-    print("")
 
 
 def main(argv: argparse.Namespace):

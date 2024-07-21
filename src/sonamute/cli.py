@@ -8,7 +8,7 @@
 # STL
 import os
 import sys
-from typing import Any, TypedDict, NotRequired
+from typing import Any, TypedDict
 from datetime import date
 
 # PDM
@@ -32,8 +32,8 @@ SOURCES: dict[str, type[PlatformFetcher]] = {
 class SourceAction(TypedDict):
     source: str
     root: str
-    # to_db: bool
-    # output: NotRequired[str]
+    to_db: bool
+    output: str | None
 
 
 class SqliteAction(TypedDict):
@@ -68,11 +68,27 @@ def get_filename(prompt: str, *args: Any, **kwargs: Any) -> str:
 
 
 def setup_source():
-    source = Prompt.ask("What source?", choices=["telegram", "discord"])
+    source = Prompt.ask("What source?", choices=list(SOURCES.keys()))
     dir = get_directory("Where from?", default=os.getcwd())
+    to_db = Confirm.ask("Send to database?")
 
-    ACTIONS["sources"].append(SourceAction({"source": source, "root": dir}))
-    CONSOLE.print(f"Will fetch {source} data from {dir}")
+    output = None
+    dest = "db"  # just for presentatoin
+    if not to_db:
+        output = get_filename("Output where?", default=f"./{source}_{today_str()}.json")
+        dest = output
+
+    result = SourceAction(
+        {
+            "source": source,
+            "root": dir,
+            "to_db": to_db,
+            "output": output,
+        }
+    )
+
+    ACTIONS["sources"].append(result)
+    CONSOLE.print(f"Will fetch {source} data from {dir} and output to {dest}")
 
 
 def setup_frequency():
@@ -91,7 +107,12 @@ def setup_sqlite():
 def display_choices():
     if sources := ACTIONS["sources"]:
         for source in sources:
-            CONSOLE.print(f"Fetching {source['source']} data from {source['root']}")
+            dest = "db"
+            if not source["to_db"]:
+                dest = source["output"]
+            CONSOLE.print(
+                f"Sending {source['source']} data from {source['root']} to {dest}"
+            )
 
     if ACTIONS["frequency"]:
         CONSOLE.print("Regenerating frequency data from database")
