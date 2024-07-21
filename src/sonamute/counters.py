@@ -16,6 +16,7 @@ from sonamute.sources.generic import PlatformFetcher
 
 AVG_SENT_LEN = 4.13557
 AVG_SENT_LEN_10X = 10 * AVG_SENT_LEN
+AVG_SENT_LEN_100X = 100 * AVG_SENT_LEN_10X
 MED_SENT_LEN = 3
 
 
@@ -154,11 +155,15 @@ def phrase_counter(
 
 def is_nonsense(sent_len: int, sent: list[str]) -> bool:
     """
-    Skip a sentence if it is "nonsense," which means "longer than 10x the average" and "mostly a single word"
+    Skip a sentence if it is "nonsense," which means
+    - "longer than 10x the average" and
+    - "mostly a single word", or
+    - "longer than 100x the average" (instant disqualification)
+
 
     This is intentionally a very weak filter.
-    As of writing, there are fewer than 1000 sentences of more than 40 words,
-    and barely over 100 sentences with over 400 words.
+    As of writing, there are fewer than 1000 sentences with >=40 words,
+    and barely over 100 sentences with >=400 words.
 
     Given:
     - The average sentence length is ~4.13 (with outliers)
@@ -167,21 +172,24 @@ def is_nonsense(sent_len: int, sent: list[str]) -> bool:
     these being "real sentences" worth counting is... unlikely.
 
     I can't totally dismiss the possibility without manual inspection,
-    and manually inspecting all of them isn't an option.
+    and I don't want to involve manual inspection if I can avoid it.
+    (though statistical inspection would be fine.)
     But I think we can say with extremely high confidence
-    that a 40+ word sentence which is >50% one word is nonsense.
+    that a 40+ word sentence which is >=50% one word is nonsense.
 
     So, we omit them.
     """
 
     if sent_len <= AVG_SENT_LEN_10X:
         return False
+    if sent_len >= AVG_SENT_LEN_100X:
+        return True
 
     counter = Counter(sent)
     _, count = counter.most_common(n=1)[0]
     # we don't care what the term is
 
-    return (count / sent_len) > 0.5
+    return (count / sent_len) >= 0.5
 
 
 def metacount_frequencies(
