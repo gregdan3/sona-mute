@@ -17,6 +17,7 @@ from rich.prompt import Prompt, Confirm, IntPrompt
 from rich.console import Console
 
 # LOCAL
+from sonamute.sources.reddit import RedditFetcher
 from sonamute.sources.discord import DiscordFetcher
 from sonamute.sources.generic import PlatformFetcher
 from sonamute.sources.telegram import TelegramFetcher
@@ -26,6 +27,7 @@ CONSOLE = Console()
 SOURCES: dict[str, type[PlatformFetcher]] = {
     "discord": DiscordFetcher,
     "telegram": TelegramFetcher,
+    "reddit": RedditFetcher,
 }
 
 
