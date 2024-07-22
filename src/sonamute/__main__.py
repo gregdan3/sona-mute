@@ -87,7 +87,7 @@ async def source_to_db(db: MessageDB, source: PlatformFetcher, batch_size: int):
         _ = await asyncio.gather(*inserts)
 
         i += len(inserts)
-        if i % 100000 == 0:
+        if i % (batch_size * 100) == 0:
             print("Processed %s messages" % i)
 
     print("Final total: %s messages" % i)
