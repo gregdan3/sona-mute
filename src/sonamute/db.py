@@ -176,7 +176,7 @@ select (
         platform := <Platform>$platform,
         is_bot := <bool>$is_bot,
         is_webhook := <bool>$is_webhook,
-    } unless conflict on (._id, .platform)
+    } unless conflict on (._id, .name, .platform)
 else Author)"""
 
 MSG_INSERT = """

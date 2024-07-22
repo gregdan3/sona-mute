@@ -33,7 +33,7 @@ module default {
       (NOT .author.is_bot OR .author.is_webhook) AND
       NOT (.container in {316066233755631616, 786041291707777034, 914305039764426772, 1128714905932021821}));
 
-    constraint exclusive on ((._id, .platform));
+    constraint exclusive on ((._id, .name, .platform));
     index on ((._id, .platform));
     index on ((.is_bot));
     index on ((.is_webhook));
