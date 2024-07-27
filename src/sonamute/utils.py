@@ -74,16 +74,16 @@ def months_in_range(
 
 
 def round_to_prev_epoch(d: datetime) -> datetime:
-    new = datetime(d.year, 8, 8, tzinfo=d.tzinfo)
+    new = datetime(d.year, 8, 1, tzinfo=d.tzinfo)
     if new > d:
-        new = datetime(d.year - 1, 8, 8, tzinfo=d.tzinfo)
+        new = datetime(d.year - 1, 8, 1, tzinfo=d.tzinfo)
     return new
 
 
 def round_to_next_epoch(d: datetime) -> datetime:
-    new = datetime(d.year, 8, 8, tzinfo=d.tzinfo)
+    new = datetime(d.year, 8, 1, tzinfo=d.tzinfo)
     if new <= d:
-        new = datetime(d.year + 1, 8, 8, tzinfo=d.tzinfo)
+        new = datetime(d.year + 1, 8, 1, tzinfo=d.tzinfo)
     return new
 
 
@@ -91,7 +91,7 @@ def epochs_in_range(
     start: datetime,
     end: datetime,
 ) -> Generator[tuple[datetime, datetime], None, None]:
-    """Provide datetimes rounded to the start of every epoch, August 8th, such that `start` and `end` are within the given range"""
+    """Provide datetimes rounded to the start of every epoch, August 1st, such that `start` and `end` are within the given range"""
     start = round_to_prev_epoch(start)
     step = round_to_next_epoch(start)
     end = round_to_next_epoch(end)
