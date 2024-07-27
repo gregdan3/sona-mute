@@ -17,7 +17,7 @@ from sqlalchemy.dialects.sqlite import Insert as insert
 
 # LOCAL
 from sonamute.db import Frequency, MessageDB, load_messagedb_from_env
-from sonamute.utils import batch_iter, months_in_range
+from sonamute.utils import batch_iter, epochs_in_range, months_in_range
 
 Base = declarative_base()
 
@@ -56,6 +56,17 @@ class Total(Base):
     min_sent_len = Column(Integer, nullable=False)
     occurrences = Column(Integer, nullable=False)
     __table_args__ = (PrimaryKeyConstraint("day", "phrase_len", "min_sent_len"),)
+
+
+# same as total table but with fewer, more targeted inputs:
+# - annual occurrences by epoch (august 1)
+class Ranks(Base):
+    __tablename__ = "ranks"
+    phrase_id = Column(Integer, ForeignKey("phrase.id"), nullable=False)
+    min_sent_len = Column(Integer, nullable=False)
+    day = Column(Integer, nullable=True)
+    occurrences = Column(Integer, nullable=False)
+    __table_args__ = (PrimaryKeyConstraint("phrase_id", "min_sent_len", "day"),)
 
 
 class InsertablePhrase(TypedDict):
@@ -131,6 +142,21 @@ class FreqDB:
             _ = await s.execute(stmt)
             await s.commit()
 
+    async def insert_ranks(self, data: list[Frequency]):
+        words: list[InsertablePhrase] = [
+            {"text": d["text"], "len": d["phrase_len"]} for d in data
+        ]
+        phrase_id_map = await self.upsert_word(words)
+        for d in data:  # TODO: typing
+            d["phrase_id"] = phrase_id_map[d["text"]]
+            _ = d.pop("text")
+            _ = d.pop("phrase_len")
+
+        async with self.session() as s:
+            stmt = insert(Ranks).values(data)
+            _ = await s.execute(stmt)
+            await s.commit()
+
 
 async def freqdb_factory(database_file: str) -> FreqDB:
     t = FreqDB(database_file=database_file)
@@ -160,8 +186,9 @@ async def generate_sqlite(edb: MessageDB, filename: str):
     first_msg_dt, last_msg_dt = await edb.get_msg_date_range()
 
     # limited to months bc that's much more Sensible:tm:
+    print("Generating frequency data")
     for start, end in months_in_range(first_msg_dt, last_msg_dt):
-        print(start)
+        print(f"{start} - {end}")
         start_ts = int(start.timestamp())
         for phrase_len in range(1, 7):
             for min_sent_len in range(phrase_len, 7):
@@ -194,3 +221,24 @@ async def generate_sqlite(edb: MessageDB, filename: str):
                     start_ts,
                     total_occurrences,
                 )
+
+    print("Generating rank data")
+    # this is in its own table and shrunk further to save query time
+    for start, end in epochs_in_range(first_msg_dt, last_msg_dt):
+        print(f"{start} - {end}")
+        start_ts = int(start.timestamp())
+        for phrase_len in range(1, 7):
+            for min_sent_len in range(phrase_len, 7):
+                result = await edb.occurrences_in_range(
+                    phrase_len,
+                    min_sent_len,
+                    start,
+                    end,
+                    limit=500,
+                )
+                formatted = make_insertable_occurrence(
+                    result, phrase_len, min_sent_len, start_ts
+                )
+
+                for batch in batch_iter(formatted, 249):
+                    await sdb.insert_ranks(batch)
