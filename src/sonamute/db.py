@@ -136,7 +136,7 @@ with
   select groups {
     text := .key.text,
     total := sum(.elements.occurrences)
-  } order by .total desc;
+  } order by .total desc
 """
 
 GLOBAL_FREQ_SELECT = """
@@ -473,10 +473,15 @@ class MessageDB:
         min_sent_len: int,
         start: datetime,
         end: datetime,
+        limit: int | None = None,
         # word: str | None = None,
     ):
+        query = FREQ_SELECT
+        if limit:
+            query = FREQ_SELECT + f" limit {limit}"
+
         results = await self.client.query(
-            FREQ_SELECT,
+            query,
             phrase_len=phrase_len,
             min_sent_len=min_sent_len,
             start=start,
