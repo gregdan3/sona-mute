@@ -46,7 +46,10 @@ class Freq(Base):
     day = Column(Integer, nullable=False)
     occurrences = Column(Integer, nullable=False)
 
-    __table_args__ = (PrimaryKeyConstraint("phrase_id", "min_sent_len", "day"),)
+    __table_args__ = (
+        PrimaryKeyConstraint("phrase_id", "min_sent_len", "day"),
+        {"sqlite_with_rowid": False},
+    )
 
 
 class Total(Base):
@@ -55,18 +58,25 @@ class Total(Base):
     phrase_len = Column(Integer, nullable=False)
     min_sent_len = Column(Integer, nullable=False)
     occurrences = Column(Integer, nullable=False)
-    __table_args__ = (PrimaryKeyConstraint("day", "phrase_len", "min_sent_len"),)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("phrase_len", "min_sent_len", "day"),
+        {"sqlite_with_rowid": False},
+    )
 
 
-# same as total table but with fewer, more targeted inputs:
-# - annual occurrences by epoch (august 1)
+# identical to Freq but with annual epochs and a special day=0 row
 class Ranks(Base):
     __tablename__ = "ranks"
     phrase_id = Column(Integer, ForeignKey("phrase.id"), nullable=False)
     min_sent_len = Column(Integer, nullable=False)
     day = Column(Integer, nullable=True)
     occurrences = Column(Integer, nullable=False)
-    __table_args__ = (PrimaryKeyConstraint("phrase_id", "min_sent_len", "day"),)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("phrase_id", "min_sent_len", "day"),
+        {"sqlite_with_rowid": False},
+    )
 
 
 class InsertablePhrase(TypedDict):
