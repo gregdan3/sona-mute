@@ -1,8 +1,9 @@
 # STL
 import asyncio
-import argparse
 from typing import TypedDict
+from datetime import datetime
 from contextlib import asynccontextmanager
+from collections.abc import Callable, Coroutine
 
 # PDM
 from sqlalchemy import Text, Column, Integer, ForeignKey, PrimaryKeyConstraint
@@ -16,7 +17,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.dialects.sqlite import Insert as insert
 
 # LOCAL
-from sonamute.db import Frequency, MessageDB, load_messagedb_from_env
+from sonamute.db import Frequency, MessageDB
 from sonamute.utils import batch_iter, epochs_in_range, months_in_range
 
 # we insert 4 items per row; max sql variables is 999 for, reasons,
@@ -177,21 +178,14 @@ async def freqdb_factory(database_file: str) -> FreqDB:
     return t
 
 
-def make_insertable_occurrence(
-    data, phrase_len: int, min_sent_len: int, day: int
-) -> list[Frequency]:
-    output: list[Frequency] = list()
-    for item in data:
-        d: Frequency = {
-            # NOTE: this is intently reduced from EdgeDB's Frequency
-            "text": item.text,
-            "occurrences": item.total,
-            "phrase_len": phrase_len,
-            "min_sent_len": min_sent_len,
-            "day": day,
-        }
-        output.append(d)
-    return output
+async def batch_insert(
+    formatted: list[Frequency],
+    callable: Callable[[list[Frequency]], Coroutine[None, None, None]],
+) -> None:
+    tasks: list[Coroutine[None, None, None]] = []
+    for batch in batch_iter(formatted, SQLITE_BATCH):
+        tasks.append(callable(batch))
+    _ = await asyncio.gather(*tasks)
 
 
 async def generate_sqlite(edb: MessageDB, filename: str):
@@ -204,49 +198,40 @@ async def generate_sqlite(edb: MessageDB, filename: str):
         for min_sent_len in range(phrase_len, 7):
             print(f"Starting on min sent len of {min_sent_len}")
 
-            result = await edb.occurrences_in_range(
-                phrase_len, min_sent_len, first_msg_dt, last_msg_dt
+            results = await edb.occurrences_in_range(
+                phrase_len,
+                min_sent_len,
+                datetime.fromtimestamp(0),
+                last_msg_dt,
             )
-            formatted = make_insertable_occurrence(result, phrase_len, min_sent_len, 0)
-            for batch in batch_iter(formatted, SQLITE_BATCH):
+            for batch in batch_iter(results, SQLITE_BATCH):
                 await sdb.insert_ranks(batch)
 
-            # this is in its own table and shrunk further to save query time
             for start, end in epochs_in_range(first_msg_dt, last_msg_dt):
                 print(f"{start} - {end}")
                 start_ts = int(start.timestamp())
-                result = await edb.occurrences_in_range(
+                results = await edb.occurrences_in_range(
                     phrase_len,
                     min_sent_len,
                     start,
                     end,
                     limit=500,
                 )
-                formatted = make_insertable_occurrence(
-                    result, phrase_len, min_sent_len, start_ts
-                )
 
-                for batch in batch_iter(formatted, SQLITE_BATCH):
+                for batch in batch_iter(results, SQLITE_BATCH):
                     await sdb.insert_ranks(batch)
 
             # a higher resolution than months would make the data too large
             for start, end in months_in_range(first_msg_dt, last_msg_dt):
                 print(f"{start} - {end}")
                 start_ts = int(start.timestamp())
-                result = await edb.occurrences_in_range(
+                results = await edb.occurrences_in_range(
                     phrase_len,
                     min_sent_len,
                     start,
                     end,
                 )
-                formatted = make_insertable_occurrence(
-                    result,
-                    phrase_len,
-                    min_sent_len,
-                    start_ts,
-                )
-
-                for batch in batch_iter(formatted, SQLITE_BATCH):
+                for batch in batch_iter(results, SQLITE_BATCH):
                     await sdb.insert_word_freq(batch)
 
                 # The totals table exists to convert absolute occurrences to percents on the fly

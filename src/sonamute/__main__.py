@@ -18,7 +18,7 @@ from sonamute.db import (
     MessageDB,
     PreMessage,
     CommSentence,
-    make_insertable_freqs,
+    make_edgedb_frequency,
     load_messagedb_from_env,
 )
 from sonamute.cli import SOURCES, menu_handler
@@ -99,7 +99,7 @@ def metacounter_to_insertable_freqs(
     output: list[Frequency] = list()
     for phrase_len, inner in metacounter.items():
         for min_sent_len, counter in inner.items():
-            formatted = make_insertable_freqs(
+            formatted = make_edgedb_frequency(
                 counter, community, phrase_len, min_sent_len, day
             )
             output.extend(formatted)

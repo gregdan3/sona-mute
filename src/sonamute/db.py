@@ -475,7 +475,7 @@ class MessageDB:
         end: datetime,
         limit: int | None = None,
         # word: str | None = None,
-    ):
+    ) -> list[Frequency]:
         query = FREQ_SELECT
         if limit:
             query = FREQ_SELECT + f" limit {limit}"
@@ -487,8 +487,13 @@ class MessageDB:
             start=start,
             end=end,
         )
-        # result has .text and .total
-        return results
+        formatted = make_sqlite_frequency(
+            results,
+            phrase_len,
+            min_sent_len,
+            int(start.timestamp()),
+        )
+        return formatted
 
     async def global_occurrences_in_range(
         self,
@@ -509,7 +514,7 @@ class MessageDB:
         return results
 
 
-def make_insertable_freqs(
+def make_edgedb_frequency(
     counter: Counter[str],
     community: UUID,
     phrase_len: int,
@@ -530,6 +535,23 @@ def make_insertable_freqs(
         )
         word_freq_rows.append(result)
     return word_freq_rows
+
+
+def make_sqlite_frequency(
+    data, phrase_len: int, min_sent_len: int, day: int
+) -> list[Frequency]:
+    output: list[Frequency] = list()
+    for item in data:
+        d: Frequency = {
+            # NOTE: this is intently reduced from EdgeDB's Frequency
+            "text": item.text,
+            "occurrences": item.total,
+            "phrase_len": phrase_len,
+            "min_sent_len": min_sent_len,
+            "day": day,
+        }
+        output.append(d)
+    return output
 
 
 def load_messagedb_from_env() -> MessageDB:
