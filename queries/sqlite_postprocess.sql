@@ -1,24 +1,3 @@
-/* NOTE: Deletes the last month from the data
-* This is presumed to be safe due to the data being incomplete
-* May not be safe if data was collected on the last day of the month exactly */
-DELETE FROM frequency
-WHERE
-  day IN (
-    SELECT
-      MAX(day)
-    FROM
-      frequency
-  );
-
-DELETE FROM total
-WHERE
-  day IN (
-    SELECT
-      MAX(day)
-    FROM
-      total
-  );
-
 /* Remove words/phrases below a certain number of occurrences, here 40
 * Partly for anonymity, but mostly for Google's reasons: the data is massive if you don't do this */
 WITH
