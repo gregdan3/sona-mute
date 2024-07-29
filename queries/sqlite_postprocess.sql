@@ -64,6 +64,15 @@ WHERE
       frequency
   );
 
+DELETE FROM ranks
+WHERE
+  phrase_id NOT IN (
+    SELECT
+      id
+    FROM
+      phrase
+  );
+
 CREATE INDEX FreqCovering on frequency (phrase_id, min_sent_len, day, occurrences);
 
 CREATE INDEX TotalCovering on total (phrase_len, min_sent_len, day, occurrences);
