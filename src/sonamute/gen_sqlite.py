@@ -203,7 +203,7 @@ async def generate_sqlite(edb: MessageDB, filename: str):
                 min_sent_len,
                 datetime.fromtimestamp(0),
                 last_msg_dt,
-                limit=500,
+                # limit=500,
             )
             for batch in batch_iter(results, SQLITE_BATCH):
                 await sdb.insert_ranks(batch)
@@ -216,7 +216,7 @@ async def generate_sqlite(edb: MessageDB, filename: str):
                     min_sent_len,
                     start,
                     end,
-                    limit=500,
+                    # limit=500,
                 )
 
                 for batch in batch_iter(results, SQLITE_BATCH):
