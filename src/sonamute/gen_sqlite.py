@@ -1,7 +1,7 @@
 # STL
 import asyncio
 from typing import TypedDict
-from datetime import datetime
+from datetime import UTC, datetime
 from contextlib import asynccontextmanager
 from collections.abc import Callable, Coroutine
 
@@ -201,7 +201,7 @@ async def generate_sqlite(edb: MessageDB, filename: str):
             results = await edb.occurrences_in_range(
                 phrase_len,
                 min_sent_len,
-                datetime.fromtimestamp(0),
+                datetime.fromtimestamp(0, tz=UTC),
                 last_msg_dt,
                 # limit=500,
             )
