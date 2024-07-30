@@ -79,6 +79,8 @@ CREATE INDEX TotalCovering on total (phrase_len, min_sent_len, day, occurrences)
 
 CREATE INDEX RanksCovering on ranks (phrase_id, min_sent_len, day, occurrences);
 
+CREATE INDEX PhraseCovering ON phrase (id, len, text);
+
 /* For HttpVFS performance */
 pragma journal_mode = delete;
 
