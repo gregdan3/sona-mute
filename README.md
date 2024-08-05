@@ -62,17 +62,17 @@ This is in order of how important the platform is to include!
 
 #### forums.tokipona.org
 
-To an outsider, it may seem odd to want to include a specific singular forum in this data- but [this forum](http://forums.tokipona.org) is important because it was active from 1 Oct 2009 to, mostly, mid-2020. This period is virtually unrepresented in the data I currently have to, and this space is one of only a handful that were in use during this time. As such, this forum is highly important to the history of Toki Pona.
+To an outsider, it may seem odd to want to include a specific singular forum in this data- but [this forum](http://forums.tokipona.org) is important because it was active from 1 Oct 2009 to, mostly, mid-2020. This period is virtually unrepresented in the data I currently have to, and this space is one of only a handful that were in use during that time. As such, this forum is highly important to the history of Toki Pona.
 
 I do already have a backup of this data, but actually adding it to the database is difficult. I lack user IDs, post IDs, and properly formatted quotes. That's because I used [this backup tool](https://github.com/Dascienz/phpBB-forum-scraper), and frankly, it's not very good. I have thus far not needed to make my own scrapers for any of the data I've collected, but this one may be different. If you have a better phpBB scraper, or otherwise a cleaner capture of this data, please reach out!
 
-#### tokipona@yahoogroups.com
+#### `tokipona@yahoogroups.com`
 
-From some time in 2002 until Oct 1 2009, the Toki Pona yahoo group was one of very few spaces where Toki Pona was regularly spoken, and it appears to have been the most popular- the IRC channel could have been more popular, but it wasn't preserved that I'm aware of. Fortunately, the entire yahoo group is backed up on the forum above. Unfortunately, its formatting is mangled badly because its newlines are missing. If that weren't enough, its formatting is already highly inconsistent due to the unstable nature of email from provider to provider. Including it in the database as-is would be messy, at best; it needs some pre-processing effort.
+From some time in 2002 until Oct 1 2009, the Toki Pona yahoo group was one of very few spaces where Toki Pona was regularly spoken, and it appears to have been the most popular- the IRC channel could have been more popular, but it wasn't preserved that I'm aware of. Fortunately, the entire yahoo group is backed up on the forum above. Unfortunately, its formatting is mangled badly because its newlines are missing. If that weren't enough, its formatting is already highly inconsistent due to the unstable nature of email from provider to provider. Including it in the database as-is would be messy and uninformative, or even misleading; it needs some pre-processing effort.
 
 #### Facebook
 
-There are several Toki Pona communities on Facebook, [here](https://www.facebook.com/groups/sitelen), [here](https://www.facebook.com/groups/1590434267942176/), [here](https://www.facebook.com/groups/543153192468898/), and [here](https://www.facebook.com/groups/2424398856/). The majority of their activity is in a period similar to that of Discord- that is, from 2020 onward- but they have much more pre-2020 activity than most other communities that existed around this time.
+There are several Toki Pona communities on Facebook, [here](https://www.facebook.com/groups/sitelen), [here](https://www.facebook.com/groups/1590434267942176/), [here](https://www.facebook.com/groups/543153192468898/), and [here](https://www.facebook.com/groups/2424398856/). The majority of their activity is in a period similar to that of Discord- that is, from 2020 onward- but they have much more pre-2020 activity than most other communities that existed around that time.
 
 #### LiveJournal
 
