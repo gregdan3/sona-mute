@@ -52,6 +52,8 @@ This, or answering "no" to "Do you want to perform another action?" will run the
 
 ## Future Work
 
+Most of what I want to do is in [the issues on this repo](https://github.com/gregdan3/sona-mute/issues). The rest is either meta, or not directly related to code in this library.
+
 ### Tests
 
 "hey why doesn't this code have tests" i had more excitement than foresight when i wrote this code
@@ -91,28 +93,3 @@ There are at least two livejournal blogs that focused on Toki Pona, [here](https
 #### Reddit (subreddits other than /r/tokipona)
 
 While /u/Watchful1 has done an admirable job of scraping data from Reddit after the death of Reddit's API, they have understandably stopped short of capturing literally all the data on the platform. They only look at the top 40,000 subreddits, which means only [/r/tokipona](http://reddit.com/r/tokipona) is included. I would love to include [/r/mi_lon](https://www.reddit.com/r/mi_lon/), [/r/tokiponataso](https://www.reddit.com/r/tokiponataso/), and any others I can- but scraping this myself doesn't seem realistic. The API is gone, and the user API only lets you scroll through 1000 posts total. Unsure what to do about this.
-
-### Better detection of bots (in Discord)
-
-In Discord, detecting bot messages is normally easy. Discord delivers a field that tells you whether the message is from a bot, and whether the message is from a webhook- and if the message is from a webhook, it is also considered to be from a bot.
-
-Here's the trouble: [PluralKit](https://pluralkit.me/) sends messages via webhooks, and so do many other tools such as those that copy Github notifications into Discord.
-
-Currently, I count all user messages and all webhook messages so that I don't miss PluralKit messages, but this means I count messages which are from webhooks other than PluralKit. These webhooks are overwhelmingly automated messages, and a few of them have been intently adjusted to emit messages in Toki Pona, so suddenly those are included despite being effectively bot messages. Oops!
-
-I'd like to take all my webhook message IDs and ask the PluralKit API if they're from PluralKit. I just haven't done so yet. I'd also like to store that information independently of the EdgeDB database, so that I can archive it separately from the backed up database blob. Put another way, it should be possible to construct my entire database from scratch if you have all my same data.
-
-### Weekly (or 4-weekly) resolution instead of monthly
-
-Currently, I use a monthly resolution for all my data. This is fine for graphs that consider an n-gram's occurrences against the total number of same-length n-grams in a period, but can introduce bias against shorter months or months with fewer active periods (e.g. weekends) if viewing the data in an absolute way i.e. seeing the raw numbers. This bias can be corrected by choosing a time resolution which is equally sized.
-
-### Inserting "start of sentence" and "end of sentence" markers
-
-While preparing for presentation during [suno pi toki pona](https://suno.pona.la/2024/), I realized I could insert `^` and `$` as sentence start and end markers while counting frequency data, since they cannot appear in a processed sentence. This would change the relationship between minimum sentence length and phrase length, but allow for useful searches like `anu seme $, anu seme - anu seme $`- comparing occurrences of "anu seme" at the end of the sentence with occurrences of it anywhere else.
-
-### Faster writing to SQLite
-
-There are two places to save time with the data I'm writing to SQLite:
-
-1. If I switch from the SQLAlchemy ORM to Core, I reportedly can get as much as a 10x speedup. What.
-2. I'm currently writing all frequency information to the SQLite database then, in post-processing, filtering down to words/phrases with at least 40 occurrences. I can save as much as 86% of my effort (estimating by disk space, the SQLite DB goes from ~3.1GB to ~420MB) if I instead make queries to EdgeDB which don't include information I don't intend to deliver. This will make the queries themselves slower, but that's probably fine.
