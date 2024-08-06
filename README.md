@@ -56,6 +56,12 @@ This, or answering "no" to "Do you want to perform another action?" will run the
 
 "hey why doesn't this code have tests" i had more excitement than foresight when i wrote this code
 
+### Improving detection of Toki Pona and rejection of other languages
+
+This tool doesn't do any of its own work detecting Toki Pona sentences. Instead, that's up to [sona toki](https://github.com/gregdan3/sona-toki), my library to help you detect Toki Pona being spoken!
+
+If you'd like to contribute, [see the issues on that library!](https://github.com/gregdan3/sona-toki/issues)
+
 ### More platforms
 
 This is in order of how important the platform is to include!
@@ -72,11 +78,11 @@ From some time in 2002 until Oct 1 2009, the Toki Pona yahoo group was one of ve
 
 #### Facebook
 
-There are several Toki Pona communities on Facebook, [here](https://www.facebook.com/groups/sitelen), [here](https://www.facebook.com/groups/1590434267942176/), [here](https://www.facebook.com/groups/543153192468898/), and [here](https://www.facebook.com/groups/2424398856/). The majority of their activity is in a period similar to that of Discord- that is, from 2020 onward- but they have much more pre-2020 activity than most other communities that existed around that time.
+There are several Toki Pona communities on Facebook, [here](https://www.facebook.com/groups/sitelen), [here](https://www.facebook.com/groups/1590434267942176/), [here](https://www.facebook.com/groups/543153192468898/), and [here](https://www.facebook.com/groups/2424398856/). The majority of their activity is in a period similar to that of Discord- that is, from 2020 onward- but they have much more pre-2020 activity than most other communities that existed around that time. Unfortunately, scraping data from Facebook is extremely difficult, and I have not fully explored doing so as a result.
 
 #### LiveJournal
 
-There are at least two livejournal blogs that focused on Toki Pona, [here](https://tokipona.livejournal.com/) and [here](https://ru-tp.livejournal.com/), which were active in a similar time period to the forum.
+There are at least two livejournal blogs that focused on Toki Pona, [here](https://tokipona.livejournal.com/) and [here](https://ru-tp.livejournal.com/), which were active in a similar time period to the forum or yahoo group.
 
 #### kulupu.pona.la
 
@@ -84,15 +90,17 @@ There are at least two livejournal blogs that focused on Toki Pona, [here](https
 
 #### Reddit (subreddits other than /r/tokipona)
 
+While /u/Watchful1 has done an admirable job of scraping data from Reddit after the death of Reddit's API, they have understandably stopped short of capturing literally all the data on the platform. They only look at the top 40,000 subreddits, which means only [/r/tokipona](http://reddit.com/r/tokipona) is included. I would love to include [/r/mi_lon](https://www.reddit.com/r/mi_lon/), [/r/tokiponataso](https://www.reddit.com/r/tokiponataso/), and any others I can- but scraping this myself doesn't seem realistic. The API is gone, and the user API only lets you scroll through 1000 posts total. Unsure what to do about this.
+
 ### Better detection of bots (in Discord)
 
 In Discord, detecting bot messages is normally easy. Discord delivers a field that tells you whether the message is from a bot, and whether the message is from a webhook- and if the message is from a webhook, it is also considered to be from a bot.
 
 Here's the trouble: [PluralKit](https://pluralkit.me/) sends messages via webhooks, and so do many other tools such as those that copy Github notifications into Discord.
 
-Currently, I count all user messages and all webhook messages so that I don't miss pluralkit messages, but this means
+Currently, I count all user messages and all webhook messages so that I don't miss PluralKit messages, but this means I count messages which are from webhooks other than PluralKit. These webhooks are overwhelmingly automated messages, and a few of them have been intently adjusted to emit messages in Toki Pona, so suddenly those are included despite being effectively bot messages. Oops!
 
-I'd like to take all my webhook message IDs and ask the PluralKit API if they're from PluralKit.
+I'd like to take all my webhook message IDs and ask the PluralKit API if they're from PluralKit. I just haven't done so yet. I'd also like to store that information independently of the EdgeDB database, so that I can archive it separately from the backed up database blob. Put another way, it should be possible to construct my entire database from scratch if you have all my same data.
 
 ### Weekly (or 4-weekly) resolution instead of monthly
 
@@ -107,4 +115,4 @@ While preparing for presentation during [suno pi toki pona](https://suno.pona.la
 There are two places to save time with the data I'm writing to SQLite:
 
 1. If I switch from the SQLAlchemy ORM to Core, I reportedly can get as much as a 10x speedup. What.
-2. I'm currently writing all frequency information to the SQLite database then, in post-processing, filtering down to words/phrases with at least 40 occurrences. I can save as much as 86% of my effort (estimating by disk space, we go from ~3.1GB to ~420MB) if I instead make queries to EdgeDB which don't include information I don't intend to deliver. This will make the queries themselves slower, but that's probably fine.
+2. I'm currently writing all frequency information to the SQLite database then, in post-processing, filtering down to words/phrases with at least 40 occurrences. I can save as much as 86% of my effort (estimating by disk space, the SQLite DB goes from ~3.1GB to ~420MB) if I instead make queries to EdgeDB which don't include information I don't intend to deliver. This will make the queries themselves slower, but that's probably fine.
