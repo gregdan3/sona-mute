@@ -79,6 +79,7 @@ module default {
       NOT (.message.container in {316066233755631616, 786041291707777034, 914305039764426772, 1128714905932021821, 1187212477155528804})
       #  mapona/jaki, mapona/ako, mapali/wikipesija, mamusi/ako,
       #  mapona/toki-suli/musitokipiantesitelenwan
+      # 895303838662295572 maponasewi/tokinanpa
   );
 
   alias NonTPUserSentence := (
