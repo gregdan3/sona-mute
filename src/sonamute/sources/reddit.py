@@ -182,6 +182,25 @@ def split_type_id(typed_id: str) -> tuple[int, int]:
     return int(otype[1]), b36decode(b36id)
 
 
+def format_post(msg: RedditJSON) -> str:
+    content = ""
+    if title := msg.get("title"):
+        content = title
+    if selftext := msg.get("selftext"):
+        content += "\n\n" + selftext
+    if body := msg.get("body"):
+        # only exists on comments
+        content = body
+
+    # my archive formats < and > like these
+    content = content.replace("&gt;", ">")
+    content = content.replace("&lt;", "<")
+    content = content.replace("&amp;", "&")
+    content = content.replace("#x200B", "​")
+
+    return content
+
+
 class RedditFetcher(FileFetcher):
     platform: Platform = {
         "_id": KnownPlatforms.Reddit.value,
@@ -267,15 +286,7 @@ class RedditFetcher(FileFetcher):
             community = self.get_community(msg)
             author = self.get_author(msg)
 
-            content = ""
-            if title := msg.get("title"):
-                content = title
-            if selftext := msg.get("selftext"):
-                content += "\n\n" + selftext
-            if body := msg.get("body"):
-                content = body
-
-            assert isinstance(content, str)
+            content = format_post(msg)
 
             timestamp = int(msg["created_utc"])
             postdate = datetime.fromtimestamp(timestamp, tz=UTC)
