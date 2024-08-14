@@ -15,7 +15,7 @@ module default {
     multi messages := .<community[is Message];
     multi user_messages := (select .<community[is Message] filter
       (NOT .author.is_bot OR .author.is_webhook) AND
-      NOT (.container in {316066233755631616, 786041291707777034, 914305039764426772, 1128714905932021821}));
+      NOT (.container in {316066233755631616, 786041291707777034, 914305039764426772, 1128714905932021821, 1187212477155528804}));
 
     constraint exclusive on ((._id, .platform));
     index on ((._id, .platform));
@@ -31,7 +31,7 @@ module default {
     multi messages := .<author[is Message];
     multi user_messages := (select .<author[is Message] filter
       (NOT .author.is_bot OR .author.is_webhook) AND
-      NOT (.container in {316066233755631616, 786041291707777034, 914305039764426772, 1128714905932021821}));
+      NOT (.container in {316066233755631616, 786041291707777034, 914305039764426772, 1128714905932021821, 1187212477155528804}));
 
     constraint exclusive on ((._id, .name, .platform));
     index on ((._id, .platform));
@@ -76,15 +76,16 @@ module default {
     SELECT Sentence FILTER
       .score >= 0.8 AND
       (NOT .message.author.is_bot OR .message.author.is_webhook) AND
-      NOT (.message.container in {316066233755631616, 786041291707777034, 914305039764426772, 1128714905932021821})
-      #  mapona/jaki, mapona/ako, mapali/wikipesija, mamusi/ako
+      NOT (.message.container in {316066233755631616, 786041291707777034, 914305039764426772, 1128714905932021821, 1187212477155528804})
+      #  mapona/jaki, mapona/ako, mapali/wikipesija, mamusi/ako,
+      #  mapona/toki-suli/musitokipiantesitelenwan
   );
 
   alias NonTPUserSentence := (
     SELECT Sentence FILTER
       .score < 0.8 AND
       (NOT .message.author.is_bot OR .message.author.is_webhook) AND
-      NOT (.message.container in {316066233755631616, 786041291707777034, 914305039764426772, 1128714905932021821})
+      NOT (.message.container in {316066233755631616, 786041291707777034, 914305039764426772, 1128714905932021821, 1187212477155528804})
   );
 
   type Frequency {
