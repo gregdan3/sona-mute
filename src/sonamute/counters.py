@@ -15,9 +15,12 @@ from sonamute.constants import IGNORED_CONTAINERS
 from sonamute.sources.generic import PlatformFetcher
 
 AVG_SENT_LEN = 4.13557
-AVG_SENT_LEN_10X = 10 * AVG_SENT_LEN
-AVG_SENT_LEN_100X = 100 * AVG_SENT_LEN_10X
+AVG_SENT_LEN_5X = 5 * AVG_SENT_LEN
+AVG_SENT_LEN_50X = 50 * AVG_SENT_LEN
+
 MED_SENT_LEN = 3
+MED_SENT_LEN_5X = 10
+MED_SENT_LEN_50X = 50 * MED_SENT_LEN
 
 
 def dump(counter: Counter[str] | Counter[tuple[str, ...]]) -> str:
@@ -156,10 +159,8 @@ def phrase_counter(
 def is_nonsense(sent_len: int, sent: list[str]) -> bool:
     """
     Skip a sentence if it is "nonsense," which means
-    - "longer than 10x the average" and
-    - "mostly a single word", or
-    - "longer than 100x the average" (instant disqualification)
-
+    - "longer than 5x the average" and "mostly a single word", or
+    - "longer than 50x the average" (instant disqualification)
 
     This is intentionally a very weak filter.
     As of writing, there are fewer than 1000 sentences with >=40 words,
@@ -180,9 +181,9 @@ def is_nonsense(sent_len: int, sent: list[str]) -> bool:
     So, we omit them.
     """
 
-    if sent_len <= AVG_SENT_LEN_10X:
+    if sent_len <= AVG_SENT_LEN_5X:
         return False
-    if sent_len >= AVG_SENT_LEN_100X:
+    if sent_len >= AVG_SENT_LEN_50X:
         return True
 
     counter = Counter(sent)
