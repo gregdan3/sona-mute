@@ -1,6 +1,6 @@
 # STL
 import os
-from typing import Tuple, Literal, TypedDict, NotRequired, cast
+from typing import Literal, TypedDict, NotRequired, cast
 from datetime import UTC, datetime
 from collections.abc import Generator
 
@@ -14,7 +14,7 @@ from sonamute.sources.generic import NULL_CONTAINER, FileFetcher
 
 # TODO: special handling?
 ONECHAT_BRIDGE_ID = 128026086
-MATRIX_BRIDGE_ID = 1447411261
+TPT_RULES_BOT_ID = 1534630115
 
 FMT_TEXT_MAP = {
     "bold": "*",
@@ -214,6 +214,7 @@ class TelegramFetcher(FileFetcher):
     @override
     def get_author(self, raw_msg: TelegramPlainMessageJSON) -> Author:
         author_type, author_id, author_name = get_actor_metadata(raw_msg)
+        # author type is either user or channel; no bot info
 
         is_bot: bool = False  # we skip service messages, and otherwise can't know
         is_webhook_: bool = False  # telegram has no analogue
@@ -246,17 +247,23 @@ class TelegramFetcher(FileFetcher):
                     # ignore forwards entirely
                     continue
 
-                # TODO: if author is ONECHAT_BRIDGE_ID, first part of message is `word:` and must be cut
                 author = self.get_author(m)
-                if author["_id"] == ONECHAT_BRIDGE_ID and len(m["text_entities"]) > 1:
-                    # telegram's closest analogue of webhooks is bridges
+                if author["_id"] == TPT_RULES_BOT_ID:
+                    # this is the only known telegram bot that speaks toki pona
                     author["is_bot"] = True
-                    author["is_webhook"] = True
+                if author["_id"] == ONECHAT_BRIDGE_ID and len(m["text_entities"]) > 1:
+                    # we rewrite to reflect the actual author of the message
 
+                    # NOTE: this is a bot, but we have no way to know
+                    # is_bot and is_webhook are already false here
+
+                    # name is first bc 1chat bridge always bolds it
+                    # assign new name over bot's name
+                    author["name"] = m["text_entities"][0]["text"]
+                    # omit name
                     m["text_entities"] = m["text_entities"][1:]
-                    # omit name, which is always bold
-                    m["text_entities"][0]["text"] = m["text_entities"][0]["text"][2:]
                     # and following colon+space
+                    m["text_entities"][0]["text"] = m["text_entities"][0]["text"][2:]
                     # NOTE: one guy in 2018 broke the bot's formatting
                     # his message is len=1
                     # ... oh well idc
