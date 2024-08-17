@@ -61,9 +61,14 @@ def populate_sents(msgs: Iterable[PreMessage]) -> Generator[Message, None, None]
         content = ILO.preprocess(msg["content"])
 
         sentences: list[Sentence] = []
-        for _, _, cleaned, score, result in ILO._are_toki_pona(content):
-            if cleaned:  # omit empty sentences
-                sentences.append(Sentence(words=cleaned, score=score))
+        for scorecard in ILO._are_toki_pona(content):
+            if scorecard["cleaned"]:  # omit empty sentences
+                sentences.append(
+                    Sentence(
+                        words=scorecard["cleaned"],
+                        score=scorecard["score"],
+                    )
+                )
 
         final_msg: Message = {**msg, "sentences": sentences}
         yield final_msg
