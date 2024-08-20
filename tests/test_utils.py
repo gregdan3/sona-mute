@@ -1,5 +1,7 @@
 # STL
+import math
 import asyncio
+from datetime import datetime
 
 # PDM
 import pytest
@@ -9,9 +11,52 @@ from sonamute.utils import (
     batch_iter,
     gather_batch,
     days_in_range,
+    ndays_in_range,
     epochs_in_range,
     months_in_range,
 )
+
+
+def test_ndays_in_range():
+    start = datetime(2022, 8, 1)
+    end = datetime(2024, 8, 31)
+    n = 28
+    parity_date = datetime(2001, 8, 8)
+
+    r_start = None
+    r_end = None
+    i = 0
+    for r_start, r_end in ndays_in_range(start, end, n, parity_date):
+        if i == 0:  # nearest date of proper parity before start
+            assert r_start == datetime(2022, 7, 13)
+
+        assert (r_end - r_start).days == n
+
+        i += 1
+
+    # TODO: does this always hold? i don't think so
+    assert i == math.ceil((end - start).days / n)
+
+
+def test_months_in_range():
+    start = datetime(2022, 8, 2)
+    end = datetime(2024, 8, 30)
+
+    r_start = None
+    r_end = None
+    i = 0
+    for r_start, r_end in months_in_range(start, end):
+        if i == 0:
+            assert r_start == datetime(2022, 8, 1)
+
+        assert r_start.day == 1
+        assert r_end.day == 1
+        assert 28 <= (r_end - r_start).days <= 31
+
+        i += 1
+    assert r_end == datetime(2024, 9, 1)
+
+    assert i == 25  # one more to be certain of encompassing
 
 
 def test_batch_list():

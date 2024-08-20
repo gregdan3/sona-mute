@@ -47,6 +47,47 @@ def days_in_range(
         step += timedelta(days=1)
 
 
+def ndays_in_range(
+    start: datetime,
+    end: datetime,
+    n: int,
+    parity_date: datetime,
+) -> Generator[tuple[datetime, datetime], None, None]:
+    """
+    Generate all pairs of dates `n` days apart which encompass the given start and
+    end dates, with `parity_date` as a specifier for what date the range should be
+    calculated from.
+
+    "Encompass" means the first returned date will be the closest matching date before
+    `start`, and the last returned date will be the closest matching date after `end`.
+
+    The parity date is necessary because the outcome can change depending on what date
+    you begin calculating from. For example, if you choose `n=10`, a start date of
+    the May 8th, and a parity date of May 1st, you would get May 1st, 11th, 21st, and 31st.
+
+    However, if your parity date were May 5th instead, you would get May 5th, 15th,
+    25th, and June 4th.
+
+    Note: If you choose `n` that is divisible by 7 (the length of a week), the resultant
+    periods will roughly correspond with patterns of activity, which is valuable for
+    interpreting data in a directly comparable way.
+    """
+    # re-align ranges with given parity date
+    realignment_factor = (start - parity_date).days % n
+    range_start = start - timedelta(days=realignment_factor)
+    delta = timedelta(days=n)
+
+    # ensure encompassing
+    if range_start > start:
+        range_start -= delta
+
+    range_end = range_start + delta
+    while range_start <= end:
+        yield range_start, range_end
+        range_start = range_end
+        range_end += delta
+
+
 def round_to_next_month(d: datetime) -> datetime:
     if d.month == 12:
         d = datetime(d.year + 1, 1, 1, tzinfo=d.tzinfo)
