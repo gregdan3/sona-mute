@@ -18,19 +18,25 @@ from sonamute.file_io import EdgeDBEncoder
 
 class KnownPlatforms(IntEnum):
     Other = 0  # unsortable
-    Discord = 1
-    Telegram = 2
-    Facebook = 3
-    Reddit = 4
-    Twitter = 5
-    Instagram = 6
-    Tumblr = 7
-    YouTube = 8  # somewhat crosses into 'publication'
+
+    Discord = 1  # supported
+    Telegram = 2  # supported
+    # Facebook = 3
+    Reddit = 4  # supported
+    # Twitter = 5
+    # Instagram = 6
+    # Tumblr = 7
+    # YouTube = 8
     # Threads = 9
     # Cohost = 10
-    Forum = 100  # generic
-    Publication = 200  # generic
-    Fediverse = 300
+    # Mastodon = 11
+    # Forum = 100  # generic
+    # NOTE: includes Yahoo Groups, kulupu.pona.la, and forums.tokipona.org
+
+    # Publication = 200  # generic
+    # NOTE: includes lipu Wikipesija, lipu tenpo, lipu kule
+
+    # Personal = 300
 
 
 class Platform(TypedDict):
