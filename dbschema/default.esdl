@@ -1,6 +1,6 @@
 module default {
   type Platform {
-    required _id: int64;
+    required _id: int16;  # if there are ever more than 2^16 platforms, what
     required name: str;
 
     constraint exclusive on ((._id));
@@ -8,7 +8,7 @@ module default {
   }
 
   type Community {
-    required _id: int64;
+    required _id: bigint;
     required name: str;
     required platform: Platform;
 
@@ -22,7 +22,7 @@ module default {
   }
 
   type Author {
-    required _id: int64;
+    required _id: bigint;
     name: str;
     required platform: Platform;
     required is_bot: bool;
@@ -50,13 +50,12 @@ module default {
   }
 
   type Message {
-    required _id: int64;
+    required _id: bigint;
     required community: Community;
-    required container: int64 {
-      default := 0;
-    };
+    required container: bigint;
     # if there is some further level of organization, put it here
     # e.g. discord channels, reddit flairs
+    # user must specify as 0 if "null"
     required author: Author;
     required postdate: datetime;
     required content: str;
@@ -96,8 +95,10 @@ module default {
 
     required community: Community;  # what community the sentence was taken from
     required text: str;
-    required phrase_len: int64;
-    required min_sent_len: int64;
+
+    required phrase_len: int16;
+    required min_sent_len: int16; # these will never be double digit
+
     required day: datetime; # the day, starting at UTC midnight, of the measured frequency
     required occurrences: int64;
     # required tpt: bool;  # whether the frequency was measured with toki pona sentences (score >=0.8) or all sentences

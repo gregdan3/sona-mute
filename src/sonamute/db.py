@@ -104,15 +104,15 @@ def create_client(username: str, password: str, host: str, port: int) -> AsyncIO
 
 
 PLAT_SELECT = """
-select Platform filter ._id = <int64>$_id
+select Platform filter ._id = <int16>$_id
 """
 
 COMM_SELECT = """
-select Community filter ._id = <int64>$_id and .platform = <Platform>$platform
+select Community filter ._id = <bigint>$_id and .platform = <Platform>$platform
 """
 
 MSG_SELECT = """
-select Message filter ._id = <int64>$_id and .community = <Community>$community
+select Message filter ._id = <bigint>$_id and .community = <Community>$community
 """
 
 USER_SENTS_SELECT = """
@@ -129,8 +129,8 @@ with
   F := (
     select Frequency {text}
     filter
-      .phrase_len = <int64>$phrase_len
-      and .min_sent_len = <int64>$min_sent_len
+      .phrase_len = <int16>$phrase_len
+      and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
   ),
@@ -150,8 +150,8 @@ with
   F := (
     select Frequency {occurrences}
     filter
-      .phrase_len = <int64>$phrase_len
-      and .min_sent_len = <int64>$min_sent_len
+      .phrase_len = <int16>$phrase_len
+      and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
   ) select sum(F.occurrences);
@@ -160,7 +160,7 @@ with
 PLAT_INSERT = """
 select (
     INSERT Platform {
-        _id := <int64>$_id,
+        _id := <int16>$_id,
         name := <str>$name,
     } unless conflict on (._id)
 else Platform)"""
@@ -168,7 +168,7 @@ else Platform)"""
 COMM_INSERT = """
 select (
     INSERT Community {
-        _id := <int64>$_id,
+        _id := <bigint>$_id,
         name := <str>$name,
         platform := <Platform>$platform,
     } unless conflict on (._id, .platform)
@@ -177,7 +177,7 @@ else Community)"""
 AUTH_INSERT = """
 select (
     INSERT Author {
-        _id := <int64>$_id,
+        _id := <bigint>$_id,
         name := <optional str>$name,
         platform := <Platform>$platform,
         is_bot := <bool>$is_bot,
@@ -188,9 +188,9 @@ else Author)"""
 MSG_INSERT = """
 select (
     INSERT Message {
-        _id := <int64>$_id,
+        _id := <bigint>$_id,
         community := <Community>$community,
-        container := <int64>$container,
+        container := <bigint>$container,
         author := <Author>$author,
         postdate := <std::datetime>$postdate,
         content := <str>$content
@@ -209,8 +209,8 @@ FREQ_INSERT = """
 INSERT Frequency {
     text := <str>$text,
     community := <Community>$community,
-    phrase_len := <int64>$phrase_len,
-    min_sent_len := <int64>$min_sent_len,
+    phrase_len := <int16>$phrase_len,
+    min_sent_len := <int16>$min_sent_len,
     day := <datetime>$day,
     occurrences := <int64>$occurrences,
 } unless conflict on (.text, .min_sent_len, .community, .day)
@@ -222,8 +222,8 @@ FOR freq IN json_array_unpack(raw_data) union (
     INSERT Frequency {
         text := <str>freq['text'],
         community := <Community><uuid>freq['community'],
-        phrase_len := <int64>freq['phrase_len'],
-        min_sent_len := <int64>freq['min_sent_len'],
+        phrase_len := <int16>freq['phrase_len'],
+        min_sent_len := <int16>freq['min_sent_len'],
         day := <datetime>freq['day'],
         occurrences := <int64>freq['occurrences'],
     } unless conflict on (.text, .min_sent_len, .community, .day)
