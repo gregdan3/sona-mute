@@ -23,13 +23,11 @@ class KnownPlatforms(IntEnum):
     Telegram = 2  # supported
     # Facebook = 3
     Reddit = 4  # supported
-    # Twitter = 5
-    # Instagram = 6
-    # Tumblr = 7
-    # YouTube = 8
-    # Threads = 9
-    # Cohost = 10
-    # Mastodon = 11
+    YouTube = 5  # supported
+    # Twitter = 6
+    # Instagram = 7
+    # Tumblr = 8
+    # Mastodon = 9
     # Forum = 100  # generic
     # NOTE: includes Yahoo Groups, kulupu.pona.la, and forums.tokipona.org
 

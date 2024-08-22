@@ -20,6 +20,7 @@ from rich.console import Console
 from sonamute.sources.reddit import RedditFetcher
 from sonamute.sources.discord import DiscordFetcher
 from sonamute.sources.generic import PlatformFetcher
+from sonamute.sources.youtube import YouTubeFetcher
 from sonamute.sources.telegram import TelegramFetcher
 
 CONSOLE = Console()
@@ -28,6 +29,7 @@ SOURCES: dict[str, type[PlatformFetcher]] = {
     "discord": DiscordFetcher,
     "telegram": TelegramFetcher,
     "reddit": RedditFetcher,
+    "youtube": YouTubeFetcher,
 }
 
 
