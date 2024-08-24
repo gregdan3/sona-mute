@@ -1,6 +1,6 @@
 [project]
 name = "sonamute"
-version = "0.1.0"
+version = "0.2.0"
 description = "Taking Toki Pona statements and turning it into frequency information."
 authors = [
     {name = "Gregory Danielson", email = "gregory.danielson3@gmail.com"},
