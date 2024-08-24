@@ -122,12 +122,13 @@ PASSING_USER_SENTS_SELECT = USER_SENTS_SELECT % "TPUserSentence"
 FAILING_USER_SENTS_SELECT = USER_SENTS_SELECT % "NonTPUserSentence"
 
 
+# needs to merge across communities
 FREQ_SELECT = """
 with
   F := (
-    select Frequency {text}
+    select Frequency {text := .phrase.text}
     filter
-      .phrase_len = <int16>$phrase_len
+      .phrase.length = <int16>$phrase_len
       and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
@@ -148,7 +149,7 @@ with
   F := (
     select Frequency {occurrences}
     filter
-      .phrase_len = <int16>$phrase_len
+      .phrase.length = <int16>$phrase_len
       and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
@@ -205,13 +206,18 @@ INSERT Sentence {
 
 FREQ_INSERT = """
 INSERT Frequency {
-    text := <str>$text,
+    phrase := (
+        INSERT Phrase {
+            text := <str>$text,
+            length := <int16>$phrase_len,
+        } unless conflict on (.text)
+        else (Phrase)
+    ),
     community := <Community>$community,
-    phrase_len := <int16>$phrase_len,
     min_sent_len := <int16>$min_sent_len,
     day := <datetime>$day,
     occurrences := <int64>$occurrences,
-} unless conflict on (.text, .min_sent_len, .community, .day)
+} unless conflict on (.phrase, .community, .min_sent_len, .day)
 else (update Frequency set { occurrences := <int64>$occurrences });
 """
 BULK_FREQ_INSERT = """

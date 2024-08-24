@@ -88,25 +88,28 @@ module default {
       NOT (.message.container in {316066233755631616, 786041291707777034, 914305039764426772, 1128714905932021821, 1187212477155528804})
   );
 
+  type Phrase {
+    required text: str;
+    required length: int16;
+    constraint exclusive on ((.text));
+    index on ((.text, .length));
+  }
+
   type Frequency {
     # This entire table is essentially computed stats from the rest of the database.
-    # I'd like to go back and add the commented out community field and tpt (toki pona taso) field,
-    # but for now these are not a priority.
-
     required community: Community;  # what community the sentence was taken from
-    required text: str;
-
-    required phrase_len: int16;
+    required phrase: Phrase;
     required min_sent_len: int16; # these will never be double digit
 
     required day: datetime; # the day, starting at UTC midnight, of the measured frequency
     required occurrences: int64;
+    # required authors: int64;
     # required tpt: bool;  # whether the frequency was measured with toki pona sentences (score >=0.8) or all sentences
 
-    constraint exclusive on ((.text, .min_sent_len, .community, .day));
+    constraint exclusive on ((.phrase, .community, .min_sent_len, .day));
 
+    index on ((.phrase));
     index on ((.community));
-    index on ((.phrase_len));
     index on ((.min_sent_len));
     index on ((.day));
   }
