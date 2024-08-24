@@ -119,8 +119,8 @@ def youtube_id_to_int(yt_id: str) -> int:
     _id = int.from_bytes(decoded)
 
     if len(yt_id) == 11:  # video
-        assert _id < 2**64
-    assert _id < 2**128  # everything else
+        assert _id < 2**64, (yt_id, b64, decoded, _id)
+    assert _id < 2**128, (yt_id, b64, decoded, _id)  # everything else
     # NOTE: this assumption fails if the 6 char pad isn't removed
 
     return _id
