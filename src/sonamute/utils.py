@@ -72,6 +72,11 @@ def ndays_in_range(
     periods will roughly correspond with patterns of activity, which is valuable for
     interpreting data in a directly comparable way.
     """
+    # ensure start/end are day-aligned
+    start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = end.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
     # re-align ranges with given parity date
     realignment_factor = (start - parity_date).days % n
     range_start = start - timedelta(days=realignment_factor)
