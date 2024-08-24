@@ -170,6 +170,19 @@ def fetch_comment_id(comment: YouTubeComment) -> int:
     comment_id = youtube_id_to_int(comment_id)
     return comment_id
 
+def fetch_author_id(comment: YouTubeComment) -> int:
+    author_id = comment["author_id"]
+
+    # NOTE: Again, serious.
+    # Every comment has this. 
+    # Chopping it brings it into the correct range.
+    # ????????????????
+    if len(author_id) == 24:
+        author_id = author_id.removeprefix("UC")
+
+    author_id = youtube_id_to_int(author_id)
+    return author_id
+
 
 class YouTubeFetcher(FileFetcher):
     platform: Platform = {
@@ -225,7 +238,7 @@ class YouTubeFetcher(FileFetcher):
 
         # comment
         elif "author_id" in raw_msg:
-            _id = youtube_id_to_int(raw_msg["author_id"])
+            _id = fetch_author_id(raw_msg)
             name = clean_username(raw_msg["author"])
 
         return Author(
