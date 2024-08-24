@@ -4,7 +4,7 @@ import json
 import asyncio
 import argparse
 from uuid import UUID
-from datetime import datetime
+from datetime import UTC, datetime
 from collections import Counter
 
 # PDM
@@ -23,7 +23,7 @@ from sonamute.db import (
 )
 from sonamute.cli import SOURCES, menu_handler
 from sonamute.ilo import ILO
-from sonamute.utils import T, batch_iter, gather_batch, months_in_range
+from sonamute.utils import T, batch_iter, gather_batch, ndays_in_range, months_in_range
 from sonamute.counters import countables, metacount_frequencies
 from sonamute.gen_sqlite import generate_sqlite
 from sonamute.sources.generic import PlatformFetcher
@@ -113,9 +113,10 @@ def metacounter_to_insertable_freqs(
 
 
 async def sentences_to_frequencies(db: MessageDB, batch_size: int, passing: bool):
+    parity_date = datetime(2001, 8, 8, tzinfo=UTC)  # birthdate of toki pona
+    n_days = 28
     first_msg_dt, last_msg_dt = await db.get_msg_date_range()
-    for start, end in months_in_range(first_msg_dt, last_msg_dt):
-        # NOTE: I originally used days, but this turned out to be excessive effort and impossible to graph usefully
+    for start, end in ndays_in_range(first_msg_dt, last_msg_dt, n_days, parity_date):
         print(start)
         result = await db.counted_sents_in_range(start, end, passing)
         by_community = sort_by_community(result)
