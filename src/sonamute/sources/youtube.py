@@ -1,7 +1,7 @@
 # STL
 import os
 import base64
-from typing import TypedDict, cast
+from typing import Literal, TypedDict, cast
 from datetime import UTC, datetime
 from collections.abc import Generator
 
@@ -10,7 +10,7 @@ from typing_extensions import override
 
 # LOCAL
 from sonamute.db import Author, Platform, Community, PreMessage, KnownPlatforms
-from sonamute.file_io import try_load_json, try_load_json_file
+from sonamute.file_io import try_load_json_file
 from sonamute.sources.generic import NULL_CONTAINER, FileFetcher
 
 
@@ -170,18 +170,24 @@ def fetch_comment_id(comment: YouTubeComment) -> int:
     comment_id = youtube_id_to_int(comment_id)
     return comment_id
 
-def fetch_author_id(comment: YouTubeComment) -> int:
-    author_id = comment["author_id"]
+def fetch_user_id(raw: YouTubeJSON | YouTubeComment, key: Literal["author_id", "channel_id"]) -> int:
+    # when the type checking
+    user_id = None
+    if "author_id" in raw and key == "author_id":
+        user_id = raw[key]
+    if "channel_id" in raw and key == "channel_id":
+        user_id = raw[key]
+    if not user_id:
+        raise KeyError(f"{key} not found in raw", raw)
 
-    # NOTE: Again, serious.
-    # Every comment has this. 
+    # NOTE: Again, serious. Every user ID has this.
     # Chopping it brings it into the correct range.
-    # ????????????????
-    if len(author_id) == 24:
-        author_id = author_id.removeprefix("UC")
+    # Also doesn't change the uniqueness of the key.
+    if len(user_id) == 24:
+        user_id = user_id.removeprefix("UC")
 
-    author_id = youtube_id_to_int(author_id)
-    return author_id
+    user_id = youtube_id_to_int(user_id)
+    return user_id
 
 
 class YouTubeFetcher(FileFetcher):
@@ -217,7 +223,7 @@ class YouTubeFetcher(FileFetcher):
         # since authors tend to draw like-minded audiences
         # Communities do not figure into most analysis anyway,
         # so this is a convention rather than meaningful.
-        community_id = youtube_id_to_int(raw_src["channel_id"])
+        community_id = fetch_user_id(raw_src, "channel_id")
         community_name = fetch_video_author_name(raw_src)
 
         return Community(
@@ -233,12 +239,12 @@ class YouTubeFetcher(FileFetcher):
 
         # video
         if "channel_id" in raw_msg:
-            _id = youtube_id_to_int(raw_msg["channel_id"])
+            _id = fetch_user_id(raw_msg, "channel_id")
             name = fetch_video_author_name(raw_msg)
 
         # comment
         elif "author_id" in raw_msg:
-            _id = fetch_author_id(raw_msg)
+            _id = fetch_user_id(raw_msg, "author_id")
             name = clean_username(raw_msg["author"])
 
         return Author(
