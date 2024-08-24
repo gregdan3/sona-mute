@@ -165,7 +165,7 @@ def fetch_comment_id(comment: YouTubeComment) -> int:
     # I found a stackoverflow post from Dec 2017 with this pad too.
     # https://stackoverflow.com/questions/47815604/comment-id-format-has-changed
     if len(comment_id) == 26:
-        comment_id = comment_id.rstrip("AaABAg")
+        comment_id = comment_id.removesuffix("AaABAg")
 
     comment_id = youtube_id_to_int(comment_id)
     return comment_id
