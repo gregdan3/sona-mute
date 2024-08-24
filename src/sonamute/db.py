@@ -64,6 +64,7 @@ class Sentence(TypedDict):
 class CommSentence(TypedDict):
     words: list[str]
     community: UUID
+    # author: UUID
 
 
 class PreMessage(TypedDict):
@@ -113,6 +114,7 @@ MSG_SELECT = """
 select Message filter ._id = <bigint>$_id and .community = <Community>$community
 """
 
+# author := .message.author.id, 
 USER_SENTS_SELECT = """
 SELECT %s { community := .message.community.id, words } FILTER
     .message.postdate >= <std::datetime>$start AND
@@ -473,6 +475,7 @@ class MessageDB:
             out: CommSentence = {
                 "words": [word.lower() for word in result.words],
                 "community": result.community,
+                # "author": result.author,
             }
             output.append(out)
         return output
