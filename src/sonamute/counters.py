@@ -1,18 +1,19 @@
 # STL
 import json
+import itertools
+from typing import TypeVar
 from collections import Counter
 from collections.abc import Iterable, Generator
-
-# PDM
-from sonatoki.utils import overlapping_ntuples
 
 # LOCAL
 from sonamute.db import Message, Sentence, PreMessage
 from sonamute.ilo import ILO
-from sonamute.utils import overlapping_phrases
 from sonamute.file_io import TupleJSONEncoder
 from sonamute.constants import IGNORED_CONTAINERS
 from sonamute.sources.generic import PlatformFetcher
+
+T = TypeVar("T")
+
 
 AVG_SENT_LEN = 4.13557
 AVG_SENT_LEN_5X = 5 * AVG_SENT_LEN
@@ -21,6 +22,21 @@ AVG_SENT_LEN_50X = 50 * AVG_SENT_LEN
 MED_SENT_LEN = 3
 MED_SENT_LEN_5X = 10
 MED_SENT_LEN_50X = 50 * MED_SENT_LEN
+
+
+def overlapping_ntuples(iterable: Iterable[T], n: int) -> Iterable[T]:
+    teed = itertools.tee(iterable, n)
+    for i in range(1, n):
+        for j in range(i):
+            _ = next(teed[i], None)
+            # offset start by position
+
+    # ends when any iter is empty; all groups will be same size
+    return zip(*teed)
+
+
+def overlapping_phrases(iterable: Iterable[str], n: int) -> Iterable[str]:
+    return [" ".join(item) for item in overlapping_ntuples(iterable, n)]
 
 
 def dump(counter: Counter[str] | Counter[tuple[str, ...]]) -> str:

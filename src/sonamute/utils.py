@@ -8,7 +8,6 @@ from collections.abc import Iterable, Iterator, Generator
 
 # PDM
 import dotenv
-from sonatoki.utils import overlapping_ntuples
 
 T = TypeVar("T")
 
@@ -75,7 +74,6 @@ def ndays_in_range(
     # ensure start/end are day-aligned
     start = start.replace(hour=0, minute=0, second=0, microsecond=0)
     end = end.replace(hour=0, minute=0, second=0, microsecond=0)
-
 
     # re-align ranges with given parity date
     realignment_factor = (start - parity_date).days % n
@@ -170,7 +168,3 @@ async def gather_batch(
         result = await asyncio.gather(*gatherables)
         results.extend(result)
     return results
-
-
-def overlapping_phrases(iterable: Iterable[str], n: int) -> Iterable[str]:
-    return [" ".join(item) for item in overlapping_ntuples(iterable, n)]
