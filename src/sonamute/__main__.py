@@ -25,6 +25,7 @@ from sonamute.cli import SOURCES, menu_handler
 from sonamute.ilo import ILO
 from sonamute.utils import T, batch_iter, gather_batch, ndays_in_range, months_in_range
 from sonamute.counters import countables, metacount_frequencies
+from sonamute.constants import NDAYS, EPOCH_INIT
 from sonamute.gen_sqlite import generate_sqlite
 from sonamute.sources.generic import PlatformFetcher, is_countable
 
@@ -114,10 +115,8 @@ def metacounter_to_insertable_freqs(
 
 
 async def sentences_to_frequencies(db: MessageDB, batch_size: int, passing: bool):
-    parity_date = datetime(2001, 8, 8, tzinfo=UTC)  # birthdate of toki pona
-    n_days = 28
     first_msg_dt, last_msg_dt = await db.get_msg_date_range()
-    for start, end in ndays_in_range(first_msg_dt, last_msg_dt, n_days, parity_date):
+    for start, end in ndays_in_range(first_msg_dt, last_msg_dt, NDAYS, EPOCH_INIT):
         print(start)
         result = await db.counted_sents_in_range(start, end, passing)
         by_community = sort_by_community(result)

@@ -1,3 +1,6 @@
+# STL
+from datetime import UTC, datetime
+
 IGNORED_CONTAINERS = {
     316066233755631616,  # ma pona/jaki
     786041291707777034,  # ma pona/ako
@@ -9,3 +12,6 @@ IGNORED_CONTAINERS = {
 
 # TODO: reintroduce for non-pk webhooks?
 IGNORED_AUTHORS = {}
+
+EPOCH_INIT = datetime(2001, 8, 8, tzinfo=UTC)
+NDAYS = 7 * 4
