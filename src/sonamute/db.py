@@ -195,7 +195,8 @@ select (
         container := <bigint>$container,
         author := <Author>$author,
         postdate := <std::datetime>$postdate,
-        content := <str>$content
+        content := <str>$content,
+        is_counted := <bool>$is_counted
     } unless conflict on (._id, .community))
 """
 
@@ -400,6 +401,7 @@ class MessageDB:
         postdate: datetime,
         content: str,
         sentences: list[Sentence],
+        is_counted: bool,
         container: int | None = None,
     ):
         result = await self.client.query_single(
@@ -409,6 +411,7 @@ class MessageDB:
             author=author,
             postdate=postdate,
             content=content,
+            is_counted=is_counted,
             container=container,
         )
         if not result:
@@ -434,6 +437,7 @@ class MessageDB:
             postdate=message["postdate"],
             content=message["content"],
             sentences=message["sentences"],
+            is_counted=message["is_counted"],
             container=message.get("container", None),
         )
 
