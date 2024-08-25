@@ -62,8 +62,7 @@ module default {
 
     constraint exclusive on ((._id, .community));
     index on ((._id, .community));
-    index on ((.container));
-    index on ((.postdate));
+    index on ((.is_counted, .postdate));
   }
 
   # This table exists for the purpose of frequency analysis,
