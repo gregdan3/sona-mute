@@ -45,7 +45,7 @@ class RedditSubmission(TypedDict):
     # link_flair_type: str
     locked: bool
     media: str | None
-    media_embed: dict
+    # media_embed: dict
     no_follow: bool
     num_comments: int
     num_crossposts: int
@@ -56,7 +56,7 @@ class RedditSubmission(TypedDict):
     rte_mode: str  # markdown
     score: int
     secure_media: None
-    secure_media_embed: dict
+    # secure_media_embed: dict
     selftext: str
     send_replies: bool
     spoiler: bool
@@ -102,7 +102,7 @@ class RedditComment(TypedDict):
     edited: bool
 
     # seen in latest comment
-    all_awardings: list
+    # all_awardings: list
     approved_at_utc: str | None
     approved_by: None  # not seen with value
     associated_award: None
@@ -136,7 +136,7 @@ class RedditComment(TypedDict):
     permalink: str  # url starting from /r/
     removal_reason: str | None
     replies: str  # always empty str?
-    report_reasons: list
+    # report_reasons: list
     saved: bool
     send_replies: bool
     stickied: bool
@@ -144,10 +144,10 @@ class RedditComment(TypedDict):
     subreddit_type: str  # public
     top_awarded_type: None
     total_awards_received: int
-    treatment_tags: list
+    # treatment_tags: list
     unrepliable_reason: str | None
     updated_on: int
-    user_reports: list
+    # user_reports: list
 
 
 RedditJSON = RedditSubmission | RedditComment
