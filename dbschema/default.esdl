@@ -9,7 +9,7 @@ module default {
 
   type Community {
     required _id: bigint;
-    required name: str;
+    name: str;
     required platform: Platform;
 
     multi messages := .<community[is Message];
@@ -65,8 +65,6 @@ module default {
     index on ((.is_counted, .postdate));
   }
 
-  # This table exists for the purpose of frequency analysis,
-  # performing all desirable filters such that the entire alias is wanted.
   alias TPUserSentence := (
     SELECT Sentence FILTER
       .score >= 0.8 AND
