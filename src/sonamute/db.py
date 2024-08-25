@@ -209,21 +209,25 @@ INSERT Sentence {
 """
 
 FREQ_INSERT = """
+with phrase := (
+    INSERT Phrase {
+        text := <str>$text,
+        length := <int16>$phrase_len,
+    } unless conflict on (.text)
+    else (Phrase)
+)
 INSERT Frequency {
-    phrase := (
-        INSERT Phrase {
-            text := <str>$text,
-            length := <int16>$phrase_len,
-        } unless conflict on (.text)
-        else (Phrase)
-    ),
+    phrase := (SELECT phrase),
     community := <Community>$community,
     min_sent_len := <int16>$min_sent_len,
     day := <datetime>$day,
     occurrences := <int64>$occurrences,
-} unless conflict on (.phrase, .community, .min_sent_len, .day)
-else (update Frequency set { occurrences := <int64>$occurrences });
+}
 """
+FREQ_INSERT_CONFLICT = """
+unless conflict on (.phrase, .community, .min_sent_len, .day)
+else (update Frequency set { occurrences := <int64>$occurrences });
+"""  # TODO: optionally add to FREQ_INSERT
 BULK_FREQ_INSERT = """
 WITH raw_data := <json>$data,
 FOR freq IN json_array_unpack(raw_data) union (
