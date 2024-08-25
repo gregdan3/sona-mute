@@ -97,9 +97,6 @@ module default {
 
     constraint exclusive on ((.phrase, .community, .min_sent_len, .day));
 
-    index on ((.phrase));
-    index on ((.community));
-    index on ((.min_sent_len));
-    index on ((.day));
+    index on ((.phrase, .min_sent_len, .day));
   }
 }
