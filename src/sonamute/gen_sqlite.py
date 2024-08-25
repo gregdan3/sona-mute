@@ -18,7 +18,8 @@ from sqlalchemy.dialects.sqlite import Insert as insert
 
 # LOCAL
 from sonamute.db import Frequency, MessageDB
-from sonamute.utils import batch_iter, epochs_in_range, months_in_range
+from sonamute.utils import batch_iter, ndays_in_range, epochs_in_range
+from sonamute.constants import NDAYS, EPOCH_INIT
 
 # we insert 4 items per row; max sql variables is 999 for, reasons,
 SQLITE_BATCH = 249
@@ -222,8 +223,9 @@ async def generate_sqlite(edb: MessageDB, filename: str):
                 for batch in batch_iter(results, SQLITE_BATCH):
                     await sdb.insert_ranks(batch)
 
-            # a higher resolution than months would make the data too large
-            for start, end in months_in_range(first_msg_dt, last_msg_dt):
+            for start, end in ndays_in_range(
+                first_msg_dt, last_msg_dt, NDAYS, EPOCH_INIT
+            ):
                 print(f"{start} - {end}")
                 start_ts = int(start.timestamp())
                 results = await edb.occurrences_in_range(
