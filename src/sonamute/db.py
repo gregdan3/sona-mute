@@ -77,6 +77,7 @@ class PreMessage(TypedDict):
 
 
 class Message(PreMessage):
+    is_counted: bool
     sentences: list[Sentence]
 
 
@@ -114,7 +115,7 @@ MSG_SELECT = """
 select Message filter ._id = <bigint>$_id and .community = <Community>$community
 """
 
-# author := .message.author.id, 
+# author := .message.author.id,
 USER_SENTS_SELECT = """
 SELECT %s { community := .message.community.id, words } FILTER
     .message.postdate >= <std::datetime>$start AND
