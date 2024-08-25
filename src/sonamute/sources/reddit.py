@@ -256,15 +256,13 @@ class RedditFetcher(FileFetcher):
 
         author_name = raw_msg["author"]
 
-        is_bot: bool = False  # there are bots but resp doesn't tell us
-        is_webhook_: bool = False
-
         author: Author = {
             "_id": author_id,
             "name": author_name,
             "platform": self.platform,
-            "is_bot": is_bot,
-            "is_webhook": is_webhook_,
+            # there are bots but resp doesn't tell us
+            "is_bot": False,
+            "is_webhook": False,
         }
         return author
 
