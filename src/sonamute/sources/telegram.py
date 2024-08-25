@@ -216,14 +216,12 @@ class TelegramFetcher(FileFetcher):
         author_type, author_id, author_name = get_actor_metadata(raw_msg)
         # author type is either user or channel; no bot info
 
-        is_bot: bool = False  # we skip service messages, and otherwise can't know
-        is_webhook_: bool = False  # telegram has no analogue
         author: Author = {
             "_id": author_id,
             "name": author_name,
             "platform": self.platform,
-            "is_bot": is_bot,
-            "is_webhook": is_webhook_,
+            "is_bot": False,  # we skip service messages, and otherwise can't know,
+            "is_webhook": False,  # telegram has no analogue
         }
         return author
 
