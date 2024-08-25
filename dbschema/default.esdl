@@ -13,9 +13,7 @@ module default {
     required platform: Platform;
 
     multi messages := .<community[is Message];
-    multi user_messages := (select .<community[is Message] filter
-      (NOT .author.is_bot OR .author.is_webhook) AND
-      NOT (.container in {316066233755631616, 786041291707777034, 914305039764426772, 1128714905932021821, 1187212477155528804}));
+    multi user_messages := (select .<community[is Message] filter .is_counted);
 
     constraint exclusive on ((._id, .platform));
     index on ((._id, .platform));
@@ -29,14 +27,10 @@ module default {
     required is_webhook: bool;
 
     multi messages := .<author[is Message];
-    multi user_messages := (select .<author[is Message] filter
-      (NOT .author.is_bot OR .author.is_webhook) AND
-      NOT (.container in {316066233755631616, 786041291707777034, 914305039764426772, 1128714905932021821, 1187212477155528804}));
+    multi user_messages := (select .<author[is Message] filter .is_counted);
 
     constraint exclusive on ((._id, .name, .platform));
     index on ((._id, .platform));
-    index on ((.is_bot));
-    index on ((.is_webhook));
   }
 
   type Sentence {
@@ -59,6 +53,9 @@ module default {
     required author: Author;
     required postdate: datetime;
     required content: str;
+    required is_counted: bool;
+    # simplified from checking the author's is_bot or is_webhook
+    # or containers of the message
 
     multi sentences := .<message[is Sentence];
     multi tp_sentences := (select .<message[is Sentence] filter .score >= 0.8);
@@ -74,18 +71,13 @@ module default {
   alias TPUserSentence := (
     SELECT Sentence FILTER
       .score >= 0.8 AND
-      (NOT .message.author.is_bot OR .message.author.is_webhook) AND
-      NOT (.message.container in {316066233755631616, 786041291707777034, 914305039764426772, 1128714905932021821, 1187212477155528804})
-      #  mapona/jaki, mapona/ako, mapali/wikipesija, mamusi/ako,
-      #  mapona/toki-suli/musitokipiantesitelenwan
-      # 895303838662295572 maponasewi/tokinanpa
+      .message.is_counted
   );
 
   alias NonTPUserSentence := (
     SELECT Sentence FILTER
       .score < 0.8 AND
-      (NOT .message.author.is_bot OR .message.author.is_webhook) AND
-      NOT (.message.container in {316066233755631616, 786041291707777034, 914305039764426772, 1128714905932021821, 1187212477155528804})
+      .message.is_counted
   );
 
   type Phrase {
