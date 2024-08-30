@@ -67,6 +67,11 @@ class CommSentence(TypedDict):
     author: UUID
 
 
+class SortedSentence(TypedDict):
+    words: list[str]
+    author: UUID
+
+
 class PreMessage(TypedDict):
     _id: int
     community: Community
