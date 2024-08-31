@@ -2,9 +2,9 @@
 import os
 import asyncio
 import itertools
-from typing import Any, TypeVar, Callable, Coroutine
+from typing import Any, TypeVar, Callable
 from datetime import datetime, timedelta
-from collections.abc import Iterable, Iterator, Generator
+from collections.abc import Iterable, Coroutine, Generator
 
 # PDM
 import dotenv
