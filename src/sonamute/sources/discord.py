@@ -79,6 +79,10 @@ def is_webhook(m: DiscordMessageJSON) -> bool:
 
 
 class DiscordFetcher(FileFetcher):
+    platform: Platform = {
+        "_id": KnownPlatforms.Discord.value,
+        "name": KnownPlatforms.Discord.name,
+    }
     __seen: set[int] = set()
 
     @override
@@ -101,10 +105,6 @@ class DiscordFetcher(FileFetcher):
 
     @override
     def get_messages(self) -> Generator[PreMessage, None, None]:
-        platform_id = KnownPlatforms.Discord.value
-        platform_name = KnownPlatforms.Discord.name
-        platform: Platform = {"_id": platform_id, "name": platform_name}
-
         for f in self.get_files():
             container_id = int(f["channel"]["id"])
             community_id = int(f["guild"]["id"])
@@ -112,7 +112,7 @@ class DiscordFetcher(FileFetcher):
             community: Community = {
                 "_id": community_id,
                 "name": community_name,
-                "platform": platform,
+                "platform": self.platform,
             }
 
             for m in f.get("messages", []):
@@ -129,7 +129,7 @@ class DiscordFetcher(FileFetcher):
                 author: Author = {
                     "_id": author_id,
                     "name": author_name,
-                    "platform": platform,
+                    "platform": self.platform,
                     "is_bot": is_bot,
                     "is_webhook": is_webhook_,
                     # NOTE: If an author is a webhook, we know to check it later in PluralKit
