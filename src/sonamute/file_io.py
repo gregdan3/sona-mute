@@ -7,6 +7,9 @@ from collections.abc import Mapping, Iterable
 
 # PDM
 import orjson
+import lxml.html
+import lxml.etree
+from bs4 import BeautifulSoup
 from typing_extensions import override
 
 JSON = str | int | float | Mapping["JSON", "JSON"] | Iterable["JSON"]
@@ -52,4 +55,18 @@ def try_load_json_file(filename: str) -> JSON | None:
     # TODO: what if the file is too large?
     with open(filename, "r") as f:
         content = try_load_json(f.read())
+    return content
+
+
+def try_load_html(data: str):
+    content = None
+    # try:
+    content = BeautifulSoup(data, "lxml")
+    # except
+    return content
+
+
+def try_load_html_file(filename: str):
+    with open(filename, "r") as f:
+        content = try_load_html(f.read())
     return content
