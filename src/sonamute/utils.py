@@ -1,6 +1,7 @@
 # STL
 import os
 import asyncio
+import hashlib
 import itertools
 from typing import Any, TypeVar, Callable
 from datetime import datetime, timedelta
@@ -25,6 +26,15 @@ def load_envvar(envvar: str, default: str | None = None) -> str:
     if default is not None:
         return default
     raise EnvironmentError(f"No {envvar} found in environment!")
+
+
+def fake_id(s: str) -> int:
+    """Hash a string with md5, returning a 128 bit number."""
+    b = s.encode("utf-8")
+    # TODO: why does pyright think md5 isn't a property of hashlib
+    md5_hash = hashlib.md5(b)
+    md5_hash = md5_hash.hexdigest()
+    return int(md5_hash, 16)
 
 
 def days_in_range(
