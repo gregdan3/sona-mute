@@ -10,7 +10,7 @@ from typing_extensions import override
 # LOCAL
 from sonamute.db import Author, Platform, Community, PreMessage, KnownPlatforms
 from sonamute.file_io import try_load_json
-from sonamute.sources.generic import NULL_CONTAINER, FileFetcher
+from sonamute.sources.generic import NULL_AUTHOR, NULL_CONTAINER, FileFetcher
 
 
 class RedditSubmission(TypedDict):
@@ -250,7 +250,7 @@ class RedditFetcher(FileFetcher):
     def get_author(self, raw_msg: RedditJSON) -> Author:
 
         author_fullname = raw_msg.get("author_fullname")
-        author_id = 0  # null Reddit author
+        author_id = NULL_AUTHOR
         if author_fullname:
             _, author_id = split_type_id(author_fullname)
 

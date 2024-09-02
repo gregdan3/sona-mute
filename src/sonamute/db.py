@@ -28,7 +28,8 @@ class KnownPlatforms(IntEnum):
     # Instagram = 7
     # Tumblr = 8
     # Mastodon = 9
-    # Forum = 100  # generic
+    # Cohost = 10
+    Forum = 100  # generic
     # NOTE: includes Yahoo Groups, kulupu.pona.la, and forums.tokipona.org
 
     # Publication = 200  # generic

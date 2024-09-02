@@ -7,6 +7,7 @@ from collections.abc import Generator
 from sonamute.db import Author, Community, PreMessage, KnownPlatforms
 
 NULL_CONTAINER = 0
+NULL_AUTHOR = 0
 # I know this is a sin.
 # But EdgeDB is doing that thing where nulls are implicitly omitted from any `filter`,
 # even `NOT` filters for which nulls should intuitively match.
