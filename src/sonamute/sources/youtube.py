@@ -102,9 +102,6 @@ class YouTubeJSON(TypedDict):
     # even more metadata about video format
 
 
-B64_PAD = ["", "==", "="]
-
-
 def youtube_id_to_int(yt_id: str) -> int:
     # https://webapps.stackexchange.com/questions/54443
     # youtube's alphabet is different for URL reasons
@@ -112,9 +109,9 @@ def youtube_id_to_int(yt_id: str) -> int:
 
     # and they omit padding since the IDs are of known length
     # 11 for videos, 22 for channels, 20 for comments
-    b64 += B64_PAD[len(yt_id) % 3]
+    b64 += "=="
 
-    decoded = base64.b64decode(b64, validate=True)
+    decoded = base64.b64decode(b64, validate=False)
 
     _id = int.from_bytes(decoded)
 
