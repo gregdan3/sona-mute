@@ -45,6 +45,7 @@ class SourceAction(TypedDict):
 
 class SqliteAction(TypedDict):
     filename: str
+    filename_trimmed: str
     root: str
 
 
@@ -129,11 +130,21 @@ def setup_frequency():
 
 
 def setup_sqlite():
-    filename = get_filename("Name for SQLite DB?", default=f"{today_str()}-full.sqlite")
+    filename = get_filename("Base name for SQLite DB?", default=f"{today_str()}")
     location = get_directory("Save to where?", default=".")
+    full_filename = filename + "-full.sqlite"
+    trimmed_filename = filename + "-trimmed.sqlite"
 
-    ACTIONS["sqlite"] = SqliteAction({"filename": filename, "root": location})
-    CONSOLE.print(f"Will generate a SQLite database {filename} at {location}")
+    ACTIONS["sqlite"] = SqliteAction(
+        {
+            "filename": full_filename,
+            "filename_trimmed": trimmed_filename,
+            "root": location,
+        }
+    )
+    CONSOLE.print(
+        f"Will generate a SQLite db at {location}/{full_filename} and {location}/{trimmed_filename}"
+    )
 
 
 def display_choices():

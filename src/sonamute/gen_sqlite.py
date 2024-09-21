@@ -1,12 +1,22 @@
 # STL
+import shutil
 import asyncio
-from typing import TypedDict
+from typing import Any, TypedDict
 from datetime import UTC, datetime
 from contextlib import asynccontextmanager
 from collections.abc import Callable, Coroutine
 
 # PDM
-from sqlalchemy import Text, Column, Integer, ForeignKey, PrimaryKeyConstraint
+from sqlalchemy import (
+    Text,
+    Column,
+    Result,
+    Integer,
+    ForeignKey,
+    TextClause,
+    PrimaryKeyConstraint,
+    text,
+)
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -22,6 +32,7 @@ from sonamute.utils import batch_iter, epochs_in_range, months_in_range
 
 # we insert 4 items per row; max sql variables is 999 for, reasons,
 SQLITE_BATCH = 249
+SQLITE_POSTPROCESS = "queries/sqlite_postprocess.sql"
 
 Base = declarative_base()
 
@@ -107,6 +118,11 @@ class FreqDB:
     async def session(self):
         async with self.sgen() as s:
             yield s
+
+    async def execute(self, query: TextClause) -> Result[Any]:
+        async with self.session() as s:
+            result = await s.execute(query)
+        return result
 
     async def upsert_word(self, data: list[InsertablePhrase]):
         async with self.session() as s:
@@ -245,3 +261,13 @@ async def generate_sqlite(edb: MessageDB, filename: str, trimmed_filename: str):
                 await copy_totals(edb, sdb, phrase_len, min_sent_len, start, end)
 
                 # The totals table exists to convert absolute occurrences to percents on the fly
+
+    await sdb.close()
+
+    query = ""
+    with open(SQLITE_POSTPROCESS, "r") as f:
+        query = text(f.read())
+
+    shutil.copy(filename, trimmed_filename)
+    sdb = await freqdb_factory(trimmed_filename)
+    _ = await sdb.execute(query)
