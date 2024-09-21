@@ -18,8 +18,7 @@ from sqlalchemy.dialects.sqlite import Insert as insert
 
 # LOCAL
 from sonamute.db import Frequency, MessageDB
-from sonamute.utils import batch_iter, ndays_in_range, epochs_in_range
-from sonamute.constants import NDAYS, EPOCH_INIT
+from sonamute.utils import batch_iter, epochs_in_range, months_in_range
 
 # we insert 4 items per row; max sql variables is 999 for, reasons,
 SQLITE_BATCH = 249
@@ -34,7 +33,7 @@ Base = declarative_base()
 
 
 class Phrase(Base):
-    # NOTE: misnomer since it will also contain phrases
+    # NOTE: misnomer since it will also contain words
     __tablename__ = "phrase"
 
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
@@ -125,7 +124,7 @@ class FreqDB:
             word_id_map[word] = id
         return word_id_map
 
-    async def insert_word_freq(self, data: list[Frequency]):
+    async def insert_freq(self, data: list[Frequency], table: Freq | Ranks):
         words: list[InsertablePhrase] = [
             {"text": d["text"], "len": d["phrase_len"]} for d in data
         ]
@@ -136,11 +135,11 @@ class FreqDB:
             _ = d.pop("phrase_len")
 
         async with self.session() as s:
-            stmt = insert(Freq).values(data)
+            stmt = insert(table).values(data)
             _ = await s.execute(stmt)
             await s.commit()
 
-    async def insert_total_freq(
+    async def insert_total(
         self,
         phrase_len: int,
         min_sent_len: int,
@@ -154,21 +153,6 @@ class FreqDB:
                 day=day,
                 occurrences=occurrences,
             )
-            _ = await s.execute(stmt)
-            await s.commit()
-
-    async def insert_ranks(self, data: list[Frequency]):
-        words: list[InsertablePhrase] = [
-            {"text": d["text"], "len": d["phrase_len"]} for d in data
-        ]
-        phrase_id_map = await self.upsert_word(words)
-        for d in data:  # TODO: typing
-            d["phrase_id"] = phrase_id_map[d["text"]]
-            _ = d.pop("text")
-            _ = d.pop("phrase_len")
-
-        async with self.session() as s:
-            stmt = insert(Ranks).values(data)
             _ = await s.execute(stmt)
             await s.commit()
 
@@ -189,7 +173,51 @@ async def batch_insert(
     _ = await asyncio.gather(*tasks)
 
 
-async def generate_sqlite(edb: MessageDB, filename: str):
+async def copy_freqs(
+    edb: MessageDB,
+    sdb: FreqDB,
+    phrase_len: int,
+    min_sent_len: int,
+    start: datetime,
+    end: datetime,
+    table: Freq | Ranks,
+):
+    # all-time ranking data
+    results = await edb.occurrences_in_range(
+        phrase_len,
+        min_sent_len,
+        start,
+        end,
+        # limit=500,
+    )
+    for batch in batch_iter(results, SQLITE_BATCH):
+        await sdb.insert_freq(batch, table)
+
+
+async def copy_totals(
+    edb: MessageDB,
+    sdb: FreqDB,
+    phrase_len: int,
+    min_sent_len: int,
+    start: datetime,
+    end: datetime,
+):
+    total_occurrences = await edb.global_occurrences_in_range(
+        phrase_len,
+        min_sent_len,
+        start,
+        end,
+    )
+    start_ts = int(start.timestamp())
+    await sdb.insert_total(
+        phrase_len,
+        min_sent_len,
+        start_ts,
+        total_occurrences,
+    )
+
+
+async def generate_sqlite(edb: MessageDB, filename: str, trimmed_filename: str):
     sdb = await freqdb_factory(filename)
     first_msg_dt, last_msg_dt = await edb.get_msg_date_range()
 
@@ -199,54 +227,21 @@ async def generate_sqlite(edb: MessageDB, filename: str):
         for min_sent_len in range(phrase_len, 7):
             print(f"Starting on min sent len of {min_sent_len}")
 
-            results = await edb.occurrences_in_range(
-                phrase_len,
-                min_sent_len,
-                datetime.fromtimestamp(0, tz=UTC),
-                last_msg_dt,
-                # limit=500,
+            print("all time")
+            alltime_start = datetime.fromtimestamp(0, tz=UTC)
+            await copy_freqs(
+                edb, sdb, phrase_len, min_sent_len, alltime_start, last_msg_dt, Ranks
             )
-            for batch in batch_iter(results, SQLITE_BATCH):
-                await sdb.insert_ranks(batch)
 
+            # per-epoch (aug 1-aug 1) ranking data
             for start, end in epochs_in_range(first_msg_dt, last_msg_dt):
-                print(f"{start} - {end}")
-                start_ts = int(start.timestamp())
-                results = await edb.occurrences_in_range(
-                    phrase_len,
-                    min_sent_len,
-                    start,
-                    end,
-                    # limit=500,
-                )
+                print(f"epoch {start} - {end}")
+                await copy_freqs(edb, sdb, phrase_len, min_sent_len, start, end, Ranks)
 
-                for batch in batch_iter(results, SQLITE_BATCH):
-                    await sdb.insert_ranks(batch)
-
-            for start, end in ndays_in_range(
-                first_msg_dt, last_msg_dt, NDAYS, EPOCH_INIT
-            ):
-                print(f"{start} - {end}")
-                start_ts = int(start.timestamp())
-                results = await edb.occurrences_in_range(
-                    phrase_len,
-                    min_sent_len,
-                    start,
-                    end,
-                )
-                for batch in batch_iter(results, SQLITE_BATCH):
-                    await sdb.insert_word_freq(batch)
+            # periodic frequency data
+            for start, end in months_in_range(first_msg_dt, last_msg_dt):
+                print(f"period {start} - {end}")
+                await copy_freqs(edb, sdb, phrase_len, min_sent_len, start, end, Freq)
+                await copy_totals(edb, sdb, phrase_len, min_sent_len, start, end)
 
                 # The totals table exists to convert absolute occurrences to percents on the fly
-                total_occurrences = await edb.global_occurrences_in_range(
-                    phrase_len,
-                    min_sent_len,
-                    start,
-                    end,
-                )
-                await sdb.insert_total_freq(
-                    phrase_len,
-                    min_sent_len,
-                    start_ts,
-                    total_occurrences,
-                )
