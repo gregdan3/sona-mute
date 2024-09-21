@@ -8,10 +8,11 @@
 # STL
 import os
 import sys
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 from datetime import date
 
 # PDM
+import yaml
 from rich.panel import Panel
 from rich.prompt import Prompt, Confirm, IntPrompt
 from rich.console import Console
@@ -73,17 +74,36 @@ def get_filename(prompt: str, *args: Any, **kwargs: Any) -> str:
     return filename
 
 
-def setup_source():
+def add_source(source_action: SourceAction):
+    source = source_action["source"]
+    dir = source_action["root"]
+    to_db = source_action["to_db"]
+    dest = source_action["output"]
+    if not to_db:
+        dest = "db"
+
+    ACTIONS["sources"].append(source_action)
+    CONSOLE.print(f"Will fetch {source} data from {dir} and output to {dest}")
+
+
+def setup_source_from_config():
+    output = get_filename("Provide config", default="./sources.yml")
+    with open(output) as f:
+        configs = cast(list[SourceAction], yaml.safe_load(f))
+
+    for config in configs:
+        result = SourceAction(**config)
+        add_source(result)
+
+
+def setup_one_source():
     source = Prompt.ask("What source?", choices=list(SOURCES.keys()))
     dir = get_directory("Where from?", default=os.getcwd())
     to_db = Confirm.ask("Send to database?")
 
     output = None
-    dest = "db"  # just for presentatoin
     if not to_db:
         output = get_filename("Output where?", default=f"./{source}_{today_str()}.json")
-        dest = output
-
     result = SourceAction(
         {
             "source": source,
@@ -92,9 +112,15 @@ def setup_source():
             "output": output,
         }
     )
+    add_source(result)
 
-    ACTIONS["sources"].append(result)
-    CONSOLE.print(f"Will fetch {source} data from {dir} and output to {dest}")
+
+def setup_sources():
+    from_config = Confirm.ask("From config?")
+    if from_config:
+        setup_source_from_config()
+    else:
+        setup_one_source()
 
 
 def setup_frequency():
@@ -103,7 +129,7 @@ def setup_frequency():
 
 
 def setup_sqlite():
-    filename = get_filename("Name for SQLite DB?", default=f"{today_str()}.sqlite")
+    filename = get_filename("Name for SQLite DB?", default=f"{today_str()}-full.sqlite")
     location = get_directory("Save to where?", default=".")
 
     ACTIONS["sqlite"] = SqliteAction({"filename": filename, "root": location})
@@ -147,7 +173,7 @@ def main_menu():
     choice = int(choice)
 
     if choice == 1:
-        setup_source()
+        setup_sources()
     elif choice == 2:
         setup_frequency()
     elif choice == 3:
