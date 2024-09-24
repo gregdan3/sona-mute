@@ -148,13 +148,12 @@ def epochs_in_range(
 ) -> Generator[tuple[datetime, datetime], None, None]:
     """Provide datetimes rounded to the start of every epoch, August 1st, such that `start` and `end` are within the given range"""
     start = round_to_prev_epoch(start)
-    step = round_to_next_epoch(start)
     end = round_to_next_epoch(end)
 
     while start < end:
+        step = round_to_next_epoch(start)
         yield start, step
         start = step
-        step = round_to_next_epoch(start)
 
 
 def batch_iter(iterator: Iterable[T], batch_size: int) -> Iterable[list[T]]:
