@@ -101,13 +101,12 @@ def ndays_in_range(
         range_end += delta
 
 
-def round_to_next_month(d: datetime) -> datetime:
-    if d.month == 12:
-        d = datetime(d.year + 1, 1, 1, tzinfo=d.tzinfo)
-    else:
-        d = datetime(d.year, d.month + 1, 1, tzinfo=d.tzinfo)
-
-    return d
+def adjust_month(d: datetime, delta: int = 0) -> datetime:
+    """Alter the date by the specified number of months `delta` and round to the start of the month."""
+    adj_months = d.month - 1 + delta
+    year = d.year + (adj_months // 12)
+    month = (adj_months % 12) + 1
+    return datetime(year, month, 1, tzinfo=d.tzinfo)
 
 
 def months_in_range(
@@ -117,14 +116,16 @@ def months_in_range(
     """
     Provide datetimes rounded to the start of every month from `start` to `end`, inclusive.
     """
-    start = datetime(start.year, start.month, 1, tzinfo=start.tzinfo)
-    step = round_to_next_month(start)
-    end = round_to_next_month(end)
+    start = adjust_month(start)
+    rounded_end = adjust_month(end)
+
+    if end != rounded_end:
+        end = adjust_month(end, 1)
 
     while start < end:
+        step = adjust_month(start, 1)
         yield start, step
         start = step
-        step = round_to_next_month(start)
 
 
 def round_to_prev_epoch(d: datetime) -> datetime:
