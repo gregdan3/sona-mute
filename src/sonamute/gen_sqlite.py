@@ -1,4 +1,5 @@
 # STL
+import os
 import shutil
 import asyncio
 from typing import Any, TypedDict
@@ -32,7 +33,7 @@ from sonamute.utils import batch_iter, epochs_in_range, months_in_range
 
 # we insert 4 items per row; max sql variables is 999 for, reasons,
 SQLITE_BATCH = 249
-SQLITE_POSTPROCESS = "queries/sqlite_postprocess.sql"
+SQLITE_POSTPROCESS = "queries/postprocess/"
 
 Base = declarative_base()
 
@@ -266,15 +267,17 @@ async def generate_sqlite(
                 print(f"period {start} - {end}")
                 await copy_freqs(edb, sdb, phrase_len, min_sent_len, start, end, Freq)
                 await copy_totals(edb, sdb, phrase_len, min_sent_len, start, end)
-
                 # The totals table exists to convert absolute occurrences to percents on the fly
 
     await sdb.close()
-
-    query = ""
-    with open(SQLITE_POSTPROCESS, "r") as f:
-        query = text(f.read())
-
+    print("Copying database")
     shutil.copy(filename, trimmed_filename)
     sdb = await freqdb_factory(trimmed_filename)
-    _ = await sdb.execute(query)
+
+    for root, _, files in os.walk(SQLITE_POSTPROCESS):
+        for file in sorted(files):
+            file = os.path.join(root, file)
+            print(f"Executing {file}")
+            with open(file, "r") as f:
+                query = text(f.read())
+            _ = await sdb.execute(query)
