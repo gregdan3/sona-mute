@@ -233,9 +233,16 @@ async def copy_totals(
     )
 
 
-async def generate_sqlite(edb: MessageDB, filename: str, trimmed_filename: str):
+async def generate_sqlite(
+    edb: MessageDB,
+    filename: str,
+    trimmed_filename: str,
+    max_date: datetime,
+):
     sdb = await freqdb_factory(filename)
     first_msg_dt, last_msg_dt = await edb.get_msg_date_range()
+    if last_msg_dt > max_date:
+        last_msg_dt = max_date
 
     print("Generating frequency data")
     for phrase_len in range(1, 7):
