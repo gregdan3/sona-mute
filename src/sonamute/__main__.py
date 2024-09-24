@@ -180,10 +180,11 @@ async def amain(argv: argparse.Namespace):
         filename = actions["sqlite"]["filename"]
         dbpath = os.path.join(root, filename)
         trimmed_filename = actions["sqlite"]["filename_trimmed"]
+        min_date = actions["sqlite"]["min_date"]
         max_date = actions["sqlite"]["max_date"]
 
         print(f"Dumping frequency data to {dbpath}")
-        await generate_sqlite(db, dbpath, trimmed_filename, max_date)
+        await generate_sqlite(db, dbpath, trimmed_filename, min_date, max_date)
 
 
 def main(argv: argparse.Namespace):
