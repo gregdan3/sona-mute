@@ -18,7 +18,6 @@ from rich.prompt import Prompt, Confirm, IntPrompt
 from rich.console import Console
 
 # LOCAL
-from sonamute.utils import adjust_month
 from sonamute.sources.forum import ForumFetcher
 from sonamute.sources.reddit import RedditFetcher
 from sonamute.sources.discord import DiscordFetcher
@@ -47,6 +46,7 @@ class SourceAction(TypedDict):
 class SqliteAction(TypedDict):
     filename: str
     filename_trimmed: str
+    min_date: datetime
     max_date: datetime
     root: str
 
@@ -94,19 +94,23 @@ def get_filename(
         CONSOLE.print(f"[red]Error: {filename} is not an existing file.[/red]")
 
 
-def get_date(prompt: str, *args: Any, **kwargs: any) -> datetime:
+def get_date(
+    prompt: str,
+    *args: Any,
+    format: str = "%Y-%m-%d",
+    **kwargs: any,
+) -> datetime:
     while True:
         date_str = Prompt.ask(prompt, *args, **kwargs)
         try:
-            date = datetime.strptime(date_str, "%Y-%m-%d")
-            date = adjust_month(date)
+            date = datetime.strptime(date_str, format)
             date = date.replace(tzinfo=UTC)
 
             return date
         except ValueError:
             # Handle invalid date format
             CONSOLE.print(
-                f"[red]Error: {date_str} is not a valid date. Please use the format YYYY-MM-DD.[/red]"
+                f"[red]Error: {date_str} is not a valid date. Please use the format {format}.[/red]"
             )
 
 
@@ -167,9 +171,8 @@ def setup_frequency():
 def setup_sqlite():
     filename = get_filename("Base name for SQLite DB?", default=f"{today_str()}")
     location = get_directory("Save to where?", default=".")
-    max_date = get_date(
-        "Maximum date? Will round to start of month", default="2024-08-01"
-    )
+    min_date = get_date("Minimum date? YYYY-MM", format="%Y-%m", default="2001-08")
+    max_date = get_date("Maximum date? YYYY-MM", format="%Y-%m", default="2024-08")
 
     full_filename = filename + "-full.sqlite"
     trimmed_filename = filename + "-trimmed.sqlite"
@@ -178,12 +181,13 @@ def setup_sqlite():
         {
             "filename": full_filename,
             "filename_trimmed": trimmed_filename,
+            "min_date": min_date,
             "max_date": max_date,
             "root": location,
         }
     )
     CONSOLE.print(
-        f"Will generate a SQLite db at {location}/{full_filename} and {location}/{trimmed_filename} with data up to {max_date}"
+        f"Will generate SQLite db at {location}/{full_filename} and {location}/{trimmed_filename} with data from {min_date} to {max_date}"
     )
 
 
