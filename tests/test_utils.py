@@ -59,6 +59,27 @@ def test_months_in_range():
     assert i == 25  # one more to be certain of encompassing
 
 
+def test_months_rounding():
+    start = datetime(2022, 8, 2)
+    end = datetime(2024, 9, 1)
+
+    r_start = None
+    r_end = None
+    i = 0
+    for r_start, r_end in months_in_range(start, end):
+        if i == 0:
+            assert r_start == datetime(2022, 8, 1)
+
+        assert r_start.day == 1
+        assert r_end.day == 1
+        assert 28 <= (r_end - r_start).days <= 31
+
+        i += 1
+    assert r_end == end
+
+    assert i == 25  # one more to be certain of encompassing
+
+
 def test_batch_list():
     ex = list(range(1, 101))
     batch_size = 10
