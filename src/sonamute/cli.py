@@ -62,17 +62,34 @@ def today_str():
     return date.today().strftime("%Y-%m-%d")
 
 
-def get_directory(prompt: str, *args: Any, **kwargs: Any) -> str:
+def get_directory(
+    prompt: str,
+    *args: Any,
+    must_exist: bool = False,
+    **kwargs: Any,
+) -> str:
     while True:
-        dir = Prompt.ask("Provide a directory: ", *args, **kwargs)
-        if os.path.isdir(dir):
+        dir = Prompt.ask(prompt, *args, **kwargs)
+        if not must_exist and dir:
+            return dir
+        if must_exist and os.path.isdir(dir):
             return dir
         CONSOLE.print(f"[red]Error: {dir} is not a valid directory.[/red]")
 
 
-def get_filename(prompt: str, *args: Any, **kwargs: Any) -> str:
-    filename = Prompt.ask("Provide a filename: ", *args, **kwargs)
-    return filename
+def get_filename(
+    prompt: str,
+    *args: Any,
+    must_exist: bool = False,
+    **kwargs: Any,
+) -> str:
+    while True:
+        filename = Prompt.ask(prompt, *args, **kwargs)
+        if not must_exist and filename:
+            return filename
+        if must_exist and os.path.isfile(filename):
+            return filename
+        CONSOLE.print(f"[red]Error: {filename} is not an existing file.[/red]")
 
 
 def add_source(source_action: SourceAction):
@@ -88,7 +105,7 @@ def add_source(source_action: SourceAction):
 
 
 def setup_source_from_config():
-    output = get_filename("Provide config", default="./sources.yml")
+    output = get_filename("Provide config", default="./sources.yml", must_exist=True)
     with open(output) as f:
         configs = cast(list[SourceAction], yaml.safe_load(f))
 
