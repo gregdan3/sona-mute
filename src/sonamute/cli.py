@@ -9,7 +9,7 @@
 import os
 import sys
 from typing import Any, TypedDict, cast
-from datetime import UTC, date, datetime
+from datetime import UTC, date, tzinfo, datetime
 
 # PDM
 import yaml
@@ -100,6 +100,7 @@ def get_date(prompt: str, *args: Any, **kwargs: any) -> datetime:
         try:
             date = datetime.strptime(date_str, "%Y-%m-%d")
             date = adjust_month(date)
+            date = date.replace(tzinfo=UTC)
 
             return date
         except ValueError:
