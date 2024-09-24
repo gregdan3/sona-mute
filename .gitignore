@@ -2,6 +2,7 @@
 *.json
 *.perf
 *.sqlite
+*.sqlite-journal
 *.db
 
 # Byte-compiled / optimized / DLL files
