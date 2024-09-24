@@ -82,8 +82,8 @@ def ndays_in_range(
     interpreting data in a directly comparable way.
     """
     # ensure start/end are day-aligned
-    start = start.replace(hour=0, minute=0, second=0, microsecond=0)
-    end = end.replace(hour=0, minute=0, second=0, microsecond=0)
+    start = datetime(start.year, start.month, start.day, tzinfo=start.tzinfo)
+    end = datetime(end.year, end.month, end.day, tzinfo=end.tzinfo)
 
     # re-align ranges with given parity date
     realignment_factor = (start - parity_date).days % n
