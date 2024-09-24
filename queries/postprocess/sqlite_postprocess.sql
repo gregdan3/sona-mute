@@ -34,6 +34,10 @@ WITH
         f.min_sent_len = 6
         AND len = 6
       )
+      OR (
+        f.min_sent_len = 7
+        AND len = 7
+      )
     GROUP BY
       phrase_id
   ),
