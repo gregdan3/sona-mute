@@ -251,7 +251,7 @@ async def generate_sqlite(
         for min_sent_len in range(phrase_len, 7):
             print(f"Starting on min sent len of {min_sent_len}")
 
-            print("all time")
+            print(f"all time (pl {phrase_len}, msl {min_sent_len})")
             alltime_start = datetime.fromtimestamp(0, tz=UTC)
             await copy_freqs(
                 edb, sdb, phrase_len, min_sent_len, alltime_start, last_msg_dt, Ranks
@@ -259,12 +259,16 @@ async def generate_sqlite(
 
             # per-epoch (aug 1-aug 1) ranking data
             for start, end in epochs_in_range(first_msg_dt, last_msg_dt):
-                print(f"epoch {start} - {end}")
+                print(
+                    f"epoch {start.date()} - {end.date()} (pl {phrase_len}, msl {min_sent_len})"
+                )
                 await copy_freqs(edb, sdb, phrase_len, min_sent_len, start, end, Ranks)
 
             # periodic frequency data
             for start, end in months_in_range(first_msg_dt, last_msg_dt):
-                print(f"period {start} - {end}")
+                print(
+                    f"period {start.date()} - {end.date()} (pl {phrase_len}, msl {min_sent_len})"
+                )
                 await copy_freqs(edb, sdb, phrase_len, min_sent_len, start, end, Freq)
                 await copy_totals(edb, sdb, phrase_len, min_sent_len, start, end)
                 # The totals table exists to convert absolute occurrences to percents on the fly
