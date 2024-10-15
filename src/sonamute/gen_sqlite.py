@@ -61,6 +61,7 @@ class Freq(Base):
     min_sent_len = Column(Integer, nullable=False)  # min words in source sentences
     day = Column(Integer, nullable=False)
     occurrences = Column(Integer, nullable=False)
+    authors = Column(Integer, nullable=False)
 
     __table_args__ = (
         PrimaryKeyConstraint("phrase_id", "min_sent_len", "day"),
@@ -74,6 +75,7 @@ class Total(Base):
     phrase_len = Column(Integer, nullable=False)
     min_sent_len = Column(Integer, nullable=False)
     occurrences = Column(Integer, nullable=False)
+    authors = Column(Integer, nullable=False)
 
     __table_args__ = (
         PrimaryKeyConstraint("phrase_len", "min_sent_len", "day"),
@@ -88,6 +90,7 @@ class Ranks(Base):
     min_sent_len = Column(Integer, nullable=False)
     day = Column(Integer, nullable=True)
     occurrences = Column(Integer, nullable=False)
+    authors = Column(Integer, nullable=False)
 
     __table_args__ = (
         PrimaryKeyConstraint("phrase_id", "min_sent_len", "day"),
