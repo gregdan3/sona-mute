@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.dialects.sqlite import Insert as insert
 
 # LOCAL
-from sonamute.db import Frequency, MessageDB
+from sonamute.db import MessageDB, SQLFrequency
 from sonamute.utils import batch_iter, epochs_in_range, months_in_range
 
 # we insert 4 items per row; max sql variables is 999 for, reasons,
@@ -126,7 +126,7 @@ class FreqDB:
             result = await s.execute(query)
         return result
 
-    async def upsert_word(self, data: list[InsertablePhrase]):
+    async def upsert_phrase(self, data: list[InsertablePhrase]):
         async with self.session() as s:
             stmt = insert(Phrase).values(data)
             stmt = stmt.on_conflict_do_update(
@@ -142,15 +142,12 @@ class FreqDB:
             word_id_map[word] = id
         return word_id_map
 
-    async def insert_freq(self, data: list[Frequency], table: Freq | Ranks):
-        words: list[InsertablePhrase] = [
-            {"text": d["text"], "len": d["phrase_len"]} for d in data
-        ]
-        phrase_id_map = await self.upsert_word(words)
+    async def insert_freq(self, data: list[SQLFrequency], table: Freq | Ranks):
+        words: list[InsertablePhrase] = [d["phrase"] for d in data]
+        phrase_id_map = await self.upsert_phrase(words)
         for d in data:  # TODO: typing
-            d["phrase_id"] = phrase_id_map[d["text"]]
-            _ = d.pop("text")
-            _ = d.pop("phrase_len")
+            d["phrase_id"] = phrase_id_map[d["phrase"]["text"]]
+            d.pop("phrase")
 
         async with self.session() as s:
             stmt = insert(table).values(data)

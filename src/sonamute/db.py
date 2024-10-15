@@ -94,6 +94,22 @@ class Frequency(TypedDict):
     community: UUID
     day: datetime
     occurrences: int
+    authors: int
+
+
+class SQLPhrase(TypedDict):
+    text: str
+    len: int
+
+
+class SQLFrequency(TypedDict):
+    # NOTE: exactly one of phrase or phrase_id are required.
+    phrase: SQLPhrase
+    phrase_id: NotRequired[int]
+    min_sent_len: int
+    day: int
+    occurrences: int
+    authors: int
 
 
 def create_client(username: str, password: str, host: str, port: int) -> AsyncIOClient:
