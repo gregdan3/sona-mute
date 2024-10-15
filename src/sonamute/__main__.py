@@ -116,7 +116,6 @@ def metacounter_to_insertable_freqs(
 async def sentences_to_frequencies(db: MessageDB, batch_size: int, passing: bool):
     first_msg_dt, last_msg_dt = await db.get_msg_date_range()
     for start, end in months_in_range(first_msg_dt, last_msg_dt):
-        print(start)
         result = await db.counted_sents_in_range(start, end, passing)
         by_community = sort_by_community(result)
         # TODO: remove community? ehhhhhh
