@@ -2,7 +2,7 @@
 import json
 from enum import IntEnum
 from uuid import UUID
-from typing import TypedDict, cast
+from typing import TypedDict, NotRequired, cast
 from datetime import datetime
 from collections import Counter
 
@@ -159,27 +159,29 @@ with
       and .day < <std::datetime>$end
   ),
   groups := (
-    group F {text, occurrences}
+    group F {text, occurrences, authors}
     using text := .text
     by text
   )
   select groups {
     text := .key.text,
-    total := sum(.elements.occurrences)
+    occurrences := sum(.elements.occurrences),
+    authors := sum(.elements.authors)
   } order by .total desc
 """
 
-GLOBAL_FREQ_SELECT = """
+GLOBAL_TOTALS_SELECT = """
 with
   F := (
-    select Frequency {occurrences}
+    select Frequency {occurrences, authors}
     filter
       .phrase.length = <int16>$phrase_len
       and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
-  ) select sum(F.occurrences);
+  ) select sum(F.occurrences), sum(F.authors);
 """
+
 
 PLAT_INSERT = """
 select (
@@ -511,7 +513,7 @@ class MessageDB:
             output.append(out)
         return output
 
-    async def occurrences_in_range(
+    async def select_frequencies_in_range(
         self,
         phrase_len: int,
         min_sent_len: int,
@@ -519,7 +521,7 @@ class MessageDB:
         end: datetime,
         limit: int | None = None,
         # word: str | None = None,
-    ) -> list[Frequency]:
+    ) -> list[SQLFrequency]:
         query = FREQ_SELECT
         if limit:
             query = FREQ_SELECT + f" limit {limit}"
@@ -539,23 +541,23 @@ class MessageDB:
         )
         return formatted
 
-    async def global_occurrences_in_range(
+    async def global_totals_in_range(
         self,
         phrase_len: int,
         min_sent_len: int,
         start: datetime,
         end: datetime,
         # word: str | None = None,
-    ) -> int:
-        results = await self.client.query_required_single(
-            GLOBAL_FREQ_SELECT,
+    ) -> tuple[int, int]:
+        result = await self.client.query(
+            GLOBAL_TOTALS_SELECT,
             phrase_len=phrase_len,
             min_sent_len=min_sent_len,
             start=start,
             end=end,
         )
-        # result should be just an integer
-        return results
+
+        return result.occurrences, result.authors
 
 
 def make_edgedb_frequency(
@@ -583,16 +585,19 @@ def make_edgedb_frequency(
 
 def make_sqlite_frequency(
     data, phrase_len: int, min_sent_len: int, day: int
-) -> list[Frequency]:
-    output: list[Frequency] = list()
+) -> list[SQLFrequency]:
+    # FIXME: what is the actual type of `data`
+    output: list[SQLFrequency] = list()
     for item in data:
-        d: Frequency = {
-            # NOTE: this is intently reduced from EdgeDB's Frequency
-            "text": item.text,
-            "occurrences": item.total,
-            "phrase_len": phrase_len,
+        d: SQLFrequency = {
+            "phrase": {
+                "text": item.text,
+                "len": phrase_len,
+            },
             "min_sent_len": min_sent_len,
             "day": day,
+            "occurrences": item.occurrences,
+            "authors": item.authors,
         }
         output.append(d)
     return output

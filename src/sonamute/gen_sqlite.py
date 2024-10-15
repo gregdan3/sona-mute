@@ -161,6 +161,8 @@ class FreqDB:
         min_sent_len: int,
         day: int,
         occurrences: int,
+        authors: int,
+        # TODO: should there be an object here
     ):
         async with self.session() as s:
             stmt = insert(Total).values(
@@ -168,6 +170,7 @@ class FreqDB:
                 min_sent_len=min_sent_len,
                 day=day,
                 occurrences=occurrences,
+                authors=authors,
             )
             _ = await s.execute(stmt)
             await s.commit()
@@ -189,7 +192,7 @@ async def copy_freqs(
     table: Freq | Ranks,
 ):
     # all-time ranking data
-    results = await edb.occurrences_in_range(
+    results = await edb.select_frequencies_in_range(
         phrase_len,
         min_sent_len,
         start,
@@ -210,7 +213,7 @@ async def copy_totals(
     start: datetime,
     end: datetime,
 ):
-    total_occurrences = await edb.global_occurrences_in_range(
+    total_occurrences, total_authors = await edb.global_totals_in_range(
         phrase_len,
         min_sent_len,
         start,
@@ -222,6 +225,7 @@ async def copy_totals(
         min_sent_len,
         start_ts,
         total_occurrences,
+        total_authors,
     )
 
 
