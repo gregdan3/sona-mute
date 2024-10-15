@@ -124,6 +124,7 @@ class FreqDB:
     async def execute(self, query: TextClause) -> Result[Any]:
         async with self.session() as s:
             result = await s.execute(query)
+            await s.commit()
         return result
 
     async def upsert_phrase(self, data: list[InsertablePhrase]):
