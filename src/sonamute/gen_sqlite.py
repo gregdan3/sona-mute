@@ -198,6 +198,8 @@ async def copy_freqs(
         end,
         # limit=500,
     )
+    # TODO: db interface can do its own batching, because values can
+    # be added on later
     for batch in batch_iter(results, SQLITE_BATCH):
         await sdb.insert_freq(batch, table)
 
