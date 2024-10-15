@@ -1,11 +1,9 @@
 # STL
 import os
 import shutil
-import asyncio
 from typing import Any, TypedDict
 from datetime import UTC, datetime
 from contextlib import asynccontextmanager
-from collections.abc import Callable, Coroutine
 
 # PDM
 from sqlalchemy import (
@@ -181,16 +179,6 @@ async def freqdb_factory(database_file: str) -> FreqDB:
     t = FreqDB(database_file=database_file)
     await t.__ainit__()
     return t
-
-
-async def batch_insert(
-    formatted: list[Frequency],
-    callable: Callable[[list[Frequency]], Coroutine[None, None, None]],
-) -> None:
-    tasks: list[Coroutine[None, None, None]] = []
-    for batch in batch_iter(formatted, SQLITE_BATCH):
-        tasks.append(callable(batch))
-    _ = await asyncio.gather(*tasks)
 
 
 async def copy_freqs(
