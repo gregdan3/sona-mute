@@ -58,7 +58,7 @@ class Freq(Base):
     # community = Column(Uuid, ForeignKey("community.id"), nullable=False)
     min_sent_len = Column(Integer, nullable=False)  # min words in source sentences
     day = Column(Integer, nullable=False)
-    occurrences = Column(Integer, nullable=False)
+    hits = Column(Integer, nullable=False)
     authors = Column(Integer, nullable=False)
 
     __table_args__ = (
@@ -72,7 +72,7 @@ class Total(Base):
     day = Column(Integer, nullable=False)
     phrase_len = Column(Integer, nullable=False)
     min_sent_len = Column(Integer, nullable=False)
-    occurrences = Column(Integer, nullable=False)
+    hits = Column(Integer, nullable=False)
     authors = Column(Integer, nullable=False)
 
     __table_args__ = (
@@ -87,7 +87,7 @@ class Ranks(Base):
     phrase_id = Column(Integer, ForeignKey("phrase.id"), nullable=False)
     min_sent_len = Column(Integer, nullable=False)
     day = Column(Integer, nullable=True)
-    occurrences = Column(Integer, nullable=False)
+    hits = Column(Integer, nullable=False)
     authors = Column(Integer, nullable=False)
 
     __table_args__ = (
@@ -160,7 +160,7 @@ class FreqDB:
         phrase_len: int,
         min_sent_len: int,
         day: int,
-        occurrences: int,
+        hits: int,
         authors: int,
         # TODO: should there be an object here
     ):
@@ -169,7 +169,7 @@ class FreqDB:
                 phrase_len=phrase_len,
                 min_sent_len=min_sent_len,
                 day=day,
-                occurrences=occurrences,
+                hits=hits,
                 authors=authors,
             )
             _ = await s.execute(stmt)
@@ -213,7 +213,7 @@ async def copy_totals(
     start: datetime,
     end: datetime,
 ):
-    total_occurrences, total_authors = await edb.global_totals_in_range(
+    total_hits, total_authors = await edb.global_totals_in_range(
         phrase_len,
         min_sent_len,
         start,
@@ -224,7 +224,7 @@ async def copy_totals(
         phrase_len,
         min_sent_len,
         start_ts,
-        total_occurrences,
+        total_hits,
         total_authors,
     )
 
@@ -269,7 +269,7 @@ async def generate_sqlite(
                 )
                 await copy_freqs(edb, sdb, phrase_len, min_sent_len, start, end, Freq)
                 await copy_totals(edb, sdb, phrase_len, min_sent_len, start, end)
-                # The totals table exists to convert absolute occurrences to percents on the fly
+                # The totals table exists to convert absolute hits to percents on the fly
 
     await sdb.close()
     print("Copying database")

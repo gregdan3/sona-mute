@@ -93,7 +93,7 @@ class Frequency(TypedDict):
     min_sent_len: int
     community: UUID
     day: datetime
-    occurrences: int
+    hits: int
     authors: int
 
 
@@ -108,7 +108,7 @@ class SQLFrequency(TypedDict):
     phrase_id: NotRequired[int]
     min_sent_len: int
     day: int
-    occurrences: int
+    hits: int
     authors: int
 
 
@@ -159,13 +159,13 @@ with
       and .day < <std::datetime>$end
   ),
   groups := (
-    group F {text, occurrences, authors}
+    group F {text, hits, authors}
     using text := .text
     by text
   )
   select groups {
     text := .key.text,
-    occurrences := sum(.elements.occurrences),
+    hits := sum(.elements.hits),
     authors := sum(.elements.authors)
   } order by .total desc
 """
@@ -173,13 +173,13 @@ with
 GLOBAL_TOTALS_SELECT = """
 with
   F := (
-    select Frequency {occurrences, authors}
+    select Frequency {hits, authors}
     filter
       .phrase.length = <int16>$phrase_len
       and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
-  ) select sum(F.occurrences), sum(F.authors);
+  ) select sum(F.hits), sum(F.authors);
 """
 
 
@@ -245,12 +245,12 @@ INSERT Frequency {
     community := <Community>$community,
     min_sent_len := <int16>$min_sent_len,
     day := <datetime>$day,
-    occurrences := <int64>$occurrences,
+    hits := <int64>$hits,
 }
 """
 FREQ_INSERT_CONFLICT = """
 unless conflict on (.phrase, .community, .min_sent_len, .day)
-else (update Frequency set { occurrences := <int64>$occurrences });
+else (update Frequency set { hits := <int64>$hits });
 """  # TODO: optionally add to FREQ_INSERT
 BULK_FREQ_INSERT = """
 WITH raw_data := <json>$data,
@@ -261,9 +261,9 @@ FOR freq IN json_array_unpack(raw_data) union (
         phrase_len := <int16>freq['phrase_len'],
         min_sent_len := <int16>freq['min_sent_len'],
         day := <datetime>freq['day'],
-        occurrences := <int64>freq['occurrences'],
+        hits := <int64>freq['hits'],
     } unless conflict on (.text, .min_sent_len, .community, .day)
-    else (update Frequency set { occurrences := <int64>freq['occurrences'] }));
+    else (update Frequency set { hits := <int64>freq['hits'] }));
 """
 
 
@@ -557,7 +557,7 @@ class MessageDB:
             end=end,
         )
 
-        return result.occurrences, result.authors
+        return result.hits, result.authors
 
 
 def make_edgedb_frequency(
@@ -568,7 +568,7 @@ def make_edgedb_frequency(
     day: datetime,
 ) -> list[Frequency]:
     word_freq_rows: list[Frequency] = list()
-    for text, occurrences in counter.items():
+    for text, hits in counter.items():
         result = Frequency(
             {
                 "text": text,
@@ -576,7 +576,7 @@ def make_edgedb_frequency(
                 "phrase_len": phrase_len,
                 "min_sent_len": min_sent_len,
                 "day": day,
-                "occurrences": occurrences,
+                "hits": hits,
             }
         )
         word_freq_rows.append(result)
@@ -596,7 +596,7 @@ def make_sqlite_frequency(
             },
             "min_sent_len": min_sent_len,
             "day": day,
-            "occurrences": item.occurrences,
+            "hits": item.hits,
             "authors": item.authors,
         }
         output.append(d)

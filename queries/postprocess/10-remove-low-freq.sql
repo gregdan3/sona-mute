@@ -1,10 +1,10 @@
-/* Remove words/phrases below a certain number of occurrences, here 40
+/* Remove words/phrases below a certain number of hits, here 40
 * Partly for anonymity, but mostly for Google's reasons: the data is massive if you don't do this */
 WITH
-  summed_occurrences AS (
+  summed_hits AS (
     SELECT
       f.phrase_id,
-      SUM(f.occurrences) AS total_occurrences
+      SUM(f.hits) AS total_hits
     FROM
       frequency f
       JOIN phrase p ON f.phrase_id = p.id
@@ -45,9 +45,9 @@ WITH
     SELECT
       phrase_id
     FROM
-      summed_occurrences
+      summed_hits
     WHERE
-      total_occurrences < 40
+      total_hits < 40
   )
 DELETE FROM frequency
 WHERE

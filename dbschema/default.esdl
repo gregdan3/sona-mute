@@ -91,7 +91,7 @@ module default {
     required min_sent_len: int16; # these will never be double digit
 
     required day: datetime; # the day, starting at UTC midnight, of the measured frequency
-    required occurrences: int64;
+    required hits: int64;
     required authors: int64;
     # required tpt: bool;  # whether the frequency was measured with toki pona sentences (score >=0.8) or all sentences
 
