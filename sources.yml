@@ -1,0 +1,21 @@
+---
+- source: discord
+  root: /home/gregdan3/communities/discord/
+  to_db: true
+  output: null
+- source: telegram
+  root: /home/gregdan3/communities/telegram/
+  to_db: true
+  output: null
+- source: reddit
+  root: /home/gregdan3/communities/reddit/
+  to_db: true
+  output: null
+- source: forum
+  root: /home/gregdan3/communities/forums/forums.tokipona.org/
+  to_db: true
+  output: null
+- source: youtube
+  root: /home/gregdan3/communities/youtube/
+  to_db: true
+  output: null

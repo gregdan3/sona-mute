@@ -34,6 +34,10 @@ WITH
         f.min_sent_len = 6
         AND len = 6
       )
+      OR (
+        f.min_sent_len = 7
+        AND len = 7
+      )
     GROUP BY
       phrase_id
   ),
@@ -53,41 +57,3 @@ WHERE
     FROM
       phrases_to_delete
   );
-
-/* Most of disk space savings are here */
-DELETE FROM phrase
-WHERE
-  id NOT IN (
-    SELECT DISTINCT
-      phrase_id
-    FROM
-      frequency
-  );
-
-DELETE FROM ranks
-WHERE
-  phrase_id NOT IN (
-    SELECT
-      id
-    FROM
-      phrase
-  );
-
-CREATE INDEX FreqCovering on frequency (phrase_id, min_sent_len, day, occurrences);
-
-CREATE INDEX TotalCovering on total (phrase_len, min_sent_len, day, occurrences);
-
-CREATE INDEX RanksCovering on ranks (phrase_id, min_sent_len, day, occurrences);
-
-CREATE INDEX PhraseCovering ON phrase (id, len, text);
-
-CREATE INDEX PhraseCoveringText ON phrase (len, text);
-
-/* For HttpVFS performance */
-pragma journal_mode = delete;
-
-pragma page_size = 1024;
-
-vacuum;
-
-analyze;

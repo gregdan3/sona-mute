@@ -1,12 +1,23 @@
 # STL
+import os
+import shutil
 import asyncio
-from typing import TypedDict
+from typing import Any, TypedDict
 from datetime import UTC, datetime
 from contextlib import asynccontextmanager
 from collections.abc import Callable, Coroutine
 
 # PDM
-from sqlalchemy import Text, Column, Integer, ForeignKey, PrimaryKeyConstraint
+from sqlalchemy import (
+    Text,
+    Column,
+    Result,
+    Integer,
+    ForeignKey,
+    TextClause,
+    PrimaryKeyConstraint,
+    text,
+)
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -18,11 +29,11 @@ from sqlalchemy.dialects.sqlite import Insert as insert
 
 # LOCAL
 from sonamute.db import Frequency, MessageDB
-from sonamute.utils import batch_iter, ndays_in_range, epochs_in_range
-from sonamute.constants import NDAYS, EPOCH_INIT
+from sonamute.utils import batch_iter, epochs_in_range, months_in_range
 
 # we insert 4 items per row; max sql variables is 999 for, reasons,
 SQLITE_BATCH = 249
+SQLITE_POSTPROCESS = "queries/postprocess/"
 
 Base = declarative_base()
 
@@ -34,7 +45,7 @@ Base = declarative_base()
 
 
 class Phrase(Base):
-    # NOTE: misnomer since it will also contain phrases
+    # NOTE: misnomer since it will also contain words
     __tablename__ = "phrase"
 
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
@@ -109,6 +120,11 @@ class FreqDB:
         async with self.sgen() as s:
             yield s
 
+    async def execute(self, query: TextClause) -> Result[Any]:
+        async with self.session() as s:
+            result = await s.execute(query)
+        return result
+
     async def upsert_word(self, data: list[InsertablePhrase]):
         async with self.session() as s:
             stmt = insert(Phrase).values(data)
@@ -125,7 +141,7 @@ class FreqDB:
             word_id_map[word] = id
         return word_id_map
 
-    async def insert_word_freq(self, data: list[Frequency]):
+    async def insert_freq(self, data: list[Frequency], table: Freq | Ranks):
         words: list[InsertablePhrase] = [
             {"text": d["text"], "len": d["phrase_len"]} for d in data
         ]
@@ -136,11 +152,11 @@ class FreqDB:
             _ = d.pop("phrase_len")
 
         async with self.session() as s:
-            stmt = insert(Freq).values(data)
+            stmt = insert(table).values(data)
             _ = await s.execute(stmt)
             await s.commit()
 
-    async def insert_total_freq(
+    async def insert_total(
         self,
         phrase_len: int,
         min_sent_len: int,
@@ -154,21 +170,6 @@ class FreqDB:
                 day=day,
                 occurrences=occurrences,
             )
-            _ = await s.execute(stmt)
-            await s.commit()
-
-    async def insert_ranks(self, data: list[Frequency]):
-        words: list[InsertablePhrase] = [
-            {"text": d["text"], "len": d["phrase_len"]} for d in data
-        ]
-        phrase_id_map = await self.upsert_word(words)
-        for d in data:  # TODO: typing
-            d["phrase_id"] = phrase_id_map[d["text"]]
-            _ = d.pop("text")
-            _ = d.pop("phrase_len")
-
-        async with self.session() as s:
-            stmt = insert(Ranks).values(data)
             _ = await s.execute(stmt)
             await s.commit()
 
@@ -189,9 +190,63 @@ async def batch_insert(
     _ = await asyncio.gather(*tasks)
 
 
-async def generate_sqlite(edb: MessageDB, filename: str):
+async def copy_freqs(
+    edb: MessageDB,
+    sdb: FreqDB,
+    phrase_len: int,
+    min_sent_len: int,
+    start: datetime,
+    end: datetime,
+    table: Freq | Ranks,
+):
+    # all-time ranking data
+    results = await edb.occurrences_in_range(
+        phrase_len,
+        min_sent_len,
+        start,
+        end,
+        # limit=500,
+    )
+    for batch in batch_iter(results, SQLITE_BATCH):
+        await sdb.insert_freq(batch, table)
+
+
+async def copy_totals(
+    edb: MessageDB,
+    sdb: FreqDB,
+    phrase_len: int,
+    min_sent_len: int,
+    start: datetime,
+    end: datetime,
+):
+    total_occurrences = await edb.global_occurrences_in_range(
+        phrase_len,
+        min_sent_len,
+        start,
+        end,
+    )
+    start_ts = int(start.timestamp())
+    await sdb.insert_total(
+        phrase_len,
+        min_sent_len,
+        start_ts,
+        total_occurrences,
+    )
+
+
+async def generate_sqlite(
+    edb: MessageDB,
+    filename: str,
+    trimmed_filename: str,
+    min_date: datetime,
+    max_date: datetime,
+):
     sdb = await freqdb_factory(filename)
     first_msg_dt, last_msg_dt = await edb.get_msg_date_range()
+    if first_msg_dt < min_date:
+        first_msg_dt = min_date
+    if last_msg_dt > max_date:
+        last_msg_dt = max_date
 
     print("Generating frequency data")
     for phrase_len in range(1, 7):
@@ -199,54 +254,37 @@ async def generate_sqlite(edb: MessageDB, filename: str):
         for min_sent_len in range(phrase_len, 7):
             print(f"Starting on min sent len of {min_sent_len}")
 
-            results = await edb.occurrences_in_range(
-                phrase_len,
-                min_sent_len,
-                datetime.fromtimestamp(0, tz=UTC),
-                last_msg_dt,
-                # limit=500,
+            print(f"all time (pl {phrase_len}, msl {min_sent_len})")
+            alltime_start = datetime.fromtimestamp(0, tz=UTC)
+            await copy_freqs(
+                edb, sdb, phrase_len, min_sent_len, alltime_start, last_msg_dt, Ranks
             )
-            for batch in batch_iter(results, SQLITE_BATCH):
-                await sdb.insert_ranks(batch)
 
+            # per-epoch (aug 1-aug 1) ranking data
             for start, end in epochs_in_range(first_msg_dt, last_msg_dt):
-                print(f"{start} - {end}")
-                start_ts = int(start.timestamp())
-                results = await edb.occurrences_in_range(
-                    phrase_len,
-                    min_sent_len,
-                    start,
-                    end,
-                    # limit=500,
+                print(
+                    f"epoch {start.date()} - {end.date()} (pl {phrase_len}, msl {min_sent_len})"
                 )
+                await copy_freqs(edb, sdb, phrase_len, min_sent_len, start, end, Ranks)
 
-                for batch in batch_iter(results, SQLITE_BATCH):
-                    await sdb.insert_ranks(batch)
-
-            for start, end in ndays_in_range(
-                first_msg_dt, last_msg_dt, NDAYS, EPOCH_INIT
-            ):
-                print(f"{start} - {end}")
-                start_ts = int(start.timestamp())
-                results = await edb.occurrences_in_range(
-                    phrase_len,
-                    min_sent_len,
-                    start,
-                    end,
+            # periodic frequency data
+            for start, end in months_in_range(first_msg_dt, last_msg_dt):
+                print(
+                    f"period {start.date()} - {end.date()} (pl {phrase_len}, msl {min_sent_len})"
                 )
-                for batch in batch_iter(results, SQLITE_BATCH):
-                    await sdb.insert_word_freq(batch)
-
+                await copy_freqs(edb, sdb, phrase_len, min_sent_len, start, end, Freq)
+                await copy_totals(edb, sdb, phrase_len, min_sent_len, start, end)
                 # The totals table exists to convert absolute occurrences to percents on the fly
-                total_occurrences = await edb.global_occurrences_in_range(
-                    phrase_len,
-                    min_sent_len,
-                    start,
-                    end,
-                )
-                await sdb.insert_total_freq(
-                    phrase_len,
-                    min_sent_len,
-                    start_ts,
-                    total_occurrences,
-                )
+
+    await sdb.close()
+    print("Copying database")
+    shutil.copy(filename, trimmed_filename)
+    sdb = await freqdb_factory(trimmed_filename)
+
+    for root, _, files in os.walk(SQLITE_POSTPROCESS):
+        for file in sorted(files):
+            file = os.path.join(root, file)
+            print(f"Executing {file}")
+            with open(file, "r") as f:
+                query = text(f.read())
+            _ = await sdb.execute(query)

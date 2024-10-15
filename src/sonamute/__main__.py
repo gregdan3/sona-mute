@@ -23,9 +23,8 @@ from sonamute.db import (
 )
 from sonamute.cli import SOURCES, menu_handler
 from sonamute.ilo import ILO
-from sonamute.utils import T, batch_iter, gather_batch, ndays_in_range, months_in_range
+from sonamute.utils import T, batch_iter, gather_batch, months_in_range
 from sonamute.counters import countables, metacount_frequencies
-from sonamute.constants import NDAYS, EPOCH_INIT
 from sonamute.gen_sqlite import generate_sqlite
 from sonamute.sources.generic import PlatformFetcher, is_countable
 
@@ -116,7 +115,7 @@ def metacounter_to_insertable_freqs(
 
 async def sentences_to_frequencies(db: MessageDB, batch_size: int, passing: bool):
     first_msg_dt, last_msg_dt = await db.get_msg_date_range()
-    for start, end in ndays_in_range(first_msg_dt, last_msg_dt, NDAYS, EPOCH_INIT):
+    for start, end in months_in_range(first_msg_dt, last_msg_dt):
         print(start)
         result = await db.counted_sents_in_range(start, end, passing)
         by_community = sort_by_community(result)
@@ -180,9 +179,12 @@ async def amain(argv: argparse.Namespace):
         root = actions["sqlite"]["root"]
         filename = actions["sqlite"]["filename"]
         dbpath = os.path.join(root, filename)
+        trimmed_filename = actions["sqlite"]["filename_trimmed"]
+        min_date = actions["sqlite"]["min_date"]
+        max_date = actions["sqlite"]["max_date"]
 
         print(f"Dumping frequency data to {dbpath}")
-        await generate_sqlite(db, dbpath)
+        await generate_sqlite(db, dbpath, trimmed_filename, min_date, max_date)
 
 
 def main(argv: argparse.Namespace):

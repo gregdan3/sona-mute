@@ -19,8 +19,7 @@ IGNORED_CONTAINERS_MAP = {
     KnownPlatforms.Discord.value: {
         316066233755631616,  # mapona/jaki
         786041291707777034,  # mapona/ako
-        # 895303838662295572,  # maponasewi/tokinanpa; this is a pluralkit user.
-        # 914305039764426772,  # mapali/wikipesija covered by authors map
+        895303838662295572,  # maponasewi/tokinanpa; this is a pluralkit user.
         1128714905932021821,  # mamusi/ako
         1187212477155528804,  # mapona/toki-suli/musitokipiantesitelenwan
     }
