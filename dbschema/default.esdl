@@ -92,7 +92,7 @@ module default {
 
     required day: datetime; # the day, starting at UTC midnight, of the measured frequency
     required occurrences: int64;
-    # required authors: int64;
+    required authors: int64;
     # required tpt: bool;  # whether the frequency was measured with toki pona sentences (score >=0.8) or all sentences
 
     constraint exclusive on ((.phrase, .community, .min_sent_len, .day));
