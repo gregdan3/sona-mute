@@ -119,7 +119,7 @@ def add_source(source_action: SourceAction):
     dir = source_action["root"]
     to_db = source_action["to_db"]
     dest = source_action["output"]
-    if not to_db:
+    if to_db:
         dest = "db"
 
     ACTIONS["sources"].append(source_action)
