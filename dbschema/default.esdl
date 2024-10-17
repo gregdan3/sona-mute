@@ -92,7 +92,8 @@ module default {
 
     required day: datetime; # the day, starting at UTC midnight, of the measured frequency
     required hits: int64;
-    required authors: int64;
+    required multi authors: Author;
+    # reportedly, the same author cannot be tracked more than once here. good.
     # required tpt: bool;  # whether the frequency was measured with toki pona sentences (score >=0.8) or all sentences
 
     constraint exclusive on ((.phrase, .community, .min_sent_len, .day));
