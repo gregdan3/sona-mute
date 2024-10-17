@@ -160,7 +160,7 @@ INSERT Frequency {
     hits := <int64>$hits,
     authors := (
         SELECT Author FILTER 
-        .id in array_unpack(<array<uuid>>$author_uuids)
+        .id in array_unpack(<array<uuid>>$authors)
     )
 }
 """
@@ -476,7 +476,9 @@ def make_edgedb_frequency(
                 "min_sent_len": min_sent_len,
                 "day": day,
                 "hits": hits_data["hits"],
-                "authors": hits_data["authors"],
+                "authors": list(hits_data["authors"]),
+                # we track it as a set up to this point
+                # but edgedb needs a subscriptable type
             }
         )
         word_freq_rows.append(result)

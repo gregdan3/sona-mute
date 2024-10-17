@@ -95,7 +95,7 @@ class EDBFrequency(TypedDict):
     community: UUID
     day: datetime
     hits: int
-    authors: set[UUID]
+    authors: list[UUID]
 
 
 # sqlite generation
