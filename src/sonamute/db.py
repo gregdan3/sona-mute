@@ -94,6 +94,19 @@ with
   ) select sum(F.hits);
 """
 
+# TODO: query real author numbers
+GLOBAL_AUTHORS_SELECT = """
+with
+  F := (
+    select Frequency {authors}
+    filter
+      .phrase.length = <int16>$phrase_len
+      and .min_sent_len = <int16>$min_sent_len
+      and .day >= <std::datetime>$start
+      and .day < <std::datetime>$end
+  ) select sum(F.authors);
+"""
+
 
 PLAT_INSERT = """
 select (
@@ -458,6 +471,25 @@ class MessageDB:
 
         return result
 
+    async def global_authors_in_range(
+        self,
+        phrase_len: int,
+        min_sent_len: int,
+        start: datetime,
+        end: datetime,
+        # word: str | None = None,
+    ) -> int:
+        return 0  # TODO:  STUB
+        result: int = await self.client.query_required_single(
+            GLOBAL_AUTHORS_SELECT,
+            phrase_len=phrase_len,
+            min_sent_len=min_sent_len,
+            start=start,
+            end=end,
+        )
+
+        return result
+
 
 def make_edgedb_frequency(
     counter: dict[str, HitsData],
@@ -486,7 +518,10 @@ def make_edgedb_frequency(
 
 
 def make_sqlite_frequency(
-    data, phrase_len: int, min_sent_len: int, day: int
+    data,
+    phrase_len: int,
+    min_sent_len: int,
+    day: int,
 ) -> list[SQLFrequency]:
     # FIXME: what is the actual type of `data`
     output: list[SQLFrequency] = list()
