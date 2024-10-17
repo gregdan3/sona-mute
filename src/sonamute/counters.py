@@ -1,15 +1,21 @@
 # STL
 import json
 import itertools
-from uuid import UUID
-from typing import TypeVar, TypedDict
+from typing import TypeVar
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Generator
 
 # LOCAL
-from sonamute.db import Message, Sentence, PreMessage, SortedSentence
 from sonamute.ilo import ILO
 from sonamute.file_io import TupleJSONEncoder
+from sonamute.smtypes import (
+    Message,
+    HitsData,
+    Sentence,
+    PreMessage,
+    Metacounter,
+    SortedSentence,
+)
 from sonamute.constants import IGNORED_CONTAINERS
 from sonamute.sources.generic import PlatformFetcher
 
@@ -213,14 +219,6 @@ def is_nonsense(sent_len: int, sent: list[str]) -> bool:
     # we don't care what the term is
 
     return (count / sent_len) >= 0.5
-
-
-class HitsData(TypedDict):
-    hits: int
-    authors: set[UUID]
-
-
-Metacounter = dict[int, dict[int, dict[str, HitsData]]]
 
 
 def count_frequencies(

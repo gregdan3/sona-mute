@@ -4,7 +4,7 @@ from typing import Any
 from collections.abc import Generator
 
 # LOCAL
-from sonamute.db import Author, Community, PreMessage, KnownPlatforms
+from sonamute.smtypes import Author, Community, PreMessage, KnownPlatforms
 
 NULL_CONTAINER = 0
 NULL_AUTHOR = 0

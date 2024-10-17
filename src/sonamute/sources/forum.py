@@ -10,9 +10,9 @@ from bs4.element import Tag
 from typing_extensions import override
 
 # LOCAL
-from sonamute.db import Author, Platform, Community, PreMessage, KnownPlatforms
 from sonamute.utils import T, fake_id
 from sonamute.file_io import try_load_html_file
+from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
 from sonamute.sources.generic import NULL_CONTAINER, FileFetcher
 
 """

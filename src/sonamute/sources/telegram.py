@@ -8,8 +8,8 @@ from collections.abc import Generator
 from typing_extensions import override
 
 # LOCAL
-from sonamute.db import Author, Platform, Community, PreMessage, KnownPlatforms
 from sonamute.file_io import try_load_json_file
+from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
 from sonamute.sources.generic import NULL_CONTAINER, FileFetcher
 
 # TODO: special handling?

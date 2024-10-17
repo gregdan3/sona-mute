@@ -9,8 +9,8 @@ from collections.abc import Generator
 from typing_extensions import override
 
 # LOCAL
-from sonamute.db import Author, Platform, Community, PreMessage, KnownPlatforms
 from sonamute.file_io import try_load_json_file
+from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
 from sonamute.sources.generic import NULL_CONTAINER, FileFetcher
 
 
@@ -167,7 +167,10 @@ def fetch_comment_id(comment: YouTubeComment) -> int:
     comment_id = youtube_id_to_int(comment_id)
     return comment_id
 
-def fetch_user_id(raw: YouTubeJSON | YouTubeComment, key: Literal["author_id", "channel_id"]) -> int:
+
+def fetch_user_id(
+    raw: YouTubeJSON | YouTubeComment, key: Literal["author_id", "channel_id"]
+) -> int:
     # when the type checking
     user_id = None
     if "author_id" in raw and key == "author_id":
