@@ -213,12 +213,14 @@ async def copy_totals(
     start: datetime,
     end: datetime,
 ):
-    total_hits, total_authors = await edb.global_totals_in_range(
+    total_hits = await edb.global_hits_in_range(
         phrase_len,
         min_sent_len,
         start,
         end,
     )
+    total_authors = 0  # TODO: query from edgedb
+
     start_ts = int(start.timestamp())
     await sdb.insert_total(
         phrase_len,

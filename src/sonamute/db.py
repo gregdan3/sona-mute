@@ -82,16 +82,16 @@ with
   } order by .total desc
 """
 
-GLOBAL_TOTALS_SELECT = """
+GLOBAL_HITS_SELECT = """
 with
   F := (
-    select Frequency {hits, authors}
+    select Frequency {hits}
     filter
       .phrase.length = <int16>$phrase_len
       and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
-  ) select sum(F.hits), sum(F.authors);
+  ) select sum(F.hits);
 """
 
 
@@ -440,23 +440,23 @@ class MessageDB:
         )
         return formatted
 
-    async def global_totals_in_range(
+    async def global_hits_in_range(
         self,
         phrase_len: int,
         min_sent_len: int,
         start: datetime,
         end: datetime,
         # word: str | None = None,
-    ) -> tuple[int, int]:
-        result = await self.client.query(
-            GLOBAL_TOTALS_SELECT,
+    ) -> int:
+        result: int = await self.client.query_required_single(
+            GLOBAL_HITS_SELECT,
             phrase_len=phrase_len,
             min_sent_len=min_sent_len,
             start=start,
             end=end,
         )
 
-        return result.hits, result.authors
+        return result
 
 
 def make_edgedb_frequency(
