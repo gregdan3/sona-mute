@@ -252,19 +252,6 @@ FREQ_INSERT_CONFLICT = """
 unless conflict on (.phrase, .community, .min_sent_len, .day)
 else (update Frequency set { hits := <int64>$hits });
 """  # TODO: optionally add to FREQ_INSERT
-BULK_FREQ_INSERT = """
-WITH raw_data := <json>$data,
-FOR freq IN json_array_unpack(raw_data) union (
-    INSERT Frequency {
-        text := <str>freq['text'],
-        community := <Community><uuid>freq['community'],
-        phrase_len := <int16>freq['phrase_len'],
-        min_sent_len := <int16>freq['min_sent_len'],
-        day := <datetime>freq['day'],
-        hits := <int64>freq['hits'],
-    } unless conflict on (.text, .min_sent_len, .community, .day)
-    else (update Frequency set { hits := <int64>freq['hits'] }));
-"""
 
 
 class MessageDB:
@@ -471,10 +458,6 @@ class MessageDB:
 
     async def insert_frequency(self, freq: Frequency):
         _ = await self.client.query(FREQ_INSERT, **freq)
-
-    async def insert_frequencies(self, freqs: list[Frequency]):
-        data = json.dumps(freqs, cls=EdgeDBEncoder)
-        _ = await self.client.query(BULK_FREQ_INSERT, data=data)
 
     ###########################
     async def get_msg_date_range(self) -> tuple[datetime, datetime]:
