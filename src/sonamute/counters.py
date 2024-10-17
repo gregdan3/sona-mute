@@ -1,12 +1,13 @@
 # STL
 import json
 import itertools
-from typing import TypeVar
-from collections import Counter
+from uuid import UUID
+from typing import TypeVar, TypedDict
+from collections import Counter, defaultdict
 from collections.abc import Iterable, Generator
 
 # LOCAL
-from sonamute.db import Message, Sentence, PreMessage
+from sonamute.db import Message, Sentence, PreMessage, SortedSentence
 from sonamute.ilo import ILO
 from sonamute.file_io import TupleJSONEncoder
 from sonamute.constants import IGNORED_CONTAINERS
@@ -20,7 +21,7 @@ AVG_SENT_LEN_5X = 5 * AVG_SENT_LEN
 AVG_SENT_LEN_50X = 50 * AVG_SENT_LEN
 
 MED_SENT_LEN = 3
-MED_SENT_LEN_5X = 10
+MED_SENT_LEN_5X = 5 * MED_SENT_LEN
 MED_SENT_LEN_50X = 50 * MED_SENT_LEN
 
 
@@ -214,34 +215,48 @@ def is_nonsense(sent_len: int, sent: list[str]) -> bool:
     return (count / sent_len) >= 0.5
 
 
-def metacount_frequencies(
-    sents: Iterable[list[str]],
+class Hits(TypedDict):
+    hits: int
+    authors: set[UUID]
+
+
+Metacounter = dict[int, dict[int, dict[str, Hits]]]
+
+
+def count_frequencies(
+    sents: Iterable[SortedSentence],
     max_phrase_len: int,
     max_min_sent_len: int,
-) -> dict[int, dict[int, Counter[str]]]:
-    metacounter: dict[int, dict[int, Counter[str]]] = {
+) -> Metacounter:
+    # metacounter tracks {phrase_len: {min_sent_len: {phrase: {hits: int, authors: int}}}}
+    metacounter: Metacounter = {
         phrase_len: {
-            min_sent_len: Counter()
+            min_sent_len: defaultdict(lambda: Hits({"hits": 0, "authors": set()}))
             for min_sent_len in range(phrase_len, max_min_sent_len + 1)
         }
         for phrase_len in range(1, max_phrase_len + 1)
     }
-
     for sent in sents:
-        sent_len = len(sent)
+        words = sent["words"]
+        author = sent["author"]
+        sent_len = len(words)
         if not sent_len:
             continue
 
-        if is_nonsense(sent_len, sent):
+        if is_nonsense(sent_len, words):
             continue
 
         for phrase_len in range(1, max_phrase_len + 1):
             if sent_len < phrase_len:
                 continue
 
-            phrases = overlapping_phrases(sent, phrase_len)
+            phrases = overlapping_phrases(words, phrase_len)
             for min_sent_len in range(phrase_len, max_min_sent_len + 1):
-                if sent_len >= min_sent_len:
-                    metacounter[phrase_len][min_sent_len].update(phrases)
+                if not (sent_len >= min_sent_len):
+                    continue
+
+                for phrase in phrases:
+                    metacounter[phrase_len][min_sent_len][phrase]["hits"] += 1
+                    metacounter[phrase_len][min_sent_len][phrase]["authors"] |= {author}
 
     return metacounter
