@@ -14,17 +14,18 @@ from edgedb.errors import EdgeDBError
 from sonamute.db import (
     Message,
     Sentence,
-    Frequency,
     MessageDB,
     PreMessage,
     CommSentence,
+    EDBFrequency,
+    SortedSentence,
     make_edgedb_frequency,
     load_messagedb_from_env,
 )
 from sonamute.cli import SOURCES, menu_handler
 from sonamute.ilo import ILO
 from sonamute.utils import T, batch_iter, gather_batch, months_in_range
-from sonamute.counters import countables, metacount_frequencies
+from sonamute.counters import Metacounter, countables, count_frequencies
 from sonamute.gen_sqlite import generate_sqlite
 from sonamute.sources.generic import PlatformFetcher, is_countable
 
@@ -77,12 +78,14 @@ async def insert_raw_msg(db: MessageDB, msg: PreMessage) -> UUID | None:
         raise (e)
 
 
-def sort_by_community(tagged_sents: list[CommSentence]) -> dict[UUID, list[list[str]]]:
-    output: dict[UUID, list[list[str]]] = dict()
+def sort_by_community(
+    tagged_sents: list[CommSentence],
+) -> dict[UUID, list[SortedSentence]]:
+    output: dict[UUID, list[SortedSentence]] = dict()
     for s in tagged_sents:
         if s["community"] not in output:
             output[s["community"]] = list()
-        output[s["community"]].append(s["words"])
+        output[s["community"]].append({"words": s["words"], "author": s["author"]})
     return output
 
 
@@ -99,10 +102,12 @@ async def source_to_db(db: MessageDB, source: PlatformFetcher, batch_size: int):
     print("Final total: %s messages" % i)
 
 
-def metacounter_to_insertable_freqs(
-    metacounter: dict[int, dict[int, Counter[str]]], community: UUID, day: datetime
-) -> list[Frequency]:
-    output: list[Frequency] = list()
+def counter_to_insertable_freqs(
+    metacounter: Metacounter,
+    community: UUID,
+    day: datetime,
+) -> list[EDBFrequency]:
+    output: list[EDBFrequency] = list()
     for phrase_len, inner in metacounter.items():
         for min_sent_len, counter in inner.items():
             formatted = make_edgedb_frequency(
@@ -118,16 +123,18 @@ async def sentences_to_frequencies(db: MessageDB, batch_size: int, passing: bool
     for start, end in months_in_range(first_msg_dt, last_msg_dt):
         result = await db.counted_sents_in_range(start, end, passing)
         by_community = sort_by_community(result)
-        # TODO: remove community? ehhhhhh
+        # NOTE: community is used behind the scenes; it's probably too
+        # identifying and too much to deliver, but i can still derive useful
+        # things from it
 
         for community, sents in by_community.items():
-            metacounter = metacount_frequencies(sents, 6, 6)
-            formatted = metacounter_to_insertable_freqs(metacounter, community, start)
+            metacounter = count_frequencies(sents, 6, 6)
+            formatted = counter_to_insertable_freqs(metacounter, community, start)
             _ = await gather_batch(db.insert_frequency, formatted, batch_size)
 
 
 def source_to_frequencies(source: PlatformFetcher):
-    metacounter = metacount_frequencies(countables(source), 6, 6)
+    metacounter = count_frequencies(countables(source), 6, 6)
     return metacounter
 
 

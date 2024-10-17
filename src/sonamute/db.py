@@ -14,6 +14,7 @@ from async_lru import alru_cache
 # LOCAL
 from sonamute.utils import load_envvar
 from sonamute.file_io import EdgeDBEncoder
+from sonamute.counters import HitsData
 
 
 class KnownPlatforms(IntEnum):
@@ -87,14 +88,14 @@ class Message(PreMessage):
     sentences: list[Sentence]
 
 
-class Frequency(TypedDict):
+class EDBFrequency(TypedDict):
     text: str
     phrase_len: int
     min_sent_len: int
     community: UUID
     day: datetime
     hits: int
-    authors: int
+    authors: set[UUID]
 
 
 class SQLPhrase(TypedDict):
@@ -246,6 +247,10 @@ INSERT Frequency {
     min_sent_len := <int16>$min_sent_len,
     day := <datetime>$day,
     hits := <int64>$hits,
+    authors := (
+        SELECT Author FILTER 
+        .id in array_unpack(<array<uuid>>$author_uuids)
+    )
 }
 """
 FREQ_INSERT_CONFLICT = """
@@ -456,7 +461,7 @@ class MessageDB:
             container=message.get("container", None),
         )
 
-    async def insert_frequency(self, freq: Frequency):
+    async def insert_frequency(self, freq: EDBFrequency):
         _ = await self.client.query(FREQ_INSERT, **freq)
 
     ###########################
@@ -544,22 +549,23 @@ class MessageDB:
 
 
 def make_edgedb_frequency(
-    counter: Counter[str],
+    counter: dict[str, HitsData],
     community: UUID,
     phrase_len: int,
     min_sent_len: int,
     day: datetime,
-) -> list[Frequency]:
-    word_freq_rows: list[Frequency] = list()
-    for text, hits in counter.items():
-        result = Frequency(
+) -> list[EDBFrequency]:
+    word_freq_rows: list[EDBFrequency] = list()
+    for text, hits_data in counter.items():
+        result = EDBFrequency(
             {
                 "text": text,
                 "community": community,
                 "phrase_len": phrase_len,
                 "min_sent_len": min_sent_len,
                 "day": day,
-                "hits": hits,
+                "hits": hits_data["hits"],
+                "authors": hits_data["authors"],
             }
         )
         word_freq_rows.append(result)

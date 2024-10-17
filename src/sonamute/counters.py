@@ -215,12 +215,12 @@ def is_nonsense(sent_len: int, sent: list[str]) -> bool:
     return (count / sent_len) >= 0.5
 
 
-class Hits(TypedDict):
+class HitsData(TypedDict):
     hits: int
     authors: set[UUID]
 
 
-Metacounter = dict[int, dict[int, dict[str, Hits]]]
+Metacounter = dict[int, dict[int, dict[str, HitsData]]]
 
 
 def count_frequencies(
@@ -231,7 +231,7 @@ def count_frequencies(
     # metacounter tracks {phrase_len: {min_sent_len: {phrase: {hits: int, authors: int}}}}
     metacounter: Metacounter = {
         phrase_len: {
-            min_sent_len: defaultdict(lambda: Hits({"hits": 0, "authors": set()}))
+            min_sent_len: defaultdict(lambda: HitsData({"hits": 0, "authors": set()}))
             for min_sent_len in range(phrase_len, max_min_sent_len + 1)
         }
         for phrase_len in range(1, max_phrase_len + 1)
