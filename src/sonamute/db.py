@@ -78,8 +78,8 @@ with
   select groups {
     text := .key.text,
     hits := sum(.elements.hits),
-    authors := sum(.elements.authors)
-  } order by .total desc
+    authors := count(.elements.authors),
+  } order by .hits desc;
 """
 
 GLOBAL_HITS_SELECT = """
@@ -104,8 +104,8 @@ with
       and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
-  ) select sum(F.authors);
-"""
+  ) select count(F.authors);
+"""  # this is distinct by default. insane. love it.
 
 
 PLAT_INSERT = """
@@ -479,7 +479,6 @@ class MessageDB:
         end: datetime,
         # word: str | None = None,
     ) -> int:
-        return 0  # TODO:  STUB
         result: int = await self.client.query_required_single(
             GLOBAL_AUTHORS_SELECT,
             phrase_len=phrase_len,
