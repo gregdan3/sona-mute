@@ -5,5 +5,5 @@ WHERE
     SELECT DISTINCT
       phrase_id
     FROM
-      frequency
+      monthly
   );

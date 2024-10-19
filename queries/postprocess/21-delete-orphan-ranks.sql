@@ -1,4 +1,4 @@
-DELETE FROM ranks
+DELETE FROM yearly
 WHERE
   phrase_id NOT IN (
     SELECT

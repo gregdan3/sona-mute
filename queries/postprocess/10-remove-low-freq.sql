@@ -3,39 +3,39 @@
 WITH
   summed_hits AS (
     SELECT
-      f.phrase_id,
-      SUM(f.hits) AS total_hits
+      mo.phrase_id,
+      SUM(mo.hits) AS total_hits
     FROM
-      frequency f
-      JOIN phrase p ON f.phrase_id = p.id
+      monthly mo
+      JOIN phrase p ON mo.phrase_id = p.id
     WHERE
       /* yes this is nonsense */
       (
-        f.min_sent_len = 1
+        mo.min_sent_len = 1
         AND len = 1
       )
       OR (
-        f.min_sent_len = 2
+        mo.min_sent_len = 2
         AND len = 2
       )
       OR (
-        f.min_sent_len = 3
+        mo.min_sent_len = 3
         AND len = 3
       )
       OR (
-        f.min_sent_len = 4
+        mo.min_sent_len = 4
         AND len = 4
       )
       OR (
-        f.min_sent_len = 5
+        mo.min_sent_len = 5
         AND len = 5
       )
       OR (
-        f.min_sent_len = 6
+        mo.min_sent_len = 6
         AND len = 6
       )
       OR (
-        f.min_sent_len = 7
+        mo.min_sent_len = 7
         AND len = 7
       )
     GROUP BY
@@ -49,7 +49,7 @@ WITH
     WHERE
       total_hits < 40
   )
-DELETE FROM frequency
+DELETE FROM monthly
 WHERE
   phrase_id IN (
     SELECT

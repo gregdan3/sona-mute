@@ -51,13 +51,28 @@ class Phrase(Base):
     text = Column(Text, unique=True, nullable=False)
 
 
-class Freq(Base):
-    __tablename__ = "frequency"
+class Monthly(Base):
+    __tablename__ = "monthly"
 
     phrase_id = Column(Integer, ForeignKey("phrase.id"), nullable=False)
     # community = Column(Uuid, ForeignKey("community.id"), nullable=False)
     min_sent_len = Column(Integer, nullable=False)  # min words in source sentences
     day = Column(Integer, nullable=False)
+    hits = Column(Integer, nullable=False)
+    authors = Column(Integer, nullable=False)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("phrase_id", "min_sent_len", "day"),
+        {"sqlite_with_rowid": False},
+    )
+
+
+class Yearly(Base):
+    # NOTE: identical to Freq but with annual epochs and a special day=0 row
+    __tablename__ = "yearly"
+    phrase_id = Column(Integer, ForeignKey("phrase.id"), nullable=False)
+    min_sent_len = Column(Integer, nullable=False)
+    day = Column(Integer, nullable=True)
     hits = Column(Integer, nullable=False)
     authors = Column(Integer, nullable=False)
 
@@ -77,21 +92,6 @@ class Total(Base):
 
     __table_args__ = (
         PrimaryKeyConstraint("phrase_len", "min_sent_len", "day"),
-        {"sqlite_with_rowid": False},
-    )
-
-
-# identical to Freq but with annual epochs and a special day=0 row
-class Ranks(Base):
-    __tablename__ = "ranks"
-    phrase_id = Column(Integer, ForeignKey("phrase.id"), nullable=False)
-    min_sent_len = Column(Integer, nullable=False)
-    day = Column(Integer, nullable=True)
-    hits = Column(Integer, nullable=False)
-    authors = Column(Integer, nullable=False)
-
-    __table_args__ = (
-        PrimaryKeyConstraint("phrase_id", "min_sent_len", "day"),
         {"sqlite_with_rowid": False},
     )
 
@@ -143,7 +143,7 @@ class FreqDB:
             word_id_map[word] = id
         return word_id_map
 
-    async def insert_freq(self, data: list[SQLFrequency], table: Freq | Ranks):
+    async def insert_freq(self, data: list[SQLFrequency], table: Monthly | Yearly):
         words: list[InsertablePhrase] = [d["phrase"] for d in data]
         phrase_id_map = await self.upsert_phrase(words)
         for d in data:  # TODO: typing
@@ -189,7 +189,7 @@ async def copy_freqs(
     min_sent_len: int,
     start: datetime,
     end: datetime,
-    table: Freq | Ranks,
+    table: Monthly | Yearly,
 ):
     # all-time ranking data
     results = await edb.select_frequencies_in_range(
@@ -259,7 +259,7 @@ async def generate_sqlite(
             print(f"all time (pl {phrase_len}, msl {min_sent_len})")
             alltime_start = datetime.fromtimestamp(0, tz=UTC)
             await copy_freqs(
-                edb, sdb, phrase_len, min_sent_len, alltime_start, last_msg_dt, Ranks
+                edb, sdb, phrase_len, min_sent_len, alltime_start, last_msg_dt, Yearly
             )
 
             # per-epoch (aug 1-aug 1) ranking data
@@ -267,14 +267,16 @@ async def generate_sqlite(
                 print(
                     f"epoch {start.date()} - {end.date()} (pl {phrase_len}, msl {min_sent_len})"
                 )
-                await copy_freqs(edb, sdb, phrase_len, min_sent_len, start, end, Ranks)
+                await copy_freqs(edb, sdb, phrase_len, min_sent_len, start, end, Yearly)
 
             # periodic frequency data
             for start, end in months_in_range(first_msg_dt, last_msg_dt):
                 print(
                     f"period {start.date()} - {end.date()} (pl {phrase_len}, msl {min_sent_len})"
                 )
-                await copy_freqs(edb, sdb, phrase_len, min_sent_len, start, end, Freq)
+                await copy_freqs(
+                    edb, sdb, phrase_len, min_sent_len, start, end, Monthly
+                )
                 await copy_totals(edb, sdb, phrase_len, min_sent_len, start, end)
                 # The totals table exists to convert absolute hits to percents on the fly
 
