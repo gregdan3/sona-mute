@@ -1,4 +1,4 @@
-CREATE MIGRATION m1y7bkszq4r5c6vfqnt2gdxnfiol6gt7kt7bvvpwz6wjmu3ntyt5xq
+CREATE MIGRATION m1xuyxchpkcyuktxo76gpu3in2ecz7bczshcrhjlu76yokbzo3aooa
     ONTO initial
 {
   CREATE TYPE default::Message {
@@ -53,6 +53,20 @@ CREATE MIGRATION m1y7bkszq4r5c6vfqnt2gdxnfiol6gt7kt7bvvpwz6wjmu3ntyt5xq
           .is_counted
       );
   };
+  CREATE TYPE default::Term {
+      CREATE REQUIRED PROPERTY text: std::str;
+      CREATE CONSTRAINT std::exclusive ON (.text);
+      CREATE REQUIRED PROPERTY len: std::int16;
+      CREATE INDEX ON ((.text, .len));
+  };
+  CREATE TYPE default::Frequency {
+      CREATE REQUIRED MULTI LINK authors: default::Author;
+      CREATE REQUIRED LINK term: default::Term;
+      CREATE REQUIRED PROPERTY day: std::datetime;
+      CREATE REQUIRED PROPERTY min_sent_len: std::int16;
+      CREATE INDEX ON ((.term, .min_sent_len, .day));
+      CREATE REQUIRED PROPERTY hits: std::int64;
+  };
   CREATE TYPE default::Community {
       CREATE REQUIRED LINK platform: default::Platform;
       CREATE REQUIRED PROPERTY _id: std::bigint;
@@ -79,22 +93,8 @@ CREATE MIGRATION m1y7bkszq4r5c6vfqnt2gdxnfiol6gt7kt7bvvpwz6wjmu3ntyt5xq
           .is_counted
       );
   };
-  CREATE TYPE default::Phrase {
-      CREATE REQUIRED PROPERTY text: std::str;
-      CREATE CONSTRAINT std::exclusive ON (.text);
-      CREATE REQUIRED PROPERTY length: std::int16;
-      CREATE INDEX ON ((.text, .length));
-  };
-  CREATE TYPE default::Frequency {
+  ALTER TYPE default::Frequency {
       CREATE REQUIRED LINK community: default::Community;
-      CREATE REQUIRED LINK phrase: default::Phrase;
-      CREATE REQUIRED PROPERTY day: std::datetime;
-      CREATE REQUIRED PROPERTY min_sent_len: std::int16;
-      CREATE CONSTRAINT std::exclusive ON ((.phrase, .community, .min_sent_len, .day));
-      CREATE INDEX ON (.community);
-      CREATE INDEX ON (.phrase);
-      CREATE INDEX ON (.day);
-      CREATE INDEX ON (.min_sent_len);
-      CREATE REQUIRED PROPERTY occurrences: std::int64;
+      CREATE CONSTRAINT std::exclusive ON ((.term, .community, .min_sent_len, .day));
   };
 };

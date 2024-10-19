@@ -2,7 +2,7 @@
 import pytest
 
 # LOCAL
-from sonamute.counters import overlapping_ntuples, overlapping_phrases
+from sonamute.counters import overlapping_terms, overlapping_ntuples
 
 
 def test_overlapping_ntuples():
@@ -14,10 +14,10 @@ def test_overlapping_ntuples():
         assert row == correct_outputs[i]
 
 
-def test_overlapping_phrases():
+def test_overlapping_terms():
     ph = ["mi", "sona", "e", "toki", "pona"]
 
     correct_outputs = ["mi sona e", "sona e toki", "e toki pona"]
 
-    for i, phrase in enumerate(overlapping_phrases(ph, 3)):
-        assert phrase == correct_outputs[i]
+    for i, term in enumerate(overlapping_terms(ph, 3)):
+        assert term == correct_outputs[i]

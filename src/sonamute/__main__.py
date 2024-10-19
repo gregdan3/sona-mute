@@ -107,10 +107,10 @@ def counter_to_insertable_freqs(
     day: datetime,
 ) -> list[EDBFrequency]:
     output: list[EDBFrequency] = list()
-    for phrase_len, inner in metacounter.items():
+    for term_len, inner in metacounter.items():
         for min_sent_len, counter in inner.items():
             formatted = make_edgedb_frequency(
-                counter, community, phrase_len, min_sent_len, day
+                counter, community, term_len, min_sent_len, day
             )
             output.extend(formatted)
 

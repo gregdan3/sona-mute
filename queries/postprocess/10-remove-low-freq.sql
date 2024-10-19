@@ -1,13 +1,13 @@
-/* Remove words/phrases below a certain number of hits, here 40
+/* Remove terms below a certain number of hits, here 40
 * Partly for anonymity, but mostly for Google's reasons: the data is massive if you don't do this */
 WITH
   summed_hits AS (
     SELECT
-      mo.phrase_id,
+      mo.term_id,
       SUM(mo.hits) AS total_hits
     FROM
       monthly mo
-      JOIN phrase p ON mo.phrase_id = p.id
+      JOIN term t ON mo.term_id = t.id
     WHERE
       /* yes this is nonsense */
       (
@@ -39,11 +39,11 @@ WITH
         AND len = 7
       )
     GROUP BY
-      phrase_id
+      term_id
   ),
-  phrases_to_delete AS (
+  terms_to_delete AS (
     SELECT
-      phrase_id
+      term_id
     FROM
       summed_hits
     WHERE
@@ -51,9 +51,9 @@ WITH
   )
 DELETE FROM monthly
 WHERE
-  phrase_id IN (
+  term_id IN (
     SELECT
-      phrase_id
+      term_id
     FROM
-      phrases_to_delete
+      terms_to_delete
   );

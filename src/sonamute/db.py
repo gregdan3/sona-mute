@@ -63,9 +63,9 @@ FAILING_USER_SENTS_SELECT = USER_SENTS_SELECT % "NonTPUserSentence"
 FREQ_SELECT = """
 with
   F := (
-    select Frequency {text := .phrase.text}
+    select Frequency {text := .term.text}
     filter
-      .phrase.length = <int16>$phrase_len
+      .term.len = <int16>$term_len
       and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
@@ -87,7 +87,7 @@ with
   F := (
     select Frequency {hits}
     filter
-      .phrase.length = <int16>$phrase_len
+      .term.len = <int16>$term_len
       and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
@@ -100,7 +100,7 @@ with
   F := (
     select Frequency {authors}
     filter
-      .phrase.length = <int16>$phrase_len
+      .term.len = <int16>$term_len
       and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
@@ -158,27 +158,27 @@ INSERT Sentence {
 """
 
 FREQ_INSERT = """
-with phrase := (
-    INSERT Phrase {
+with term := (
+    INSERT Term {
         text := <str>$text,
-        length := <int16>$phrase_len,
+        len := <int16>$term_len,
     } unless conflict on (.text)
-    else (Phrase)
+    else (Term)
 )
 INSERT Frequency {
-    phrase := (SELECT phrase),
+    term := (SELECT term),
     community := <Community>$community,
     min_sent_len := <int16>$min_sent_len,
     day := <datetime>$day,
     hits := <int64>$hits,
     authors := (
-        SELECT Author FILTER 
+        SELECT Author FILTER
         .id in array_unpack(<array<uuid>>$authors)
     )
 }
 """
 FREQ_INSERT_CONFLICT = """
-unless conflict on (.phrase, .community, .min_sent_len, .day)
+unless conflict on (.term, .community, .min_sent_len, .day)
 else (update Frequency set { hits := <int64>$hits });
 """  # TODO: optionally add to FREQ_INSERT
 
@@ -427,7 +427,7 @@ class MessageDB:
 
     async def select_frequencies_in_range(
         self,
-        phrase_len: int,
+        term_len: int,
         min_sent_len: int,
         start: datetime,
         end: datetime,
@@ -440,14 +440,14 @@ class MessageDB:
 
         results = await self.client.query(
             query,
-            phrase_len=phrase_len,
+            term_len=term_len,
             min_sent_len=min_sent_len,
             start=start,
             end=end,
         )
         formatted = make_sqlite_frequency(
             results,
-            phrase_len,
+            term_len,
             min_sent_len,
             int(start.timestamp()),
         )
@@ -455,7 +455,7 @@ class MessageDB:
 
     async def global_hits_in_range(
         self,
-        phrase_len: int,
+        term_len: int,
         min_sent_len: int,
         start: datetime,
         end: datetime,
@@ -463,7 +463,7 @@ class MessageDB:
     ) -> int:
         result: int = await self.client.query_required_single(
             GLOBAL_HITS_SELECT,
-            phrase_len=phrase_len,
+            term_len=term_len,
             min_sent_len=min_sent_len,
             start=start,
             end=end,
@@ -473,7 +473,7 @@ class MessageDB:
 
     async def global_authors_in_range(
         self,
-        phrase_len: int,
+        term_len: int,
         min_sent_len: int,
         start: datetime,
         end: datetime,
@@ -481,7 +481,7 @@ class MessageDB:
     ) -> int:
         result: int = await self.client.query_required_single(
             GLOBAL_AUTHORS_SELECT,
-            phrase_len=phrase_len,
+            term_len=term_len,
             min_sent_len=min_sent_len,
             start=start,
             end=end,
@@ -493,7 +493,7 @@ class MessageDB:
 def make_edgedb_frequency(
     counter: dict[str, HitsData],
     community: UUID,
-    phrase_len: int,
+    term_len: int,
     min_sent_len: int,
     day: datetime,
 ) -> list[EDBFrequency]:
@@ -503,7 +503,7 @@ def make_edgedb_frequency(
             {
                 "text": text,
                 "community": community,
-                "phrase_len": phrase_len,
+                "term_len": term_len,
                 "min_sent_len": min_sent_len,
                 "day": day,
                 "hits": hits_data["hits"],
@@ -518,7 +518,7 @@ def make_edgedb_frequency(
 
 def make_sqlite_frequency(
     data,
-    phrase_len: int,
+    term_len: int,
     min_sent_len: int,
     day: int,
 ) -> list[SQLFrequency]:
@@ -526,9 +526,9 @@ def make_sqlite_frequency(
     output: list[SQLFrequency] = list()
     for item in data:
         d: SQLFrequency = {
-            "phrase": {
+            "term": {
                 "text": item.text,
-                "len": phrase_len,
+                "len": term_len,
             },
             "min_sent_len": min_sent_len,
             "day": day,

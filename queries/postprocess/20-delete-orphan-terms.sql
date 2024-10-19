@@ -1,9 +1,9 @@
 /* Most of disk space savings are here */
-DELETE FROM phrase
+DELETE FROM term
 WHERE
   id NOT IN (
     SELECT DISTINCT
-      phrase_id
+      term_id
     FROM
       monthly
   );

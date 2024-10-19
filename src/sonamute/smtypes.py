@@ -90,7 +90,7 @@ class Message(PreMessage):
 
 class EDBFrequency(TypedDict):
     text: str
-    phrase_len: int
+    term_len: int
     min_sent_len: int
     community: UUID
     day: datetime
@@ -99,15 +99,15 @@ class EDBFrequency(TypedDict):
 
 
 # sqlite generation
-class SQLPhrase(TypedDict):
+class SQLTerm(TypedDict):
     text: str
     len: int
 
 
 class SQLFrequency(TypedDict):
-    # NOTE: exactly one of phrase or phrase_id are required.
-    phrase: SQLPhrase
-    phrase_id: NotRequired[int]
+    # NOTE: exactly one of term or term_id are required.
+    term: SQLTerm
+    term_id: NotRequired[int]
     min_sent_len: int
     day: int
     hits: int

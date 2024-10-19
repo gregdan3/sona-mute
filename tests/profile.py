@@ -41,7 +41,7 @@ def profile_mcf():
         iterations,
         count_frequencies,
         sents=create_sentences(),
-        max_phrase_len=6,
+        max_term_len=6,
         max_min_sent_len=6,
     )
 

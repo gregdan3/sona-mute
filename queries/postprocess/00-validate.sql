@@ -3,26 +3,26 @@
 -- however, this assumption will need to be revisited if i correct it in edgedb in the
 -- future
 SELECT
-  p.text AS term,
+  t.text AS term,
   sum(mo.hits)
 FROM
   monthly mo
-  JOIN phrase p ON mo.phrase_id = p.id
+  JOIN term t ON mo.term_id = t.id
 WHERE
-  p.len = 1
+  t.len = 1
   AND mo.min_sent_len = 1
   -- AND day >= 1690848000
   -- AND day < 1722470400
 GROUP BY
-  p.text
+  t.text
 EXCEPT
 SELECT
-  p.text AS term,
+  t.text AS term,
   yr.hits
 FROM
   yearly yr
-  JOIN phrase p ON yr.phrase_id = p.id
+  JOIN term t ON yr.term_id = t.id
 WHERE
-  p.len = 1
+  t.len = 1
   AND yr.min_sent_len = 1
   AND yr.day = 0;

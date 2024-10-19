@@ -42,7 +42,7 @@ def overlapping_ntuples(iterable: Iterable[T], n: int) -> Iterable[T]:
     return zip(*teed)
 
 
-def overlapping_phrases(iterable: Iterable[str], n: int) -> Iterable[str]:
+def overlapping_terms(iterable: Iterable[str], n: int) -> Iterable[str]:
     return [" ".join(item) for item in overlapping_ntuples(iterable, n)]
 
 
@@ -167,20 +167,20 @@ def sourced_freq_counter(
     return counter
 
 
-def phrase_counter(
+def term_counter(
     sents: Iterable[list[str]],
-    phrase_len: int,
+    term_len: int,
     min_sent_len: int,
 ) -> Counter[str]:
-    # save a comparison; sentences shorter than phrase_len can't be counted anyway
-    if phrase_len > min_sent_len:
-        min_sent_len = phrase_len
+    # save a comparison; sentences shorter than term_len can't be counted anyway
+    if term_len > min_sent_len:
+        min_sent_len = term_len
 
     counter: Counter[str] = Counter()
     for sent in sents:
         if len(sent) < min_sent_len:
             continue
-        counter.update(overlapping_phrases(sent, n=phrase_len))
+        counter.update(overlapping_terms(sent, n=term_len))
     return counter
 
 
@@ -223,16 +223,16 @@ def is_nonsense(sent_len: int, sent: list[str]) -> bool:
 
 def count_frequencies(
     sents: Iterable[SortedSentence],
-    max_phrase_len: int,
+    max_term_len: int,
     max_min_sent_len: int,
 ) -> Metacounter:
-    # metacounter tracks {phrase_len: {min_sent_len: {phrase: {hits: int, authors: int}}}}
+    # metacounter tracks {term_len: {min_sent_len: {term: {hits: int, authors: int}}}}
     metacounter: Metacounter = {
-        phrase_len: {
+        term_len: {
             min_sent_len: defaultdict(lambda: HitsData({"hits": 0, "authors": set()}))
-            for min_sent_len in range(phrase_len, max_min_sent_len + 1)
+            for min_sent_len in range(term_len, max_min_sent_len + 1)
         }
-        for phrase_len in range(1, max_phrase_len + 1)
+        for term_len in range(1, max_term_len + 1)
     }
     for sent in sents:
         words = sent["words"]
@@ -244,17 +244,17 @@ def count_frequencies(
         if is_nonsense(sent_len, words):
             continue
 
-        for phrase_len in range(1, max_phrase_len + 1):
-            if sent_len < phrase_len:
+        for term_len in range(1, max_term_len + 1):
+            if sent_len < term_len:
                 continue
 
-            phrases = overlapping_phrases(words, phrase_len)
-            for min_sent_len in range(phrase_len, max_min_sent_len + 1):
+            terms = overlapping_terms(words, term_len)
+            for min_sent_len in range(term_len, max_min_sent_len + 1):
                 if not (sent_len >= min_sent_len):
                     continue
 
-                for phrase in phrases:
-                    metacounter[phrase_len][min_sent_len][phrase]["hits"] += 1
-                    metacounter[phrase_len][min_sent_len][phrase]["authors"] |= {author}
+                for term in terms:
+                    metacounter[term_len][min_sent_len][term]["hits"] += 1
+                    metacounter[term_len][min_sent_len][term]["authors"] |= {author}
 
     return metacounter

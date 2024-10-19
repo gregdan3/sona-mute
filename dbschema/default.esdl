@@ -77,17 +77,17 @@ module default {
       .message.is_counted
   );
 
-  type Phrase {
+  type Term {
     required text: str;
-    required length: int16;
+    required len: int16;
     constraint exclusive on ((.text));
-    index on ((.text, .length));
+    index on ((.text, .len));
   }
 
   type Frequency {
     # This entire table is essentially computed stats from the rest of the database.
     required community: Community;  # what community the sentence was taken from
-    required phrase: Phrase;
+    required term: Term;
     required min_sent_len: int16; # these will never be double digit
 
     required day: datetime; # the day, starting at UTC midnight, of the measured frequency
@@ -96,8 +96,8 @@ module default {
     # reportedly, the same author cannot be tracked more than once here. good.
     # required tpt: bool;  # whether the frequency was measured with toki pona sentences (score >=0.8) or all sentences
 
-    constraint exclusive on ((.phrase, .community, .min_sent_len, .day));
+    constraint exclusive on ((.term, .community, .min_sent_len, .day));
 
-    index on ((.phrase, .min_sent_len, .day));
+    index on ((.term, .min_sent_len, .day));
   }
 }

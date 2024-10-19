@@ -1,7 +1,7 @@
 with
   F := (
     select Frequency {text}
-    filter .length = 1 and .is_word
+    filter .len = 1 and .is_word
   ),
   groups := (
     group F {text, hits}
