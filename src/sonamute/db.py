@@ -78,7 +78,7 @@ with
   select groups {
     text := .key.text,
     hits := sum(.elements.hits),
-    authors := count(.elements.authors),
+    authors := count(.elements.authors filter count(.tp_sentences) >= 10),
   } order by .hits desc;
 """
 
@@ -104,7 +104,7 @@ with
       and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
-  ) select count(F.authors);
+  ) select count(F.authors filter count(.tp_sentences) >= 10);
 """  # this is distinct by default. insane. love it.
 
 
