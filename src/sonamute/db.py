@@ -57,6 +57,11 @@ SELECT %s { community := .message.community.id, author := .message.author.id, wo
 """
 PASSING_USER_SENTS_SELECT = USER_SENTS_SELECT % "TPUserSentence"
 FAILING_USER_SENTS_SELECT = USER_SENTS_SELECT % "NonTPUserSentence"
+# NOTE: we don't omit sentences based on the number of sentences spoken by the
+# author, because it would actually omit a huge amount of meaningful data.
+# i chose a line of 20 sentences in order to measure authors who are visibly
+# "invested", but for actual occurrence of terms, this would omit a fairly large
+# number of sentences- around 50k authors speak between 1 and 19 sentences.
 
 
 # needs to merge across communities
@@ -78,7 +83,7 @@ with
   select groups {
     text := .key.text,
     hits := sum(.elements.hits),
-    authors := count(.elements.authors filter count(.tp_sentences) >= 10),
+    authors := count(.elements.authors filter count(.tp_sentences) >= 20),
   } order by .hits desc;
 """
 
@@ -94,7 +99,6 @@ with
   ) select sum(F.hits);
 """
 
-# TODO: query real author numbers
 GLOBAL_AUTHORS_SELECT = """
 with
   F := (
@@ -104,7 +108,7 @@ with
       and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
-  ) select count(F.authors filter count(.tp_sentences) >= 10);
+  ) select count(F.authors filter count(.tp_sentences) >= 20);
 """  # this is distinct by default. insane. love it.
 
 
