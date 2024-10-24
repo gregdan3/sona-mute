@@ -101,14 +101,16 @@ with
 
 GLOBAL_AUTHORS_SELECT = """
 with
-  F := (
-    select Frequency {authors}
+  authors := (
+    select Frequency
     filter
       .term.len = <int16>$term_len
       and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
-  ) select count(F.authors filter count(.tp_sentences) >= 20);
+  ).authors,
+  significant_authors := (select authors filter count(.tp_sentences) >= 20),
+select count(significant_authors);
 """  # this is distinct by default. insane. love it.
 
 
