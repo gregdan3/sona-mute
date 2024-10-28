@@ -32,6 +32,8 @@ module default {
 
     constraint exclusive on ((._id, .name, .platform));
     index on ((._id, .platform));
+
+    # index on ((.tp_sentences));
   }
 
   type Sentence {
