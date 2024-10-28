@@ -75,19 +75,22 @@ with
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
   ),
-  termdata := (
+  groups := (
     group F
     using text := .term.text
     by text
-  ),
-  significant_authors := (select termdata.elements.authors filter count(.tp_sentences) >= 20),
-  select termdata {text := .key.text, hits := sum(.elements.hits), authors := count(significant_authors) } order by .hits desc;
+  )
+  select groups {
+    text := .key.text,
+    hits := sum(.elements.hits),
+    authors := count(.elements.authors filter count(.tp_sentences) >= 20),
+  } order by .hits desc;
 """
 
 GLOBAL_HITS_SELECT = """
 with
   F := (
-    select Frequency {hits}
+    select Frequency
     filter
       .term.len = <int16>$term_len
       and .min_sent_len = <int16>$min_sent_len
