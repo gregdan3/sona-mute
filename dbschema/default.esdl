@@ -82,9 +82,9 @@ module default {
 
   type Term {
     required text: str;
-    required len: int16;
+    required length: int16;
     constraint exclusive on ((.text));
-    index on ((.text, .len));
+    index on ((.text, .length));
   }
 
   type Frequency {
