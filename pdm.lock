@@ -699,7 +699,7 @@ files = [
 
 [[package]]
 name = "sonatoki"
-version = "0.9.0"
+version = "0.9.1"
 requires_python = ">=3.8"
 summary = "ilo li moku e toki li pana e sona ni: ni li toki ala toki pona?"
 groups = ["default"]
@@ -710,8 +710,8 @@ dependencies = [
     "unidecode>=1.3.6",
 ]
 files = [
-    {file = "sonatoki-0.9.0-py3-none-any.whl", hash = "sha256:e329f9c86a5938b360a8709d4475d497b67ffa66d4153a5837ecf714e761c63d"},
-    {file = "sonatoki-0.9.0.tar.gz", hash = "sha256:ed7584411f5e4bd464a41ed8188ed80dccc5172c1da5c47299105bc119eef3bc"},
+    {file = "sonatoki-0.9.1-py3-none-any.whl", hash = "sha256:96dcf924c3d1906542544762b17520073262f88b943d57414f9dd50be3a3faa7"},
+    {file = "sonatoki-0.9.1.tar.gz", hash = "sha256:b6dbdc06648ad8b159ac4ffa6da46fe8dc60a81e281e4eb368ff1eb525d7df1a"},
 ]
 
 [[package]]
