@@ -84,7 +84,7 @@ with
     text := .key.text,
     hits := sum(.elements.hits),
     authors := count(.elements.authors),
-  } order by .hits desc;
+  };
 """
 #  filter count(.tp_sentences) >= 20
 
