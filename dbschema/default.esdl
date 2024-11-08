@@ -85,6 +85,7 @@ module default {
     required len: int16;
     constraint exclusive on ((.text));
     index on ((.text, .len));
+    index on ((.len));
   }
 
   type Frequency {
@@ -102,5 +103,9 @@ module default {
     constraint exclusive on ((.term, .community, .min_sent_len, .day));
 
     index on ((.term, .min_sent_len, .day));
+    index on ((.min_sent_len, .day));
+    index on ((.term));
+    index on ((.min_sent_len));
+    index on ((.day));
   }
 }
