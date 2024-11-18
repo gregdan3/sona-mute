@@ -29,13 +29,6 @@ license = {text = "AGPL-3.0-or-later"}
 distribution = true
 
 
-[tool.pdm.dev-dependencies]
-dev = [
-    "snakeviz>=2.2.0",
-    "ipython>=8.26.0",
-    "pytest>=8.2.2",
-    "pytest-asyncio>=0.23.7",
-]
 [tool.isort]
 length_sort = "1"
 profile = "black"
@@ -55,3 +48,12 @@ executionEnvironments = [{ root = "." }]
 [tool.ruff]
 line-length = 88
 src = ["src"]
+
+[dependency-groups]
+dev = [
+    "snakeviz>=2.2.0",
+    "ipython>=8.26.0",
+    "pytest>=8.2.2",
+    "pytest-asyncio>=0.23.7",
+    "yappi>=1.6.10",
+]
