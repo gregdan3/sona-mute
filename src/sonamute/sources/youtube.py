@@ -223,13 +223,26 @@ class YouTubeFetcher(FileFetcher):
         # since authors tend to draw like-minded audiences
         # Communities do not figure into most analysis anyway,
         # so this is a convention rather than meaningful.
-        community_id = fetch_user_id(raw_src, "channel_id")
-        community_name = fetch_video_author_name(raw_src)
 
+        # community_id = fetch_user_id(raw_src, "channel_id")
+        # community_name = fetch_video_author_name(raw_src)
+        # return Community(
+        #     {
+        #         "_id": community_id,
+        #         "name": community_name,
+        #         "platform": self.platform,
+        #     }
+        # )
+
+        # NOTE: Youtube doesn't have any "communities"
+        # So I'm forced to create one big fake community
+        # You could argue that YouTube as a community has changed over time and
+        # make reasonable divisions over time,
+        # but they would be arbitrary with respect to the work I'm doing
         return Community(
             {
-                "_id": community_id,
-                "name": community_name,
+                "_id": self.platform["_id"],
+                "name": self.platform["name"],
                 "platform": self.platform,
             }
         )
