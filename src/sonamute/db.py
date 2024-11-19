@@ -83,10 +83,9 @@ with
   select groups {
     text := .key.text,
     hits := sum(.elements.hits),
-    authors := count(.elements.authors),
+    authors := count(.elements.authors filter .num_tp_sentences >= 20),
   };
 """
-#  filter count(.tp_sentences) >= 20
 
 GLOBAL_HITS_SELECT = """
 with
@@ -110,9 +109,8 @@ with
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
   )
-  select count(F.authors);
+  select count(F.authors filter .num_tp_sentences >= 20);
 """  # this is distinct by default. insane. love it.
-#  filter count(.tp_sentences) >= 20
 
 PLAT_INSERT = """
 select (
