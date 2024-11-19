@@ -100,6 +100,9 @@ async def source_to_db(db: MessageDB, source: PlatformFetcher, batch_size: int):
         if i % (batch_size * 100) == 0:
             print("Processed %s messages" % i)
 
+    print("Calculating tpt sentences per author...")
+    await db.update_author_tpt_sents()
+
     print("Final total: %s messages" % i)
 
 

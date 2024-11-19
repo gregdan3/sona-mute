@@ -186,6 +186,11 @@ unless conflict on (.term, .community, .min_sent_len, .day)
 else (update Frequency set { hits := <int64>$hits });
 """  # TODO: optionally add to FREQ_INSERT
 
+UPDATE_NUM_SENTS = """
+update Author
+    set { num_tp_sentences := (select count(.<author[is Message].tp_sentences)) }
+"""
+
 
 class MessageDB:
     client: AsyncIOClient
@@ -492,6 +497,9 @@ class MessageDB:
         )
 
         return result
+
+    async def update_author_tpt_sents(self) -> None:
+        _ = await self.client.execute(UPDATE_NUM_SENTS)
 
 
 def make_edgedb_frequency(
