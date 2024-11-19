@@ -137,10 +137,10 @@ class FreqDB:
             result = await s.execute(stmt)
             await s.commit()
 
-        word_id_map: dict[str, int] = dict()
-        for word, id in result:
-            word_id_map[word] = id
-        return word_id_map
+        term_id_map: dict[str, int] = dict()
+        for term, id in result:
+            term_id_map[term] = id
+        return term_id_map
 
     async def insert_freq(self, data: list[SQLFrequency], table: Monthly | Yearly):
         words: list[InsertableTerm] = [d["term"] for d in data]
