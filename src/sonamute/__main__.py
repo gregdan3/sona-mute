@@ -1,6 +1,5 @@
 # STL
 import os
-import re
 import json
 import asyncio
 import argparse
@@ -9,7 +8,6 @@ from datetime import datetime
 from collections import Counter
 
 # PDM
-import yappi
 from edgedb.errors import EdgeDBError
 
 # LOCAL
@@ -195,21 +193,7 @@ async def amain(argv: argparse.Namespace):
         max_date = actions["sqlite"]["max_date"]
 
         print(f"Dumping frequency data to {dbpath}")
-
-        yappi.set_clock_type("cpu")
-        yappi.start()
         await generate_sqlite(db, dbpath, trimmed_filename, min_date, max_date)
-        yappi.stop()
-
-        info = yappi.get_func_stats()
-        info._save_as_PSTAT(
-            re.sub(
-                "[^a-z0-9._-]",
-                ".",
-                f"profile_async_{datetime.now()}_gen_sqlite.pstat",
-                flags=re.IGNORECASE,
-            )
-        )
 
 
 def main(argv: argparse.Namespace):
