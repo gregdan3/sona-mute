@@ -1,4 +1,4 @@
-CREATE MIGRATION m1xuyxchpkcyuktxo76gpu3in2ecz7bczshcrhjlu76yokbzo3aooa
+CREATE MIGRATION m1ajmneitebkhvqbbqgxipk4mxhf7mkkjuduqte7wsmb6dnpibcvva
     ONTO initial
 {
   CREATE TYPE default::Message {
@@ -41,9 +41,15 @@ CREATE MIGRATION m1xuyxchpkcyuktxo76gpu3in2ecz7bczshcrhjlu76yokbzo3aooa
       CREATE INDEX ON ((._id, .platform));
       CREATE REQUIRED PROPERTY is_bot: std::bool;
       CREATE REQUIRED PROPERTY is_webhook: std::bool;
+      CREATE PROPERTY num_tp_sentences: std::int64;
   };
   ALTER TYPE default::Message {
       CREATE REQUIRED LINK author: default::Author;
+      CREATE MULTI LINK tp_sentences := (SELECT
+          .<message[IS default::Sentence]
+      FILTER
+          (.score >= 0.8)
+      );
   };
   ALTER TYPE default::Author {
       CREATE MULTI LINK messages := (.<author[IS default::Message]);
@@ -52,6 +58,18 @@ CREATE MIGRATION m1xuyxchpkcyuktxo76gpu3in2ecz7bczshcrhjlu76yokbzo3aooa
       FILTER
           .is_counted
       );
+      ALTER PROPERTY num_tp_sentences {
+          CREATE REWRITE
+              INSERT 
+              USING (SELECT
+                  std::count(.<author[IS default::Message].tp_sentences)
+              );
+          CREATE REWRITE
+              UPDATE 
+              USING (SELECT
+                  std::count(.<author[IS default::Message].tp_sentences)
+              );
+      };
   };
   CREATE TYPE default::Term {
       CREATE REQUIRED PROPERTY text: std::str;
@@ -64,7 +82,7 @@ CREATE MIGRATION m1xuyxchpkcyuktxo76gpu3in2ecz7bczshcrhjlu76yokbzo3aooa
       CREATE REQUIRED LINK term: default::Term;
       CREATE REQUIRED PROPERTY day: std::datetime;
       CREATE REQUIRED PROPERTY min_sent_len: std::int16;
-      CREATE INDEX ON ((.term, .min_sent_len, .day));
+      CREATE INDEX ON ((.day, .min_sent_len, .term));
       CREATE REQUIRED PROPERTY hits: std::int64;
   };
   CREATE TYPE default::Community {
@@ -79,11 +97,6 @@ CREATE MIGRATION m1xuyxchpkcyuktxo76gpu3in2ecz7bczshcrhjlu76yokbzo3aooa
       CREATE CONSTRAINT std::exclusive ON ((._id, .community));
       CREATE INDEX ON ((._id, .community));
       CREATE MULTI LINK sentences := (.<message[IS default::Sentence]);
-      CREATE MULTI LINK tp_sentences := (SELECT
-          .<message[IS default::Sentence]
-      FILTER
-          (.score >= 0.8)
-      );
   };
   ALTER TYPE default::Community {
       CREATE MULTI LINK messages := (.<community[IS default::Message]);
