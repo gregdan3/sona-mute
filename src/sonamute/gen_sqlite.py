@@ -1,140 +1,134 @@
 # STL
 import os
 import shutil
-from typing import Any, TypedDict
+from typing import Any, Literal
 from datetime import UTC, datetime
 from contextlib import asynccontextmanager
 
 # PDM
-from sqlalchemy import (
-    Text,
-    Column,
-    Result,
-    Integer,
-    ForeignKey,
-    TextClause,
-    PrimaryKeyConstraint,
-    text,
-)
-from sqlalchemy.orm import declarative_base
-from sqlalchemy.ext.asyncio import (
-    AsyncEngine,
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
-from sqlalchemy.dialects.sqlite import Insert as insert
+import aiosqlite
+from aiosqlite.core import Connection
+from aiosqlite.cursor import Cursor
 
 # LOCAL
-from sonamute.db import MessageDB, SQLFrequency
+from sonamute.db import MessageDB
 from sonamute.utils import batch_iter, epochs_in_range, months_in_range
+from sonamute.smtypes import SQLTerm, SQLFrequency
 
 # we insert 4 items per row; max sql variables is 999 for, reasons,
 SQLITE_BATCH = 249
 SQLITE_POSTPROCESS = "queries/postprocess/"
 
-Base = declarative_base()
+FreqTable = Literal["monthly"] | Literal["yearly"]
 
 
-# class Community(Base):
-#     __tablename__ = "community"
-#     id: Column(Uuid, primary_key=True, nullable=False)
-#     name: Column(Text, nullable=False)
+async def configure_sqlite(conn: aiosqlite.Connection):
+    _ = await conn.execute("PRAGMA foreign_keys = ON;")
+    _ = await conn.execute("PRAGMA synchronous = OFF;")
+    _ = await conn.execute("PRAGMA journal_mode = MEMORY;")
+    _ = await conn.execute("PRAGMA cache_size = 20000;")
+    _ = await conn.execute("PRAGMA page_size = 65536;")
 
-
-class Term(Base):
-    __tablename__ = "term"
-
-    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
-    len = Column(Integer, nullable=False)
-    text = Column(Text, unique=True, nullable=False)
-
-
-class Monthly(Base):
-    __tablename__ = "monthly"
-
-    term_id = Column(Integer, ForeignKey("term.id"), nullable=False)
-    # community = Column(Uuid, ForeignKey("community.id"), nullable=False)
-    min_sent_len = Column(Integer, nullable=False)  # min words in source sentences
-    day = Column(Integer, nullable=False)
-    hits = Column(Integer, nullable=False)
-    authors = Column(Integer, nullable=False)
-
-    __table_args__ = (
-        PrimaryKeyConstraint("term_id", "min_sent_len", "day"),
-        {"sqlite_with_rowid": False},
+    _ = await conn.execute(
+        """
+    CREATE TABLE IF NOT EXISTS term (
+        id INTEGER NOT NULL,
+        len INTEGER NOT NULL,
+        text TEXT NOT NULL,
+        PRIMARY KEY (id),
+        UNIQUE (text)
+    );
+    """
     )
 
-
-class Yearly(Base):
-    # NOTE: identical to Freq but with annual epochs and a special day=0 row
-    __tablename__ = "yearly"
-    term_id = Column(Integer, ForeignKey("term.id"), nullable=False)
-    min_sent_len = Column(Integer, nullable=False)
-    day = Column(Integer, nullable=True)
-    hits = Column(Integer, nullable=False)
-    authors = Column(Integer, nullable=False)
-
-    __table_args__ = (
-        PrimaryKeyConstraint("term_id", "min_sent_len", "day"),
-        {"sqlite_with_rowid": False},
+    _ = await conn.execute(
+        """
+    CREATE TABLE IF NOT EXISTS monthly (
+        term_id INTEGER NOT NULL,
+        min_sent_len INTEGER NOT NULL,
+        day INTEGER NOT NULL,
+        hits INTEGER NOT NULL,
+        authors INTEGER NOT NULL,
+        PRIMARY KEY (term_id, min_sent_len, day),
+        FOREIGN KEY (term_id) REFERENCES term(id)
+    ) WITHOUT ROWID;
+    """
     )
 
-
-class Total(Base):
-    __tablename__ = "total"
-    day = Column(Integer, nullable=False)
-    term_len = Column(Integer, nullable=False)
-    min_sent_len = Column(Integer, nullable=False)
-    hits = Column(Integer, nullable=False)
-    authors = Column(Integer, nullable=False)
-
-    __table_args__ = (
-        PrimaryKeyConstraint("term_len", "min_sent_len", "day"),
-        {"sqlite_with_rowid": False},
+    _ = await conn.execute(
+        """
+    CREATE TABLE IF NOT EXISTS yearly (
+        term_id INTEGER NOT NULL,
+        min_sent_len INTEGER NOT NULL,
+        day INTEGER,
+        hits INTEGER NOT NULL,
+        authors INTEGER NOT NULL,
+        PRIMARY KEY (term_id, min_sent_len, day),
+        FOREIGN KEY (term_id) REFERENCES term(id)
+    ) WITHOUT ROWID;
+    """
     )
 
+    _ = await conn.execute(
+        """
+    CREATE TABLE IF NOT EXISTS total (
+        day INTEGER NOT NULL,
+        term_len INTEGER NOT NULL,
+        min_sent_len INTEGER NOT NULL,
+        hits INTEGER NOT NULL,
+        authors INTEGER NOT NULL,
+        PRIMARY KEY (day, term_len, min_sent_len)
+    ) WITHOUT ROWID;
+    """
+    )
 
-class InsertableTerm(TypedDict):
-    text: str
-    len: int
+    await conn.commit()
 
 
 class FreqDB:
-    engine: AsyncEngine
-    sgen: async_sessionmaker[AsyncSession]
-
     def __init__(self, database_file: str):
-        self.engine = create_async_engine(f"sqlite+aiosqlite:///{database_file}")
-        self.sgen = async_sessionmaker(bind=self.engine, expire_on_commit=True)
+        self.db_file: str = database_file
+        self.conn: Connection | None = None
 
     async def __ainit__(self):
-        async with self.engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+        async with self.session() as s:
+            await configure_sqlite(s)
 
     async def close(self):
-        await self.engine.dispose()
+        if self.conn:
+            await self.conn.close()
 
     @asynccontextmanager
     async def session(self):
-        async with self.sgen() as s:
-            yield s
+        if not self.conn:
+            self.conn = await aiosqlite.connect(self.db_file)
+        yield self.conn
 
-    async def execute(self, query: TextClause) -> Result[Any]:
+    async def execute(self, query: str) -> Cursor:
         async with self.session() as s:
             result = await s.execute(query)
             await s.commit()
         return result
 
-    async def upsert_term(self, data: list[InsertableTerm]):
+    async def upsert_term(self, data: list[SQLTerm]):
+        result: list[tuple[str, int]] = []
         async with self.session() as s:
-            stmt = insert(Term).values(data)
-            stmt = stmt.on_conflict_do_update(
-                index_elements=["text"],
-                set_={"text": stmt.excluded.text},
-            ).returning(Term.text, Term.id)
-            # Can't `do_nothing` because that would return no rows
-            result = await s.execute(stmt)
+            stmt = """
+            INSERT INTO term (len, text) VALUES (:len, :text)
+            ON CONFLICT (text) DO UPDATE SET len = len
+            RETURNING text, id
+            """
+            # cursor = await s.executemany(stmt, data)
+            # while row := await cursor.fetchone():
+            #     rows.append(row)
+
+            # result = await cursor.fetchone()
+            # rows.append(result)
+            # executemany doesn't support returning..
+            for d in data:
+                cursor = await s.execute(stmt, d)
+                returned = await cursor.fetchone()
+                result.append(returned)
             await s.commit()
 
         term_id_map: dict[str, int] = dict()
@@ -142,16 +136,19 @@ class FreqDB:
             term_id_map[term] = id
         return term_id_map
 
-    async def insert_freq(self, data: list[SQLFrequency], table: Monthly | Yearly):
-        words: list[InsertableTerm] = [d["term"] for d in data]
-        term_id_map = await self.upsert_term(words)
+    async def insert_freq(self, data: list[SQLFrequency], table: FreqTable):
+        terms = [d["term"] for d in data]
+        term_id_map = await self.upsert_term(terms)
         for d in data:
             d["term_id"] = term_id_map[d["term"]["text"]]
             d.pop("term")  # TODO: typing
 
         async with self.session() as s:
-            stmt = insert(table).values(data)
-            _ = await s.execute(stmt)
+            stmt = f"""
+            INSERT INTO {table} (term_id, min_sent_len, day, hits, authors)
+            VALUES (:term_id, :min_sent_len, :day, :hits, :authors)
+            """
+            _ = await s.executemany(stmt, parameters=data)
             await s.commit()
 
     async def insert_total(
@@ -164,14 +161,20 @@ class FreqDB:
         # TODO: should there be an object here
     ):
         async with self.session() as s:
-            stmt = insert(Total).values(
-                term_len=term_len,
-                min_sent_len=min_sent_len,
-                day=day,
-                hits=hits,
-                authors=authors,
+            stmt = """
+            INSERT INTO total (day, term_len, min_sent_len, hits, authors)
+            VALUES (:day, :term_len, :min_sent_len, :hits, :authors)
+            """
+            _ = await s.execute(
+                stmt,
+                {
+                    "day": day,
+                    "term_len": term_len,
+                    "min_sent_len": min_sent_len,
+                    "hits": hits,
+                    "authors": authors,
+                },
             )
-            _ = await s.execute(stmt)
             await s.commit()
 
 
@@ -188,7 +191,7 @@ async def copy_freqs(
     min_sent_len: int,
     start: datetime,
     end: datetime,
-    table: Monthly | Yearly,
+    table: FreqTable,
 ):
     # all-time ranking data
     results = await edb.select_frequencies_in_range(
@@ -227,11 +230,11 @@ async def copy_totals(
 
     start_ts = int(start.timestamp())
     await sdb.insert_total(
-        term_len,
-        min_sent_len,
-        start_ts,
-        total_hits,
-        total_authors,
+        term_len=term_len,
+        min_sent_len=min_sent_len,
+        day=start_ts,
+        hits=total_hits,
+        authors=total_authors,
     )
 
 
@@ -258,22 +261,46 @@ async def generate_sqlite(
             print(f"all time (pl {term_len}, msl {min_sent_len})")
             alltime_start = datetime.fromtimestamp(0, tz=UTC)
             await copy_freqs(
-                edb, sdb, term_len, min_sent_len, alltime_start, last_msg_dt, Yearly
+                edb,
+                sdb,
+                term_len,
+                min_sent_len,
+                alltime_start,
+                last_msg_dt,
+                "yearly",
             )
 
             # per-epoch (aug 1-aug 1) ranking data
+            # TODO: what if the period is smaller than or significantly offset
+            # from the epochs
             for start, end in epochs_in_range(first_msg_dt, last_msg_dt):
                 print(
                     f"epoch {start.date()} - {end.date()} (pl {term_len}, msl {min_sent_len})"
                 )
-                await copy_freqs(edb, sdb, term_len, min_sent_len, start, end, Yearly)
+                await copy_freqs(
+                    edb,
+                    sdb,
+                    term_len,
+                    min_sent_len,
+                    start,
+                    end,
+                    "yearly",
+                )
 
             # periodic frequency data
             for start, end in months_in_range(first_msg_dt, last_msg_dt):
                 print(
                     f"period {start.date()} - {end.date()} (pl {term_len}, msl {min_sent_len})"
                 )
-                await copy_freqs(edb, sdb, term_len, min_sent_len, start, end, Monthly)
+                await copy_freqs(
+                    edb,
+                    sdb,
+                    term_len,
+                    min_sent_len,
+                    start,
+                    end,
+                    "monthly",
+                )
                 await copy_totals(edb, sdb, term_len, min_sent_len, start, end)
                 # The totals table exists to convert absolute hits to percents on the fly
 
@@ -287,5 +314,5 @@ async def generate_sqlite(
             file = os.path.join(root, file)
             print(f"Executing {file}")
             with open(file, "r") as f:
-                query = text(f.read())
+                query = f.read()
             _ = await sdb.execute(query)
