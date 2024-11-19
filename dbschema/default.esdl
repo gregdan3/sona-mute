@@ -28,12 +28,14 @@ module default {
 
     multi messages := .<author[is Message];
     multi user_messages := (select .<author[is Message] filter .is_counted);
-    multi tp_sentences := (select .<author[is Message].tp_sentences);
+    num_tp_sentences: int64 {
+      rewrite insert, update using (
+        (select count(.<author[is Message].tp_sentences))
+      )
+    };
 
     constraint exclusive on ((._id, .name, .platform));
     index on ((._id, .platform));
-
-    # index on ((.tp_sentences));
   }
 
   type Sentence {
