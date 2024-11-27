@@ -104,5 +104,6 @@ module default {
     constraint exclusive on ((.term, .community, .min_sent_len, .day));
 
     index on ((.day, .min_sent_len, .term));
+    index on ((.day));
   }
 }
