@@ -316,3 +316,4 @@ async def generate_sqlite(
             with open(file, "r") as f:
                 query = f.read()
             _ = await sdb.execute(query)
+    await sdb.close()
