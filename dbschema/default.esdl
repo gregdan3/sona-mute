@@ -85,8 +85,12 @@ module default {
   type Term {
     required text: str;
     required len: int16;
+    total_hits: int64 {
+      default := 0;
+    };
+
     constraint exclusive on ((.text));
-    index on ((.text, .len));
+    index on ((.text, .len, .total_hits));
   }
 
   type Frequency {
@@ -105,5 +109,37 @@ module default {
 
     index on ((.day, .min_sent_len, .term));
     index on ((.day));
+
+    trigger update_total_hits after insert for each
+    when (__new__.min_sent_len = __new__.term.len)
+    do (
+      update Term
+      filter .id = __new__.term.id
+      set {
+        total_hits := .total_hits + __new__.hits
+      }
+    );
+
+    # trigger update_global_freqs after insert for each
+    # do (
+    #   insert GFrequency {
+    #     total_hits := .total_hits + __new__.hits
+    #   }
+    # );
   }
+
+  # type GFrequency {
+  #   required term: Term;
+  #   required min_sent_len: int16; # these will never be double digit
+
+  #   required day: datetime; # the day, starting at UTC midnight, of the measured frequency
+  #   required hits: int64;
+  #   required multi authors: Author;
+
+  #   constraint exclusive on ((.term, .min_sent_len, .day));
+
+  #   index on ((.day, .min_sent_len, .term));
+  #   index on ((.day));
+  # }
+
 }
