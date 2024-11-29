@@ -164,6 +164,14 @@ INSERT Sentence {
 }
 """
 
+TERM_INSERT = """
+INSERT Term {
+    text := <str>$text,
+    len := <int16>$term_len,
+} unless conflict on (.text)
+else (Term)
+"""
+
 FREQ_INSERT = """
 with term := (
     INSERT Term {
