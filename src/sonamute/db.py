@@ -78,11 +78,11 @@ with
   ),
   groups := (
     group F
-    using text := .term.text
-    by text
+    using term := .term
+    by term
   )
   select groups {
-    text := .key.text,
+    text := .key.term.text,
     hits := sum(.elements.hits),
     authors := count(.elements.authors filter .num_tp_sentences >= 20),
   };
