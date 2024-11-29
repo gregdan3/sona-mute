@@ -70,7 +70,7 @@ with
   F := (
     select Frequency
     filter
-      .term.total_hits > 40
+      .term.total_hits >= 40
       and .term.len = <int16>$term_len
       and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
@@ -93,7 +93,7 @@ with
   F := (
     select Frequency
     filter
-      .term.total_hits > 40
+      .term.total_hits >= 40
       and .term.len = <int16>$term_len
       and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
@@ -106,7 +106,7 @@ with
   F := (
     select Frequency
     filter
-      .term.total_hits > 40
+      .term.total_hits >= 40
       and .term.len = <int16>$term_len
       and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
