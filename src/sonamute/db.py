@@ -173,7 +173,7 @@ with term := (
     else (Term)
 )
 INSERT Frequency {
-    term := (SELECT term),
+    term := term,
     community := <Community>$community,
     min_sent_len := <int16>$min_sent_len,
     day := <datetime>$day,
