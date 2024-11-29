@@ -194,6 +194,14 @@ update Author
     set { num_tp_sentences := (select count(.<author[is Message].tp_sentences)) }
 """
 
+TERM_HITS_UPDATE = """
+update Term
+filter .text = <str>$text
+set {
+    total_hits := .total_hits + <int64>$hits
+}
+"""
+
 
 class MessageDB:
     client: AsyncIOClient
@@ -399,6 +407,12 @@ class MessageDB:
 
     async def insert_frequency(self, freq: EDBFrequency):
         _ = await self.client.query(FREQ_INSERT, **freq)
+        if freq["term_len"] == freq["min_sent_len"]:
+            _ = await self.client.query(
+                TERM_HITS_UPDATE,
+                text=freq["text"],
+                hits=freq["hits"],
+            )
 
     ###########################
     async def get_msg_date_range(self) -> tuple[datetime, datetime]:

@@ -110,15 +110,15 @@ module default {
     index on ((.day, .min_sent_len, .term));
     index on ((.day));
 
-    trigger update_total_hits after insert for each
-    when (__new__.min_sent_len = __new__.term.len)
-    do (
-      update Term
-      filter .id = __new__.term.id
-      set {
-        total_hits := .total_hits + __new__.hits
-      }
-    );
+    # trigger update_total_hits after insert for each
+    # when (__new__.min_sent_len = __new__.term.len)
+    # do (
+    #   update Term
+    #   filter .id = __new__.term.id
+    #   set {
+    #     total_hits := .total_hits + __new__.hits
+    #   }
+    # );
 
     # trigger update_global_freqs after insert for each
     # do (
