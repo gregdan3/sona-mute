@@ -132,7 +132,7 @@ select (
     } unless conflict on (._id, .platform)
 else Community)"""
 
-AUTH_INSERT = """
+AUTHOR_INSERT = """
 select (
     INSERT Author {
         _id := <bigint>$_id,
@@ -265,7 +265,7 @@ class MessageDB:
         platform: UUID,
     ) -> UUID:
         result = await self.client.query_required_single(
-            query=AUTH_INSERT,
+            query=AUTHOR_INSERT,
             _id=_id,
             name=name,
             platform=platform,
