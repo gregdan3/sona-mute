@@ -29,11 +29,8 @@ module default {
     multi messages := .<author[is Message];
     multi user_messages := (select .<author[is Message] filter .is_counted);
     num_tp_sentences: int64 {
-      rewrite insert, update using (
-        (select count(.<author[is Message].tp_sentences))
-      )
+      default := 0;
     };
-
     constraint exclusive on ((._id, .name, .platform));
     index on ((._id, .platform));
   }
