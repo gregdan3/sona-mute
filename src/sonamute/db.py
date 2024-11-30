@@ -116,44 +116,40 @@ with
 """  # this is distinct by default. insane. love it.
 
 PLAT_INSERT = """
-select (
-    INSERT Platform {
-        _id := <int16>$_id,
-        name := <str>$name,
-    } unless conflict on (._id)
-else Platform)"""
+INSERT Platform {
+    _id := <int16>$_id,
+    name := <str>$name,
+} unless conflict on (._id)
+else Platform"""
 
 COMM_INSERT = """
-select (
-    INSERT Community {
-        _id := <bigint>$_id,
-        name := <str>$name,
-        platform := <Platform>$platform,
-    } unless conflict on (._id, .platform)
-else Community)"""
+INSERT Community {
+    _id := <bigint>$_id,
+    name := <str>$name,
+    platform := <Platform>$platform,
+} unless conflict on (._id, .platform)
+else Community"""
 
 AUTHOR_INSERT = """
-select (
-    INSERT Author {
-        _id := <bigint>$_id,
-        name := <optional str>$name,
-        platform := <Platform>$platform,
-        is_bot := <bool>$is_bot,
-        is_webhook := <bool>$is_webhook,
-    } unless conflict on (._id, .name, .platform)
-else Author)"""
+INSERT Author {
+    _id := <bigint>$_id,
+    name := <optional str>$name,
+    platform := <Platform>$platform,
+    is_bot := <bool>$is_bot,
+    is_webhook := <bool>$is_webhook,
+} unless conflict on (._id, .name, .platform)
+else Author"""
 
 MSG_INSERT = """
-select (
-    INSERT Message {
-        _id := <bigint>$_id,
-        community := <Community>$community,
-        container := <bigint>$container,
-        author := <Author>$author,
-        postdate := <std::datetime>$postdate,
-        content := <str>$content,
-        is_counted := <bool>$is_counted
-    } unless conflict on (._id, .community))
+INSERT Message {
+    _id := <bigint>$_id,
+    community := <Community>$community,
+    container := <bigint>$container,
+    author := <Author>$author,
+    postdate := <std::datetime>$postdate,
+    content := <str>$content,
+    is_counted := <bool>$is_counted
+}
 """
 
 SENT_INSERT = """
