@@ -88,6 +88,7 @@ module default {
 
     constraint exclusive on ((.text));
     index on ((.text, .len, .total_hits));
+    index on (.total_hits);
   }
 
   type Frequency {
