@@ -99,6 +99,9 @@ module default {
 
     required day: datetime; # the day, starting at UTC midnight, of the measured frequency
     required hits: int64;
+    # required multi communities: Community; # all communities the term appeared in
+    # NOTE: if i did this, i would save a ton of space but not be able to fetch
+    # data on a per-community basis
     required multi authors: Author;
     # reportedly, the same author cannot be tracked more than once here. good.
     # required tpt: bool;  # whether the frequency was measured with toki pona sentences (score >=0.8) or all sentences

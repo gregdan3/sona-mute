@@ -188,6 +188,12 @@ INSERT Frequency {
     )
 }
 """
+# community := (
+#     SELECT Community FILTER
+#     .id in array_unpack(<array<uuid>>$communities)
+# ),
+
+
 FREQ_INSERT_CONFLICT = """
 unless conflict on (.term, .community, .min_sent_len, .day)
 else (update Frequency set { hits := <int64>$hits });
