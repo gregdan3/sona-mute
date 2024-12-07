@@ -68,7 +68,7 @@ FAILING_USER_SENTS_SELECT = USER_SENTS_SELECT % "NonTPUserSentence"
 FREQ_SELECT = """
 with
   F := (
-    select Frequency
+    select Frequency {text := .term.text}
     filter
       .term.total_hits >= 40
       and .term.len = <int16>$term_len
@@ -78,11 +78,11 @@ with
   ),
   groups := (
     group F
-    using term := .term
-    by term
+    using text := .text
+    by text
   )
   select groups {
-    text := .key.term.text,
+    text := .key.text,
     hits := sum(.elements.hits),
     authors := count(.elements.authors filter .num_tp_sentences >= 20),
   };
