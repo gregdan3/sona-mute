@@ -84,8 +84,12 @@ with
   select groups {
     text := .key.text,
     hits := sum(.elements.hits),
-    authors := count(.elements.authors filter .num_tp_sentences >= 20),
+    authors := .elements.authors,
   };
+"""
+
+AUTHOR_IS_COUNTED_SELECT = """
+    select Author filter .id = <std::uuid>$author and .num_tp_sentences >= 20;
 """
 
 GLOBAL_HITS_SELECT = """
@@ -112,7 +116,7 @@ with
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
   )
-  select count(F.authors filter .num_tp_sentences >= 20);
+  select F.authors;
 """  # this is distinct by default. insane. love it.
 
 PLAT_INSERT = """
@@ -461,6 +465,24 @@ class MessageDB:
             output.append(out)
         return output
 
+    @alru_cache(maxsize=None)
+    async def is_author_counted(self, author: UUID) -> bool:
+        result = await self.client.query_single(
+            AUTHOR_IS_COUNTED_SELECT,
+            author=author,
+        )
+        return not not result
+
+    async def count_nontrivial_authors(self, authors: list[UUID]) -> int:
+        # NOTE: I tried asyncio.gather. it's genuinely slower, but the
+        # difference is tiny
+        counted_authors = 0
+        for author in authors:
+            counted = await self.is_author_counted(author.id)
+            if counted:
+                counted_authors += 1
+        return counted_authors
+
     async def select_frequencies_in_range(
         self,
         term_len: int,
@@ -481,13 +503,19 @@ class MessageDB:
             start=start,
             end=end,
         )
-        formatted = make_sqlite_frequency(
-            results,
-            term_len,
-            min_sent_len,
-            int(start.timestamp()),
-        )
-        return formatted
+        results: list[SQLFrequency] = list()
+        for result in results:
+            counted_authors = await self.count_nontrivial_authors(result.authors)
+            formatted = make_sqlite_frequency(
+                text=result.text,
+                term_len=term_len,
+                min_sent_len=min_sent_len,
+                day=int(start.timestamp()),
+                hits=result.hits,
+                authors=counted_authors,
+            )
+            results.append(formatted)
+        return results
 
     async def global_hits_in_range(
         self,
@@ -515,15 +543,14 @@ class MessageDB:
         end: datetime,
         # word: str | None = None,
     ) -> int:
-        result: int = await self.client.query_required_single(
+        result = await self.client.query(
             GLOBAL_AUTHORS_SELECT,
             term_len=term_len,
             min_sent_len=min_sent_len,
             start=start,
             end=end,
         )
-
-        return result
+        return await self.count_nontrivial_authors(result)
 
     async def update_author_tpt_sents(self) -> None:
         _ = await self.client.execute(UPDATE_NUM_SENTS)
@@ -556,26 +583,24 @@ def make_edgedb_frequency(
 
 
 def make_sqlite_frequency(
-    data,
+    text: str,
     term_len: int,
     min_sent_len: int,
     day: int,
-) -> list[SQLFrequency]:
-    # FIXME: what is the actual type of `data`
-    output: list[SQLFrequency] = list()
-    for item in data:
-        d: SQLFrequency = {
-            "term": {
-                "text": item.text,
-                "len": term_len,
-            },
-            "min_sent_len": min_sent_len,
-            "day": day,
-            "hits": item.hits,
-            "authors": item.authors,
-        }
-        output.append(d)
-    return output
+    hits: int,
+    authors: int,
+) -> SQLFrequency:
+    d: SQLFrequency = {
+        "term": {
+            "text": text,
+            "len": term_len,
+        },
+        "min_sent_len": min_sent_len,
+        "day": day,
+        "hits": hits,
+        "authors": authors,
+    }
+    return d
 
 
 def load_messagedb_from_env() -> MessageDB:
