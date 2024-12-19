@@ -1,7 +1,7 @@
 # STL
 import os
 import shutil
-from typing import Any, Literal
+from typing import Literal, get_args
 from datetime import UTC, datetime
 from contextlib import asynccontextmanager
 
@@ -19,7 +19,10 @@ from sonamute.smtypes import SQLTerm, SQLFrequency
 SQLITE_BATCH = 249
 SQLITE_POSTPROCESS = "queries/postprocess/"
 
-FreqTable = Literal["monthly"] | Literal["yearly"]
+FreqTable = Literal["monthly", "yearly"]
+FREQ_TABLES: tuple[str] = get_args(FreqTable)
+TotalTable = Literal["total_monthly", "total_yearly"]
+TOTAL_TABLES: tuple[str] = get_args(TotalTable)
 
 
 async def configure_sqlite(conn: aiosqlite.Connection):
@@ -41,46 +44,34 @@ async def configure_sqlite(conn: aiosqlite.Connection):
     """
     )
 
-    _ = await conn.execute(
+    for table in FREQ_TABLES:
+        _ = await conn.execute(
+            f"""
+        CREATE TABLE IF NOT EXISTS {table} (
+            term_id INTEGER NOT NULL,
+            min_sent_len INTEGER NOT NULL,
+            day INTEGER NOT NULL,
+            hits INTEGER NOT NULL,
+            authors INTEGER NOT NULL,
+            PRIMARY KEY (term_id, min_sent_len, day),
+            FOREIGN KEY (term_id) REFERENCES term(id)
+        ) WITHOUT ROWID;
         """
-    CREATE TABLE IF NOT EXISTS monthly (
-        term_id INTEGER NOT NULL,
-        min_sent_len INTEGER NOT NULL,
-        day INTEGER NOT NULL,
-        hits INTEGER NOT NULL,
-        authors INTEGER NOT NULL,
-        PRIMARY KEY (term_id, min_sent_len, day),
-        FOREIGN KEY (term_id) REFERENCES term(id)
-    ) WITHOUT ROWID;
-    """
-    )
+        )
 
-    _ = await conn.execute(
+    for table in TOTAL_TABLES:
+        _ = await conn.execute(
+            f"""
+        CREATE TABLE IF NOT EXISTS {table} (
+            day INTEGER NOT NULL,
+            term_len INTEGER NOT NULL,
+            min_sent_len INTEGER NOT NULL,
+            hits INTEGER NOT NULL,
+            authors INTEGER NOT NULL,
+            PRIMARY KEY (day, term_len, min_sent_len)
+        ) WITHOUT ROWID;
         """
-    CREATE TABLE IF NOT EXISTS yearly (
-        term_id INTEGER NOT NULL,
-        min_sent_len INTEGER NOT NULL,
-        day INTEGER,
-        hits INTEGER NOT NULL,
-        authors INTEGER NOT NULL,
-        PRIMARY KEY (term_id, min_sent_len, day),
-        FOREIGN KEY (term_id) REFERENCES term(id)
-    ) WITHOUT ROWID;
-    """
-    )
-
-    _ = await conn.execute(
-        """
-    CREATE TABLE IF NOT EXISTS total (
-        day INTEGER NOT NULL,
-        term_len INTEGER NOT NULL,
-        min_sent_len INTEGER NOT NULL,
-        hits INTEGER NOT NULL,
-        authors INTEGER NOT NULL,
-        PRIMARY KEY (day, term_len, min_sent_len)
-    ) WITHOUT ROWID;
-    """
-    )
+        )
 
     await conn.commit()
 
@@ -158,11 +149,12 @@ class FreqDB:
         day: int,
         hits: int,
         authors: int,
+        table: TotalTable,
         # TODO: should there be an object here
     ):
         async with self.session() as s:
-            stmt = """
-            INSERT INTO total (day, term_len, min_sent_len, hits, authors)
+            stmt = f"""
+            INSERT INTO {table} (day, term_len, min_sent_len, hits, authors)
             VALUES (:day, :term_len, :min_sent_len, :hits, :authors)
             """
             _ = await s.execute(
@@ -214,6 +206,7 @@ async def copy_totals(
     min_sent_len: int,
     start: datetime,
     end: datetime,
+    table: TotalTable,
 ):
     total_hits = await edb.global_hits_in_range(
         term_len,
@@ -235,6 +228,7 @@ async def copy_totals(
         day=start_ts,
         hits=total_hits,
         authors=total_authors,
+        table=table,
     )
 
 
@@ -269,6 +263,15 @@ async def generate_sqlite(
                 last_msg_dt,
                 "yearly",
             )
+            await copy_totals(
+                edb,
+                sdb,
+                term_len,
+                min_sent_len,
+                alltime_start,
+                last_msg_dt,
+                "total_yearly",
+            )
 
             # per-epoch (aug 1-aug 1) ranking data
             # TODO: what if the period is smaller than or significantly offset
@@ -286,6 +289,15 @@ async def generate_sqlite(
                     end,
                     "yearly",
                 )
+                await copy_totals(
+                    edb,
+                    sdb,
+                    term_len,
+                    min_sent_len,
+                    start,
+                    end,
+                    "total_yearly",
+                )
 
             # periodic frequency data
             for start, end in months_in_range(first_msg_dt, last_msg_dt):
@@ -301,8 +313,15 @@ async def generate_sqlite(
                     end,
                     "monthly",
                 )
-                await copy_totals(edb, sdb, term_len, min_sent_len, start, end)
-                # The totals table exists to convert absolute hits to percents on the fly
+                await copy_totals(
+                    edb,
+                    sdb,
+                    term_len,
+                    min_sent_len,
+                    start,
+                    end,
+                    "total_monthly",
+                )
 
     await sdb.close()
     print("Copying database")
