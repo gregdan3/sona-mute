@@ -37,6 +37,10 @@ def fake_id(s: str) -> int:
     return int(md5_hash, 16)
 
 
+def now() -> str:
+    return datetime.now().strftime("%m-%d %H:%M:%S")
+
+
 def days_in_range(
     start: datetime,
     end: datetime,

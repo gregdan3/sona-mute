@@ -12,7 +12,7 @@ from aiosqlite.cursor import Cursor
 
 # LOCAL
 from sonamute.db import MessageDB
-from sonamute.utils import batch_iter, epochs_in_range, months_in_range
+from sonamute.utils import now, batch_iter, epochs_in_range, months_in_range
 from sonamute.smtypes import SQLTerm, SQLFrequency
 
 # we insert 4 items per row; max sql variables is 999 for, reasons,
@@ -23,10 +23,6 @@ FreqTable = Literal["monthly", "yearly"]
 FREQ_TABLES: tuple[str] = get_args(FreqTable)
 TotalTable = Literal["total_monthly", "total_yearly"]
 TOTAL_TABLES: tuple[str] = get_args(TotalTable)
-
-
-def now() -> str:
-    return datetime.now().strftime("%m-%d %H:%M:%S")
 
 
 async def configure_sqlite(conn: aiosqlite.Connection):
