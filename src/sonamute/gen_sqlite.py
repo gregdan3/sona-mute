@@ -25,6 +25,10 @@ TotalTable = Literal["total_monthly", "total_yearly"]
 TOTAL_TABLES: tuple[str] = get_args(TotalTable)
 
 
+def now() -> str:
+    return datetime.now().strftime("%m-%d %H:%M:%S")
+
+
 async def configure_sqlite(conn: aiosqlite.Connection):
     _ = await conn.execute("PRAGMA foreign_keys = ON;")
     _ = await conn.execute("PRAGMA synchronous = OFF;")
@@ -246,13 +250,13 @@ async def generate_sqlite(
     if last_msg_dt > max_date:
         last_msg_dt = max_date
 
-    print("Generating frequency data")
+    print(f"Generating frequency data starting {now()}")
     for term_len in range(1, 7):
-        print(f"Starting on term len of {term_len}")
+        print(f"Starting term len {term_len} @ {now()}")
         for min_sent_len in range(term_len, 7):
-            print(f"Starting on min sent len of {min_sent_len}")
+            print(f"Starting min sent len {min_sent_len} @ {now()}")
 
-            print(f"all time (pl {term_len}, msl {min_sent_len})")
+            print(f"all time (pl {term_len}, msl {min_sent_len}) @ {now()}")
             alltime_start = datetime.fromtimestamp(0, tz=UTC)
             await copy_freqs(
                 edb,
@@ -278,7 +282,7 @@ async def generate_sqlite(
             # from the epochs
             for start, end in epochs_in_range(first_msg_dt, last_msg_dt):
                 print(
-                    f"epoch {start.date()} - {end.date()} (pl {term_len}, msl {min_sent_len})"
+                    f"yearly {start.date()} (pl {term_len}, msl {min_sent_len}) @ {now()}"
                 )
                 await copy_freqs(
                     edb,
@@ -302,7 +306,7 @@ async def generate_sqlite(
             # periodic frequency data
             for start, end in months_in_range(first_msg_dt, last_msg_dt):
                 print(
-                    f"period {start.date()} - {end.date()} (pl {term_len}, msl {min_sent_len})"
+                    f"monthly {start.date()} (pl {term_len}, msl {min_sent_len}) @ {now()}"
                 )
                 await copy_freqs(
                     edb,
