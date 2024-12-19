@@ -14,7 +14,7 @@ from edgedb.errors import EdgeDBError
 from sonamute.db import MessageDB, make_edgedb_frequency, load_messagedb_from_env
 from sonamute.cli import SOURCES, menu_handler
 from sonamute.ilo import ILO
-from sonamute.utils import T, batch_iter, gather_batch, months_in_range
+from sonamute.utils import T, now, batch_iter, gather_batch, months_in_range
 from sonamute.smtypes import (
     Message,
     Sentence,
@@ -96,12 +96,12 @@ async def source_to_db(db: MessageDB, source: PlatformFetcher, batch_size: int):
 
         i += len(inserts)
         if i % (batch_size * 100) == 0:
-            print("Processed %s messages" % i)
+            print(f"Processed {i} messages @ {now()}")
 
     print("Calculating tpt sentences per author...")
     await db.update_author_tpt_sents()
 
-    print("Final total: %s messages" % i)
+    print(f"Final total: {i} messages @ {now()}")
 
 
 def counter_to_insertable_freqs(
