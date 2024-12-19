@@ -16,7 +16,7 @@ from sonamute.utils import batch_iter, epochs_in_range, months_in_range
 from sonamute.smtypes import SQLTerm, SQLFrequency
 
 # we insert 4 items per row; max sql variables is 999 for, reasons,
-SQLITE_BATCH = 249
+SQLITE_BATCH = 5000
 SQLITE_POSTPROCESS = "queries/postprocess/"
 
 FreqTable = Literal["monthly", "yearly"]
