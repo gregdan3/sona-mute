@@ -503,7 +503,7 @@ class MessageDB:
             start=start,
             end=end,
         )
-        results: list[SQLFrequency] = list()
+        output: list[SQLFrequency] = list()
         for result in results:
             counted_authors = await self.count_nontrivial_authors(result.authors)
             formatted = make_sqlite_frequency(
@@ -514,8 +514,8 @@ class MessageDB:
                 hits=result.hits,
                 authors=counted_authors,
             )
-            results.append(formatted)
-        return results
+            output.append(formatted)
+        return output
 
     async def global_hits_in_range(
         self,
