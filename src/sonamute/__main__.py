@@ -48,10 +48,9 @@ def process_msg(msg: PreMessage) -> Message:
     """
     is_counted = is_countable(msg)
     msg["content"] = clean_string(msg["content"])
-    content = ILO.preprocess(msg["content"])
 
     sentences: list[Sentence] = []
-    for scorecard in ILO._are_toki_pona(content):
+    for scorecard in ILO.make_scorecards(msg["content"]):
         if not scorecard["cleaned"]:
             # omit empty sentences
             continue
