@@ -52,13 +52,15 @@ def process_msg(msg: PreMessage) -> Message:
 
     sentences: list[Sentence] = []
     for scorecard in ILO._are_toki_pona(content):
-        if scorecard["cleaned"]:  # omit empty sentences
-            sentences.append(
-                Sentence(
-                    words=scorecard["cleaned"],
-                    score=scorecard["score"],
-                )
+        if not scorecard["cleaned"]:
+            # omit empty sentences
+            continue
+        sentences.append(
+            Sentence(
+                words=scorecard["cleaned"],
+                score=scorecard["score"],
             )
+        )
 
     # it's okay to have no sentences
     final_msg: Message = {**msg, "sentences": sentences, "is_counted": is_counted}
