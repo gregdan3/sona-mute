@@ -33,7 +33,7 @@ class KnownPlatforms(IntEnum):
     Forum = 100  # generic
     # NOTE: includes Yahoo Groups, kulupu.pona.la, and forums.tokipona.org
 
-    # Publication = 200  # generic
+    Publication = 200  # generic
     # NOTE: includes lipu Wikipesija, lipu tenpo, lipu kule
 
     # Personal = 300
