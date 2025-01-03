@@ -97,7 +97,7 @@ def is_webhook(m: DiscordMessageJSON) -> bool:
         return False
     # must be a bot
 
-    has_roles = not not m["author"]["roles"]
+    has_roles = not not m["author"].get("roles")
     has_discrim = m["author"]["discriminator"] != "0000"
 
     # webhooks cannot have roles or have discrim other than 0000
