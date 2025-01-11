@@ -83,7 +83,7 @@ class PokiLapoFetcher(FileFetcher):
     @override
     def get_author(self, raw_msg: frontmatter.Post) -> Author:
         # NOTE: this is a concession. i cannot multiple-attribute.
-        authors: list[str] = raw_msg.metadata["authors"]
+        authors: list[str] = raw_msg.metadata.get("authors", list())
         author_name = ""
         author_id = NULL_AUTHOR
         if authors and authors[0]:
