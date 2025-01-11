@@ -19,3 +19,6 @@ IGNORED_AUTHORS = {}
 
 EPOCH_INIT = datetime(2001, 8, 8, tzinfo=UTC)
 NDAYS = 7 * 4
+
+MAX_TERM_LEN = 6
+MAX_MIN_SENT_LEN = 6

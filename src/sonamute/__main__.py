@@ -11,6 +11,7 @@ from collections import Counter
 from edgedb.errors import EdgeDBError
 
 # LOCAL
+from sonamute.constants import MAX_MIN_SENT_LEN, MAX_TERM_LEN
 from sonamute.db import MessageDB, make_edgedb_frequency, load_messagedb_from_env
 from sonamute.cli import SOURCES, menu_handler
 from sonamute.ilo import ILO
@@ -132,13 +133,13 @@ async def sentences_to_frequencies(db: MessageDB, batch_size: int, passing: bool
         # things from it
 
         for community, sents in by_community.items():
-            metacounter = count_frequencies(sents, 6, 6)
+            metacounter = count_frequencies(sents, MAX_TERM_LEN, MAX_MIN_SENT_LEN)
             formatted = counter_to_insertable_freqs(metacounter, community, start)
             _ = await gather_batch(db.insert_frequency, formatted, batch_size)
 
 
 def source_to_frequencies(source: PlatformFetcher):
-    metacounter = count_frequencies(countables(source), 6, 6)
+    metacounter = count_frequencies(countables(source), MAX_TERM_LEN, MAX_MIN_SENT_LEN)
     return metacounter
 
 
