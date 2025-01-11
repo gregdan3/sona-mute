@@ -17,6 +17,7 @@ from sonamute.ilo import ILO
 from sonamute.utils import T, now, batch_iter, gather_batch, months_in_range
 from sonamute.smtypes import (
     Message,
+    HitsData,
     Sentence,
     PreMessage,
     Metacounter,
@@ -106,16 +107,24 @@ def source_to_frequencies(source: PlatformFetcher):
     return metacounter
 
 
-def filter_counter(counter: Counter[T], min_val: int = 40) -> Counter[T]:
-    return Counter({k: v for k, v in counter.items() if v >= min_val})
+def filter_by_hits(
+    counter: dict[str, HitsData], min_val: int = 40
+) -> dict[str, HitsData]:
+    return {k: v for k, v in counter.items() if v["hits"] >= min_val}
 
 
-def filter_nested_counter(
-    counter: dict[int, dict[int, Counter[T]]], min_val: int
-) -> dict[int, dict[int, Counter[T]]]:
+def filter_metacounter(counter: Metacounter, min_val: int) -> Metacounter:
     for i, counter_i in counter.items():
         for j, counter_j in counter_i.items():
-            counter[i][j] = filter_counter(counter_j, min_val)
+            counter[i][j] = filter_by_hits(counter_j, min_val)
+    return counter
+
+
+def process_authors(counter: Metacounter):
+    for i, counter_i in counter.items():
+        for j, counter_j in counter_i.items():
+            for term, data in counter_j.items():
+                counter[i][j][term]["authors"] = len(data["authors"])
     return counter
 
 
@@ -138,8 +147,8 @@ async def amain(argv: argparse.Namespace):
         else:
             assert output  # cli guarantees it exists
             metacounter = source_to_frequencies(source)
-            # TODO: this is a bit misleading since i'm really generating frequency data to a file
-            metacounter = filter_nested_counter(metacounter, 40)
+            metacounter = filter_metacounter(metacounter, 40)
+            metacounter = process_authors(metacounter)
             dumped = json.dumps(metacounter, indent=2, ensure_ascii=False)
             with open(output, "w") as f:
                 _ = f.write(dumped)
