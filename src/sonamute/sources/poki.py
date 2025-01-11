@@ -2,7 +2,7 @@
 import os
 import re
 from typing import TypedDict, NotRequired, cast
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from collections.abc import Generator
 
 # PDM
@@ -22,7 +22,7 @@ Frontmatter = TypedDict(
         "description": NotRequired[str],
         "authors": list[str],
         "translators": NotRequired[list[str]],
-        "date": str,
+        "date": date,
         "tags": NotRequired[list[str]],
         "license": str,
         "sources": list[str],
@@ -32,13 +32,14 @@ Frontmatter = TypedDict(
 )
 
 
-def get_postdate(s: str) -> datetime:
+def coalesce_postdate(s: str | date) -> datetime:
+    if isinstance(s, date):  # Handle `datetime.date` input
+        return datetime(s.year, s.month, s.day, tzinfo=UTC)
+
     if re.match(r"^\d{4}-\d{2}$", s):
         s += "-15"
     elif not re.match(r"^\d{4}-\d{2}-\d{2}$", s):  # Invalid format
-        raise ValueError(
-            f"Invalid date format: {s}. Expected 'YYYY-mm-dd' or 'YYYY-mm'."
-        )
+        raise ValueError(f"Invalid date: {s}. Expected 'YYYY-mm-dd' or 'YYYY-mm'.")
     return datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=UTC)
 
 
@@ -111,7 +112,7 @@ class PokiLapoFetcher(FileFetcher):
             community = self.get_community(msg)
             author = self.get_author(msg)
 
-            postdate = get_postdate(msg.metadata["date"])
+            postdate = coalesce_postdate(msg.metadata["date"])
 
             message: PreMessage = {
                 "_id": _id,
