@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:a9bfa5a58ebf11f7a3f52db695a5fb392fefeb0273446d26cf2b4649c9928b9f"
+content_hash = "sha256:774812cf5a3c48349d23bd2c863db7165fbc18987d64e8e06c46dd9219c91d4d"
 
 [[metadata.targets]]
 requires_python = ">=3.11"
@@ -161,18 +161,6 @@ groups = ["dev"]
 files = [
     {file = "executing-2.0.1-py2.py3-none-any.whl", hash = "sha256:eac49ca94516ccc753f9fb5ce82603156e590b27525a8bc32cce8ae302eb61bc"},
     {file = "executing-2.0.1.tar.gz", hash = "sha256:35afe2ce3affba8ee97f2d69927fa823b08b472b7b994e36a52a964b93d16147"},
-]
-
-[[package]]
-name = "frontmatter"
-version = "3.0.8"
-summary = "Extract YAML frontmatter from files and strings."
-groups = ["default"]
-dependencies = [
-    "PyYAML==5.1",
-]
-files = [
-    {file = "frontmatter-3.0.8.tar.gz", hash = "sha256:d913619d20f607e03557d52a8bf9b249e0b3093c770c5213c0f1231d2c97fe73"},
 ]
 
 [[package]]
@@ -603,6 +591,19 @@ groups = ["default"]
 files = [
     {file = "python-dotenv-1.0.1.tar.gz", hash = "sha256:e324ee90a023d808f1959c46bcbc04446a10ced277783dc6ee09987c37ec10ca"},
     {file = "python_dotenv-1.0.1-py3-none-any.whl", hash = "sha256:f7b63ef50f1b690dddf550d03497b66d609393b40b564ed0d674909a68ebf16a"},
+]
+
+[[package]]
+name = "python-frontmatter"
+version = "1.1.0"
+summary = "Parse and manage posts with YAML (or other) frontmatter"
+groups = ["default"]
+dependencies = [
+    "PyYAML",
+]
+files = [
+    {file = "python-frontmatter-1.1.0.tar.gz", hash = "sha256:7118d2bd56af9149625745c58c9b51fb67e8d1294a0c76796dafdc72c36e5f6d"},
+    {file = "python_frontmatter-1.1.0-py3-none-any.whl", hash = "sha256:335465556358d9d0e6c98bbeb69b1c969f2a4a21360587b9873bfc3b213407c1"},
 ]
 
 [[package]]

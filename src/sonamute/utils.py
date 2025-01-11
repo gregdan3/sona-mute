@@ -3,10 +3,10 @@ import os
 import asyncio
 import hashlib
 import itertools
+from uuid import UUID
 from typing import Any, TypeVar, Callable
 from datetime import datetime, timedelta
 from collections.abc import Iterable, Coroutine, Generator
-from uuid import UUID
 
 # PDM
 import dotenv
