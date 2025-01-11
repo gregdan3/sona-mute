@@ -6,6 +6,7 @@ import itertools
 from typing import Any, TypeVar, Callable
 from datetime import datetime, timedelta
 from collections.abc import Iterable, Coroutine, Generator
+from uuid import UUID
 
 # PDM
 import dotenv
@@ -35,6 +36,10 @@ def fake_id(s: str) -> int:
     md5_hash = hashlib.md5(b)
     md5_hash = md5_hash.hexdigest()
     return int(md5_hash, 16)
+
+
+def fake_uuid(s: str) -> UUID:
+    return UUID(int=fake_id(s))
 
 
 def now() -> str:

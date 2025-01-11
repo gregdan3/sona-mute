@@ -16,8 +16,9 @@ from sonamute.smtypes import (
     Metacounter,
     SortedSentence,
 )
-from sonamute.constants import IGNORED_CONTAINERS
+from sonamute.constants import IGNORED_AUTHORS, IGNORED_CONTAINERS
 from sonamute.sources.generic import PlatformFetcher
+from sonamute.utils import fake_uuid
 
 T = TypeVar("T")
 
@@ -62,21 +63,12 @@ def ignorable(msg: PreMessage) -> bool:
     if msg["author"]["is_bot"] and not msg["author"]["is_webhook"]:
         return True
     if not msg["content"]:
-        return True  # ignore empty messages
+        return True
     if msg["container"] in IGNORED_CONTAINERS:
         return True
+    if msg["author"]["_id"] in IGNORED_AUTHORS:
+        return True
     return False
-
-
-def by_users(msgs: Iterable[PreMessage]) -> Generator[PreMessage, None, None]:
-    for msg in msgs:
-        if msg["author"]["is_bot"] and not msg["author"]["is_webhook"]:
-            continue
-        if not msg["content"]:
-            continue
-        if msg["container"] in IGNORED_CONTAINERS:
-            continue
-        yield msg
 
 
 def populate_sents(msgs: Iterable[PreMessage]) -> Generator[Message, None, None]:
@@ -93,8 +85,18 @@ def populate_sents(msgs: Iterable[PreMessage]) -> Generator[Message, None, None]
                     )
                 )
 
-        final_msg: Message = {**msg, "sentences": sentences}
+        final_msg: Message = {
+            **msg,
+            "sentences": sentences,
+            "is_counted": not ignorable(msg),
+        }
         yield final_msg
+
+
+def counted(msgs: Iterable[Message]) -> Generator[Message, None, None]:
+    for msg in msgs:
+        if msg["is_counted"]:
+            yield msg
 
 
 def sentences_of(
@@ -130,58 +132,19 @@ def lowered(
 
 def countables(
     source: PlatformFetcher,
-) -> Generator[list[str], None, None]:
+) -> Generator[SortedSentence, None, None]:
 
     # why did i write this
     msgs = source.get_messages()
-    msgs = by_users(msgs)
     msgs = populate_sents(msgs)
+    msgs = counted(msgs)
     sents = sentences_of(msgs)
     sents = with_score(sents, 0.8)
     sents = words_of(sents)
     sents = lowered(sents)
     for sent in sents:
-        yield sent
-
-    # metacounter = metacount_frequencies(sents, 6, 6)
-
-
-def sourced_freq_counter(
-    source: PlatformFetcher,
-    min_len: int = 0,
-    force_pass: bool = False,
-    _max: int = 0,
-) -> Counter[str]:
-    counter: Counter[str] = Counter()
-    counted = 0
-    for msg in populate_sents(source.get_messages(), force_pass=force_pass):
-        for sentence in msg["sentences"]:
-            if len(sentence["words"]) < min_len:
-                continue
-            sentence["words"] = [word.lower() for word in sentence["words"]]
-            counter.update(sentence["words"])
-
-        counted += 1
-        if _max and counted >= _max:
-            break
-    return counter
-
-
-def term_counter(
-    sents: Iterable[list[str]],
-    term_len: int,
-    min_sent_len: int,
-) -> Counter[str]:
-    # save a comparison; sentences shorter than term_len can't be counted anyway
-    if term_len > min_sent_len:
-        min_sent_len = term_len
-
-    counter: Counter[str] = Counter()
-    for sent in sents:
-        if len(sent) < min_sent_len:
-            continue
-        counter.update(overlapping_terms(sent, n=term_len))
-    return counter
+        yield {"words": sent, "author": fake_uuid("")}
+        # TODO: get actual msg author's name to fake authorship better
 
 
 def is_nonsense(sent_len: int, sent: list[str]) -> bool:
