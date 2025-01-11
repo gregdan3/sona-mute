@@ -4,7 +4,8 @@ from typing import Any
 from collections.abc import Generator
 
 # LOCAL
-from sonamute.smtypes import Author, Community, PreMessage, KnownPlatforms
+from sonamute.smtypes import Author, Community, PreMessage
+from sonamute.constants import IGNORED_AUTHORS_MAP, IGNORED_CONTAINERS_MAP
 
 NULL_CONTAINER = 0
 NULL_AUTHOR = 0
@@ -14,27 +15,6 @@ NULL_AUTHOR = 0
 # Tacking on an `OR exists` made the query significantly slower,
 # so now I'm using 0 for null.
 # May god have mercy on my soul.
-
-IGNORED_CONTAINERS_MAP = {
-    KnownPlatforms.Discord.value: {
-        316066233755631616,  # mapona/jaki
-        786041291707777034,  # mapona/ako
-        895303838662295572,  # maponasewi/tokinanpa; this is a pluralkit user.
-        1128714905932021821,  # mamusi/ako
-        1187212477155528804,  # mapona/toki-suli/musitokipiantesitelenwan
-    }
-}
-
-IGNORED_AUTHORS_MAP = {
-    KnownPlatforms.Discord.value: {
-        937872123085602896,  # old wikipesija logger
-        1074390249981096047,  # wikipesija logger
-        1135620786183491725,  # old ma musi minecraft logger
-        1135634171734261830,  # ma musi minecraft logger
-        1213156131006845020,  # sona.pona.la logger
-        950311805845139506,  # "o sitelen lon lipu sina"
-    }
-}
 
 
 def is_countable(msg: PreMessage) -> bool:

@@ -1,21 +1,33 @@
 # STL
 from datetime import UTC, datetime
 
-IGNORED_CONTAINERS = {
-    316066233755631616,  # ma pona/jaki
-    786041291707777034,  # ma pona/ako
-    914305039764426772,  # ma pali/wikipesija
-    1128714905932021821,  # ma musi/ako
-    # NOTE: the below two are not in my dump, but they're good examples of
-    # things to omit: log channels
-    759969963992940585,  # ma pona/jaki lawa
-    842196795756249118,  # ma pona/invite lawa
-    # The acrophobia bot is troublesome, because users trigger it with a term in toki pona.
-    # Repeated uses push every word in "ilo o ako" up by >10,000 uses, changing their relative rankings even for o.
+# LOCAL
+from sonamute.smtypes import KnownPlatforms
+
+IGNORED_CONTAINERS_MAP = {
+    KnownPlatforms.Discord.value: {
+        316066233755631616,  # mapona/jaki
+        759969963992940585,  # ma pona/jaki lawa
+        786041291707777034,  # mapona/ako
+        842196795756249118,  # ma pona/invite lawa
+        895303838662295572,  # maponasewi/tokinanpa; this is a pluralkit user.
+        914305039764426772,  # ma pali/wikipesija
+        1128714905932021821,  # mamusi/ako
+        1187212477155528804,  # mapona/toki-suli/musitokipiantesitelenwan
+    }
 }
 
-# TODO: reintroduce for non-pk webhooks?
-IGNORED_AUTHORS = {}
+IGNORED_AUTHORS_MAP = {
+    KnownPlatforms.Discord.value: {
+        937872123085602896,  # old wikipesija logger
+        1074390249981096047,  # wikipesija logger
+        1135620786183491725,  # old ma musi minecraft logger
+        1135634171734261830,  # ma musi minecraft logger
+        1213156131006845020,  # sona.pona.la logger
+        950311805845139506,  # "o sitelen lon lipu sina"
+    }
+}
+
 
 EPOCH_INIT = datetime(2001, 8, 8, tzinfo=UTC)
 NDAYS = 7 * 4

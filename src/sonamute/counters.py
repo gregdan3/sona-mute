@@ -7,6 +7,7 @@ from collections.abc import Iterable, Generator
 
 # LOCAL
 from sonamute.ilo import ILO
+from sonamute.utils import fake_uuid
 from sonamute.file_io import TupleJSONEncoder
 from sonamute.smtypes import (
     Message,
@@ -16,9 +17,7 @@ from sonamute.smtypes import (
     Metacounter,
     SortedSentence,
 )
-from sonamute.constants import IGNORED_AUTHORS, IGNORED_CONTAINERS
-from sonamute.sources.generic import PlatformFetcher
-from sonamute.utils import fake_uuid
+from sonamute.sources.generic import PlatformFetcher, is_countable
 
 T = TypeVar("T")
 
@@ -59,38 +58,47 @@ def dump(counter: Counter[str] | Counter[tuple[str, ...]]) -> str:
     )
 
 
-def ignorable(msg: PreMessage) -> bool:
-    if msg["author"]["is_bot"] and not msg["author"]["is_webhook"]:
-        return True
-    if not msg["content"]:
-        return True
-    if msg["container"] in IGNORED_CONTAINERS:
-        return True
-    if msg["author"]["_id"] in IGNORED_AUTHORS:
-        return True
-    return False
+def clean_string(content: str) -> str:
+    """
+    EdgeDB-specific string pre-processing.
+    I note all changes; none of them are semantic.
+    """
+
+    content = content.replace("\xad", "")
+    # `\xad` is the discretionary hyphen; optional to print so not semantic
+    content = content.replace("\0", "")
+    # i have no earthly idea how this could happen; i'm reading json
+    return content
 
 
-def populate_sents(msgs: Iterable[PreMessage]) -> Generator[Message, None, None]:
+def process_msg(msg: PreMessage) -> Message:
+    """
+    For EdgeDB inserts. Turns a PreMessage into a Message, including all sentences.
+    """
+    is_counted = is_countable(msg)
+    msg["content"] = clean_string(msg["content"])
+
+    sentences: list[Sentence] = []
+    for scorecard in ILO.make_scorecards(msg["content"]):
+        if not scorecard["cleaned"]:
+            # omit empty sentences
+            continue
+        sentences.append(
+            Sentence(
+                words=scorecard["cleaned"],
+                score=scorecard["score"],
+            )
+        )
+
+    # it's okay to have no sentences
+    final_msg: Message = {**msg, "sentences": sentences, "is_counted": is_counted}
+    return final_msg
+
+
+def process_msgs(msgs: Iterable[PreMessage]) -> Generator[Message, None, None]:
     for msg in msgs:
-        content = ILO.preprocess(msg["content"])
-
-        sentences: list[Sentence] = []
-        for scorecard in ILO._are_toki_pona(content):
-            if scorecard["cleaned"]:  # omit empty sentences
-                sentences.append(
-                    Sentence(
-                        words=scorecard["cleaned"],
-                        score=scorecard["score"],
-                    )
-                )
-
-        final_msg: Message = {
-            **msg,
-            "sentences": sentences,
-            "is_counted": not ignorable(msg),
-        }
-        yield final_msg
+        msg = process_msg(msg)
+        yield msg
 
 
 def counted(msgs: Iterable[Message]) -> Generator[Message, None, None]:
@@ -136,7 +144,7 @@ def countables(
 
     # why did i write this
     msgs = source.get_messages()
-    msgs = populate_sents(msgs)
+    msgs = process_msgs(msgs)
     msgs = counted(msgs)
     sents = sentences_of(msgs)
     sents = with_score(sents, 0.8)

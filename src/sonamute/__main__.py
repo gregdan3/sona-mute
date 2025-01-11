@@ -11,7 +11,6 @@ from collections import Counter
 from edgedb.errors import EdgeDBError
 
 # LOCAL
-from sonamute.constants import MAX_MIN_SENT_LEN, MAX_TERM_LEN
 from sonamute.db import MessageDB, make_edgedb_frequency, load_messagedb_from_env
 from sonamute.cli import SOURCES, menu_handler
 from sonamute.ilo import ILO
@@ -25,46 +24,10 @@ from sonamute.smtypes import (
     EDBFrequency,
     SortedSentence,
 )
-from sonamute.counters import countables, count_frequencies
+from sonamute.counters import countables, process_msg, count_frequencies
+from sonamute.constants import MAX_TERM_LEN, MAX_MIN_SENT_LEN
 from sonamute.gen_sqlite import generate_sqlite
-from sonamute.sources.generic import PlatformFetcher, is_countable
-
-
-def clean_string(content: str) -> str:
-    """
-    EdgeDB-specific string pre-processing.
-    I note all changes; none of them are semantic.
-    """
-
-    content = content.replace("\xad", "")
-    # `\xad` is the discretionary hyphen; optional to print so not semantic
-    content = content.replace("\0", "")
-    # i have no earthly idea how this could happen; i'm reading json
-    return content
-
-
-def process_msg(msg: PreMessage) -> Message:
-    """
-    For EdgeDB inserts. Turns a PreMessage into a Message, including all sentences.
-    """
-    is_counted = is_countable(msg)
-    msg["content"] = clean_string(msg["content"])
-
-    sentences: list[Sentence] = []
-    for scorecard in ILO.make_scorecards(msg["content"]):
-        if not scorecard["cleaned"]:
-            # omit empty sentences
-            continue
-        sentences.append(
-            Sentence(
-                words=scorecard["cleaned"],
-                score=scorecard["score"],
-            )
-        )
-
-    # it's okay to have no sentences
-    final_msg: Message = {**msg, "sentences": sentences, "is_counted": is_counted}
-    return final_msg
+from sonamute.sources.generic import PlatformFetcher
 
 
 async def insert_raw_msg(db: MessageDB, msg: PreMessage) -> UUID | None:
