@@ -7,10 +7,13 @@ from collections.abc import Generator
 
 # PDM
 import frontmatter
+from bs4 import Tag, BeautifulSoup
+from bs4.element import Comment
 from typing_extensions import override
 
 # LOCAL
 from sonamute.utils import fake_id
+from sonamute.file_io import try_load_html
 from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
 from sonamute.sources.generic import NULL_AUTHOR, NULL_CONTAINER, FileFetcher
 
@@ -31,6 +34,8 @@ Frontmatter = TypedDict(
     },
 )
 
+NON_VIS_ELEMS = ["style", "script", "head", "title", "meta", "[document]"]
+
 
 def coalesce_postdate(s: str | date) -> datetime:
     if isinstance(s, date):  # Handle `datetime.date` input
@@ -41,6 +46,14 @@ def coalesce_postdate(s: str | date) -> datetime:
     elif not re.match(r"^\d{4}-\d{2}-\d{2}$", s):  # Invalid format
         raise ValueError(f"Invalid date: {s}. Expected 'YYYY-mm-dd' or 'YYYY-mm'.")
     return datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=UTC)
+
+
+def clean_content(raw: str) -> str:
+    soup = try_load_html(raw)
+    for s in soup(NON_VIS_ELEMS):
+        s.extract()
+        # TODO: html comments?
+    return soup.get_text("\n")
 
 
 class PokiLapoFetcher(FileFetcher):
@@ -82,10 +95,12 @@ class PokiLapoFetcher(FileFetcher):
 
     @override
     def get_author(self, raw_msg: frontmatter.Post) -> Author:
-        # NOTE: this is a concession. i cannot multiple-attribute.
         authors: list[str] = raw_msg.metadata.get("authors", list())
         author_name = ""
         author_id = NULL_AUTHOR
+        # NOTE: this is a concession. i cannot multiple-attribute.
+        # i could do some convoluted compromise, like assigning lines
+        # round-robin or in splits to each author? but eugh
         if authors and authors[0]:
             author_name = authors[0]
             author_id = fake_id(author_name)
@@ -103,6 +118,8 @@ class PokiLapoFetcher(FileFetcher):
     def get_messages(self) -> Generator[PreMessage, None, None]:
         for msg in self.get_files():
             _id = fake_id(msg.content)
+            # file content is stable, but cleaning process may not be
+            content = clean_content(msg.content)
 
             if _id in self.__seen:
                 continue
@@ -116,7 +133,7 @@ class PokiLapoFetcher(FileFetcher):
 
             message: PreMessage = {
                 "_id": _id,
-                "content": msg.content,
+                "content": content,
                 "container": NULL_CONTAINER,
                 "community": community,
                 "author": author,
