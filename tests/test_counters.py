@@ -1,8 +1,11 @@
 # PDM
+import json
+from uuid import uuid4
 import pytest
 
 # LOCAL
-from sonamute.counters import overlapping_terms, overlapping_ntuples
+from sonamute.counters import overlapping_terms, overlapping_ntuples, count_frequencies
+from sonamute.smtypes import SortedSentence
 
 
 def test_overlapping_ntuples():
@@ -33,3 +36,15 @@ def test_overlapping_terms_with_markers():
     for term_len in range(1, 4):
         for i, term in enumerate(overlapping_terms(ph, term_len)):
             assert term == correct_map[term_len][i]
+
+
+def test_sentence_markers():
+    sents = [SortedSentence({"words": ["toki"], "author": uuid4()})]
+
+    metacounter = count_frequencies(sents, 4, 4, True)
+
+    dumped = json.dumps(metacounter, indent=2, default=str)
+
+    # print(dumped)
+
+    assert True
