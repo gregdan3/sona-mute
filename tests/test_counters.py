@@ -21,3 +21,15 @@ def test_overlapping_terms():
 
     for i, term in enumerate(overlapping_terms(ph, 3)):
         assert term == correct_outputs[i]
+
+def test_overlapping_terms_with_markers():
+    ph = ["^", "toki", "$"]
+    correct_map = {
+        1: ["^", "toki", "$"],
+        2: ["^ toki", "toki $"],
+        3: ["^ toki $"],
+    }
+
+    for term_len in range(1, 4):
+        for i, term in enumerate(overlapping_terms(ph, term_len)):
+            assert term == correct_map[term_len][i]
