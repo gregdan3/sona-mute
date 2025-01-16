@@ -182,14 +182,14 @@ def count_frequencies(
     sents: Iterable[SortedSentence],
     max_term_len: int,
     max_min_sent_len: int,
+    do_sentence_markers: bool = True,
 ) -> Metacounter:
-    # metacounter tracks {term_len: {min_sent_len: {term: {hits: int, authors: int}}}}
     metacounter: Metacounter = {
         term_len: {
             min_sent_len: defaultdict(lambda: HitsData({"hits": 0, "authors": set()}))
             for min_sent_len in range(term_len, max_min_sent_len + 1)
         }
-        for term_len in range(1, max_term_len + 1)
+        for term_len in range(0, max_term_len + 1)
     }
     for sent in sents:
         words = sent["words"]
@@ -201,6 +201,11 @@ def count_frequencies(
         if is_nonsense(sent_len, words):
             continue
 
+        if do_sentence_markers:
+            # TODO: is there a faster way to do this?
+            words = ["^", *words, "$"]
+            sent_len += 2
+
         for term_len in range(1, max_term_len + 1):
             if sent_len < term_len:
                 continue
@@ -211,7 +216,16 @@ def count_frequencies(
                     continue
 
                 for term in terms:
-                    metacounter[term_len][min_sent_len][term]["hits"] += 1
-                    metacounter[term_len][min_sent_len][term]["authors"] |= {author}
+                    offset = 0
+                    if do_sentence_markers:
+                        if term[0] == "^":
+                            offset +=1
+                        if term[-1] == "$":
+                            offset +=1
+
+                    c_term_len = term_len - offset
+                    c_msl = min_sent_len - offset
+                    metacounter[c_term_len][c_msl][term]["hits"] += 1
+                    metacounter[c_term_len][c_msl][term]["authors"] |= {author}
 
     return metacounter
