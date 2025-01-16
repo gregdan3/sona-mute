@@ -4,11 +4,10 @@ from uuid import UUID
 from typing import cast
 from datetime import datetime
 from collections.abc import Mapping, Iterable
+from collections import Counter
 
 # PDM
 import orjson
-import lxml.html
-import lxml.etree
 from bs4 import BeautifulSoup
 from typing_extensions import override
 
@@ -70,3 +69,17 @@ def try_load_html_file(filename: str):
     with open(filename, "r") as f:
         content = try_load_html(f.read())
     return content
+
+
+def dump(counter: Counter[str] | Counter[tuple[str, ...]]) -> str:
+    sorted_counter = {
+        k: v for k, v in sorted(counter.items(), key=lambda i: i[1], reverse=True)
+    }
+    return json.dumps(
+        sorted_counter,
+        indent=2,
+        ensure_ascii=False,
+        cls=TupleJSONEncoder,
+    )
+
+

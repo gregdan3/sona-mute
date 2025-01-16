@@ -1,5 +1,4 @@
 # STL
-import json
 import itertools
 from typing import TypeVar
 from collections import Counter, defaultdict
@@ -8,7 +7,6 @@ from collections.abc import Iterable, Generator
 # LOCAL
 from sonamute.ilo import ILO
 from sonamute.utils import fake_uuid
-from sonamute.file_io import TupleJSONEncoder
 from sonamute.smtypes import (
     Message,
     HitsData,
@@ -44,18 +42,6 @@ def overlapping_ntuples(iterable: Iterable[T], n: int) -> Iterable[T]:
 
 def overlapping_terms(iterable: Iterable[str], n: int) -> Iterable[str]:
     return [" ".join(item) for item in overlapping_ntuples(iterable, n)]
-
-
-def dump(counter: Counter[str] | Counter[tuple[str, ...]]) -> str:
-    sorted_counter = {
-        k: v for k, v in sorted(counter.items(), key=lambda i: i[1], reverse=True)
-    }
-    return json.dumps(
-        sorted_counter,
-        indent=2,
-        ensure_ascii=False,
-        cls=TupleJSONEncoder,
-    )
 
 
 def clean_string(content: str) -> str:
