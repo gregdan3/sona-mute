@@ -3,27 +3,27 @@ name = "sonamute"
 version = "0.2.0"
 description = "Taking Toki Pona statements and turning it into frequency information."
 authors = [
-    {name = "Gregory Danielson", email = "gregory.danielson3@gmail.com"},
+  { name = "Gregory Danielson", email = "gregory.danielson3@gmail.com" },
 ]
 dependencies = [
-    "sonatoki>=0.10.0",
-    "orjson>=3.10.3",
-    "edgedb>=1.9.0",
-    "pydantic>=2.7.1",
-    "async-lru>=2.0.4",
-    "sqlalchemy[asyncio]>=2.0.31",
-    "sqlalchemy-utils>=0.41.2",
-    "aiosqlite>=0.20.0",
-    "python-dotenv>=1.0.1",
-    "rich>=13.7.1",
-    "beautifulsoup4>=4.12.3",
-    "lxml>=5.3.0",
-    "pyyaml>=5.1.0",
-    "python-frontmatter>=1.1.0",
+  "sonatoki>=0.11.0",
+  "orjson>=3.10.3",
+  "edgedb>=1.9.0",
+  "pydantic>=2.7.1",
+  "async-lru>=2.0.4",
+  "sqlalchemy[asyncio]>=2.0.31",
+  "sqlalchemy-utils>=0.41.2",
+  "aiosqlite>=0.20.0",
+  "python-dotenv>=1.0.1",
+  "rich>=13.7.1",
+  "beautifulsoup4>=4.12.3",
+  "lxml>=5.3.0",
+  "pyyaml>=5.1.0",
+  "python-frontmatter>=1.1.0",
 ]
 requires-python = ">=3.11"
 readme = "README.md"
-license = {text = "AGPL-3.0-or-later"}
+license = { text = "AGPL-3.0-or-later" }
 
 
 [tool.pdm]
@@ -52,9 +52,9 @@ src = ["src"]
 
 [dependency-groups]
 dev = [
-    "snakeviz>=2.2.0",
-    "ipython>=8.26.0",
-    "pytest>=8.2.2",
-    "pytest-asyncio>=0.23.7",
-    "yappi>=1.6.10",
+  "snakeviz>=2.2.0",
+  "ipython>=8.26.0",
+  "pytest>=8.2.2",
+  "pytest-asyncio>=0.23.7",
+  "yappi>=1.6.10",
 ]
