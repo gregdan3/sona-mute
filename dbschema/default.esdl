@@ -85,10 +85,12 @@ module default {
     total_hits: int64 {
       default := 0;
     };
+    required marked: bool;
 
     constraint exclusive on ((.text));
-    index on ((.text, .len, .total_hits));
-    index on (.total_hits);
+    index on ((.total_hits, .len, .marked));
+    index on ((.total_hits, .text, .len));
+    index on (.text);
   }
 
   type Frequency {
@@ -109,7 +111,7 @@ module default {
     constraint exclusive on ((.term, .community, .min_sent_len, .day));
 
     index on ((.day, .min_sent_len, .term));
-    index on ((.day));
+    index on ((.term, .min_sent_len, .day));
 
     # trigger update_total_hits after insert for each
     # when (__new__.min_sent_len = __new__.term.len)

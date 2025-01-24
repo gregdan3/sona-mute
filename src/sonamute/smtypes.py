@@ -91,6 +91,8 @@ class Message(PreMessage):
 class EDBFrequency(TypedDict):
     text: str
     term_len: int
+    marked: bool
+
     min_sent_len: int
     community: UUID
     day: datetime

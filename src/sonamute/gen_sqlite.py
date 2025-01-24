@@ -208,13 +208,13 @@ async def copy_totals(
     end: datetime,
     table: TotalTable,
 ):
-    total_hits = await edb.global_hits_in_range(
+    total_hits = await edb.total_hits_in_range(
         term_len,
         min_sent_len,
         start,
         end,
     )
-    total_authors = await edb.global_authors_in_range(
+    total_authors = await edb.total_authors_in_range(
         term_len,
         min_sent_len,
         start,

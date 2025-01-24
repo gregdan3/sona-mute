@@ -65,7 +65,7 @@ FAILING_USER_SENTS_SELECT = USER_SENTS_SELECT % "NonTPUserSentence"
 
 
 # needs to merge across communities
-FREQ_SELECT = """
+TERM_DATA_SELECT = """
 with
   F := (
     select Frequency {text := .term.text}
@@ -92,26 +92,28 @@ AUTHOR_IS_COUNTED_SELECT = """
     select Author filter .id = <std::uuid>$author and .num_tp_sentences >= 20;
 """
 
-GLOBAL_HITS_SELECT = """
+TOTAL_HITS_SELECT = """
 with
   F := (
     select Frequency
     filter
       .term.total_hits >= 40
       and .term.len = <int16>$term_len
+      and not .term.marked
       and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
   ) select sum(F.hits);
 """
 
-GLOBAL_AUTHORS_SELECT = """
+TOTAL_AUTHORS_SELECT = """
 with
   F := (
     select Frequency
     filter
       .term.total_hits >= 40
       and .term.len = <int16>$term_len
+      and not .term.marked
       and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
@@ -168,6 +170,7 @@ TERM_INSERT = """
 INSERT Term {
     text := <str>$text,
     len := <int16>$term_len,
+    marked := <bool>$marked,
 } unless conflict on (.text)
 else (Term)
 """
@@ -177,6 +180,7 @@ with term := (
     INSERT Term {
         text := <str>$text,
         len := <int16>$term_len,
+        marked := <bool>$marked,
     } unless conflict on (.text)
     else (Term)
 )
@@ -492,9 +496,9 @@ class MessageDB:
         limit: int | None = None,
         # word: str | None = None,
     ) -> list[SQLFrequency]:
-        query = FREQ_SELECT
+        query = TERM_DATA_SELECT
         if limit:
-            query = FREQ_SELECT + f" limit {limit}"
+            query = TERM_DATA_SELECT + f" limit {limit}"
 
         results = await self.client.query(
             query,
@@ -517,7 +521,7 @@ class MessageDB:
             output.append(formatted)
         return output
 
-    async def global_hits_in_range(
+    async def total_hits_in_range(
         self,
         term_len: int,
         min_sent_len: int,
@@ -526,7 +530,7 @@ class MessageDB:
         # word: str | None = None,
     ) -> int:
         result: int = await self.client.query_required_single(
-            GLOBAL_HITS_SELECT,
+            TOTAL_HITS_SELECT,
             term_len=term_len,
             min_sent_len=min_sent_len,
             start=start,
@@ -535,7 +539,7 @@ class MessageDB:
 
         return result
 
-    async def global_authors_in_range(
+    async def total_authors_in_range(
         self,
         term_len: int,
         min_sent_len: int,
@@ -544,7 +548,7 @@ class MessageDB:
         # word: str | None = None,
     ) -> int:
         result = await self.client.query(
-            GLOBAL_AUTHORS_SELECT,
+            TOTAL_AUTHORS_SELECT,
             term_len=term_len,
             min_sent_len=min_sent_len,
             start=start,
@@ -554,6 +558,10 @@ class MessageDB:
 
     async def update_author_tpt_sents(self) -> None:
         _ = await self.client.execute(UPDATE_NUM_SENTS)
+
+
+def is_marked(text: str) -> bool:
+    return text[0] == "^" or text[-1] == "$"
 
 
 def make_edgedb_frequency(
@@ -568,8 +576,9 @@ def make_edgedb_frequency(
         result = EDBFrequency(
             {
                 "text": text,
-                "community": community,
                 "term_len": term_len,
+                "marked": is_marked(text),
+                "community": community,
                 "min_sent_len": min_sent_len,
                 "day": day,
                 "hits": hits_data["hits"],
@@ -582,6 +591,8 @@ def make_edgedb_frequency(
     return word_freq_rows
 
 
+# TODO: include is_marked in this?
+# you can derive it from the text
 def make_sqlite_frequency(
     text: str,
     term_len: int,
