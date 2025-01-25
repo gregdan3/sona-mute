@@ -238,6 +238,8 @@ async def generate_sqlite(
     trimmed_filename: str,
     min_date: datetime,
     max_date: datetime,
+    max_term_len: int,
+    max_min_sent_len: int,
 ):
     sdb = await freqdb_factory(filename)
     first_msg_dt, last_msg_dt = await edb.get_msg_date_range()
@@ -247,9 +249,9 @@ async def generate_sqlite(
         last_msg_dt = max_date
 
     print(f"Generating frequency data starting {now()}")
-    for term_len in range(1, 7):
+    for term_len in range(0, max_term_len + 1):
         print(f"Starting term len {term_len} @ {now()}")
-        for min_sent_len in range(term_len, 7):
+        for min_sent_len in range(term_len, max_min_sent_len + 1):
             print(f"Starting min sent len {min_sent_len} @ {now()}")
 
             print(f"all time (pl {term_len}, msl {min_sent_len}) @ {now()}")

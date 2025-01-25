@@ -167,7 +167,15 @@ async def amain(argv: argparse.Namespace):
         max_date = actions["sqlite"]["max_date"]
 
         print(f"Dumping frequency data to {dbpath}")
-        await generate_sqlite(db, dbpath, trimmed_filename, min_date, max_date)
+        await generate_sqlite(
+            db,
+            dbpath,
+            trimmed_filename,
+            min_date,
+            max_date,
+            MAX_TERM_LEN,
+            MAX_MIN_SENT_LEN,
+        )
 
 
 def main(argv: argparse.Namespace):
