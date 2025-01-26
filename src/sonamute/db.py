@@ -1,6 +1,6 @@
 # STL
 from uuid import UUID
-from typing import cast
+from typing import Any, Iterable, cast
 from datetime import datetime
 
 # PDM
@@ -17,6 +17,7 @@ from sonamute.smtypes import (
     Platform,
     Sentence,
     Community,
+    InterFreq,
     PreMessage,
     CommSentence,
     EDBFrequency,
@@ -86,6 +87,20 @@ with
     hits := sum(.elements.hits),
     authors := .elements.authors,
   };
+"""
+
+# TODO: what if i stopped filtering by term length and min sent len
+# if i did so, i would save a round trip to the term table
+# but query way more data at once
+
+TERM_DATA_SELECT_NO_GROUP = """
+select Frequency {text := .term.text, hits := .hits, authors := .authors}
+filter
+    .term.total_hits >= 40
+    and .term.len = <int16>$term_len
+    and .min_sent_len = <int16>$min_sent_len
+    and .day >= <std::datetime>$start
+    and .day < <std::datetime>$end;
 """
 
 AUTHOR_IS_COUNTED_SELECT = """
@@ -477,15 +492,28 @@ class MessageDB:
         )
         return not not result
 
-    async def count_nontrivial_authors(self, authors: list[UUID]) -> int:
+    async def count_nontrivial_authors(self, authors: Iterable[UUID]) -> int:
         # NOTE: I tried asyncio.gather. it's genuinely slower, but the
         # difference is tiny
         counted_authors = 0
         for author in authors:
-            counted = await self.is_author_counted(author.id)
+            counted = await self.is_author_counted(author)
             if counted:
                 counted_authors += 1
         return counted_authors
+
+    async def merge_frequency_data(
+        self,
+        data: Iterable[Any],
+    ) -> dict[str, InterFreq]:
+        output: dict[str, InterFreq] = dict()
+        for item in data:
+            text = item.text
+            if text not in output:
+                output[text] = {"hits": 0, "authors": set()}
+            output[text]["hits"] += item.hits
+            output[text]["authors"] |= {author.id for author in item.authors}
+        return output
 
     async def select_frequencies_in_range(
         self,
@@ -493,15 +521,9 @@ class MessageDB:
         min_sent_len: int,
         start: datetime,
         end: datetime,
-        limit: int | None = None,
-        # word: str | None = None,
     ) -> list[SQLFrequency]:
-        query = TERM_DATA_SELECT
-        if limit:
-            query = TERM_DATA_SELECT + f" limit {limit}"
-
         results = await self.client.query(
-            query,
+            TERM_DATA_SELECT,
             term_len=term_len,
             min_sent_len=min_sent_len,
             start=start,
@@ -509,13 +531,46 @@ class MessageDB:
         )
         output: list[SQLFrequency] = list()
         for result in results:
-            counted_authors = await self.count_nontrivial_authors(result.authors)
+            counted_authors = await self.count_nontrivial_authors(
+                {author.id for author in result.authors}
+            )
             formatted = make_sqlite_frequency(
                 text=result.text,
                 term_len=term_len,
                 min_sent_len=min_sent_len,
                 day=int(start.timestamp()),
                 hits=result.hits,
+                authors=counted_authors,
+            )
+            output.append(formatted)
+        return output
+
+    async def select_frequencies_in_range_fast(
+        self,
+        term_len: int,
+        min_sent_len: int,
+        start: datetime,
+        end: datetime,
+    ) -> list[SQLFrequency]:
+        """Do grouping on client instead of DB"""
+        results = await self.client.query(
+            TERM_DATA_SELECT_NO_GROUP,
+            term_len=term_len,
+            min_sent_len=min_sent_len,
+            start=start,
+            end=end,
+        )
+        merged = await self.merge_frequency_data(results)
+
+        output: list[SQLFrequency] = list()
+        for text, result in merged.items():
+            counted_authors = await self.count_nontrivial_authors(result["authors"])
+            formatted = make_sqlite_frequency(
+                text=text,
+                term_len=term_len,
+                min_sent_len=min_sent_len,
+                day=int(start.timestamp()),
+                hits=result["hits"],
                 authors=counted_authors,
             )
             output.append(formatted)
@@ -554,7 +609,7 @@ class MessageDB:
             start=start,
             end=end,
         )
-        return await self.count_nontrivial_authors(result)
+        return await self.count_nontrivial_authors({author.id for author in result})
 
     async def update_author_tpt_sents(self) -> None:
         _ = await self.client.execute(UPDATE_NUM_SENTS)

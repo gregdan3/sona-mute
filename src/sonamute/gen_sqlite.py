@@ -186,7 +186,7 @@ async def copy_freqs(
     table: FreqTable,
 ):
     # all-time ranking data
-    results = await edb.select_frequencies_in_range(
+    results = await edb.select_frequencies_in_range_fast(
         term_len,
         min_sent_len,
         start,

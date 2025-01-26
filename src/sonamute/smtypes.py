@@ -106,6 +106,11 @@ class SQLTerm(TypedDict):
     len: int
 
 
+class InterFreq(TypedDict):
+    hits: int
+    authors: set[UUID]
+
+
 class SQLFrequency(TypedDict):
     # NOTE: exactly one of term or term_id are required.
     term: SQLTerm
