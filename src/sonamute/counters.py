@@ -189,13 +189,12 @@ def count_frequencies(
             min_sent_len: defaultdict(lambda: HitsData({"hits": 0, "authors": set()}))
             for min_sent_len in range(term_len, max_min_sent_len + 1)
         }
-        for term_len in range(0, max_term_len + 1)
+        for term_len in range(1, max_term_len + 1)
     }
     for sent in sents:
         words = sent["words"]
         author = sent["author"]
         sent_len = len(words)
-        adj_sent_len = sent_len
         if not sent_len:
             continue
 
@@ -205,26 +204,15 @@ def count_frequencies(
         if do_sentence_markers:
             # TODO: is there a faster way to do this?
             words = ["^", *words, "$"]
-            adj_sent_len += 2
+            sent_len += 2
 
-        for term_len in range(1, max_term_len + 1):
-            if adj_sent_len < term_len:
-                continue
-
+        local_max_term_len = min(max_term_len, sent_len)
+        for term_len in range(1, local_max_term_len):
             terms = overlapping_terms(words, term_len)
             for term in terms:
-                adj_term_len = term_len
-                if do_sentence_markers:
-                    if term[0] == "^":
-                        adj_term_len -= 1
-                    if term[-1] == "$":
-                        adj_term_len -= 1
-
-                local_max_msl = min(max_min_sent_len, sent_len)
-                for msl in range(adj_term_len, local_max_msl + 1):
-                    if sent_len < msl:
-                        break
-                    metacounter[adj_term_len][msl][term]["hits"] += 1
+                local_max_min_sent_len = min(max_min_sent_len, sent_len)
+                for msl in range(term_len, local_max_min_sent_len + 1):
+                    metacounter[term_len][msl][term]["hits"] += 1
                     metacounter[adj_term_len][msl][term]["authors"] |= {author}
 
     return metacounter

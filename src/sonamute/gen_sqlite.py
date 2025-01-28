@@ -249,7 +249,7 @@ async def generate_sqlite(
         last_msg_dt = max_date
 
     print(f"Generating frequency data starting {now()}")
-    for term_len in range(0, max_term_len + 1):
+    for term_len in range(1, max_term_len + 1):
         print(f"Starting term len {term_len} @ {now()}")
         for min_sent_len in range(term_len, max_min_sent_len + 1):
             print(f"Starting min sent len {min_sent_len} @ {now()}")
