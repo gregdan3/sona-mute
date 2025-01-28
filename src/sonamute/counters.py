@@ -213,6 +213,6 @@ def count_frequencies(
                 local_max_min_sent_len = min(max_min_sent_len, sent_len)
                 for msl in range(term_len, local_max_min_sent_len + 1):
                     metacounter[term_len][msl][term]["hits"] += 1
-                    metacounter[adj_term_len][msl][term]["authors"] |= {author}
+                    metacounter[term_len][msl][term]["authors"].add(author)
 
     return metacounter
