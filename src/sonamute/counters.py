@@ -63,6 +63,8 @@ def process_msg(msg: PreMessage) -> Message:
     """
     is_counted = is_countable(msg)
     msg["content"] = clean_string(msg["content"])
+    msg_scorecard = ILO.make_scorecard(msg["content"])
+    msg_score = msg_scorecard["score"]
 
     sentences: list[Sentence] = []
     for scorecard in ILO.make_scorecards(msg["content"]):
@@ -77,7 +79,12 @@ def process_msg(msg: PreMessage) -> Message:
         )
 
     # it's okay to have no sentences
-    final_msg: Message = {**msg, "sentences": sentences, "is_counted": is_counted}
+    final_msg: Message = {
+        **msg,
+        "score": msg_score,
+        "sentences": sentences,
+        "is_counted": is_counted,
+    }
     return final_msg
 
 

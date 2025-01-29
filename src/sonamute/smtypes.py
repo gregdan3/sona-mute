@@ -84,6 +84,7 @@ class PreMessage(TypedDict):
 
 
 class Message(PreMessage):
+    score: float
     is_counted: bool
     sentences: list[Sentence]
 
