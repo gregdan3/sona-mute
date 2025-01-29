@@ -169,6 +169,7 @@ INSERT Message {
     author := <Author>$author,
     postdate := <std::datetime>$postdate,
     content := <str>$content,
+    score := <float64>$score,
     is_counted := <bool>$is_counted
 }
 """
@@ -397,6 +398,7 @@ class MessageDB:
         author: UUID,
         postdate: datetime,
         content: str,
+        score: float,
         sentences: list[Sentence],
         is_counted: bool,
         container: int | None = None,
@@ -408,6 +410,7 @@ class MessageDB:
             author=author,
             postdate=postdate,
             content=content,
+            score=score,
             is_counted=is_counted,
             container=container,
         )
@@ -433,6 +436,7 @@ class MessageDB:
             community=community_id,
             postdate=message["postdate"],
             content=message["content"],
+            score=message["score"],
             sentences=message["sentences"],
             is_counted=message["is_counted"],
             container=message.get("container", None),
