@@ -55,6 +55,8 @@ module default {
     required author: Author;
     required postdate: datetime;
     required content: str;
+    required score: float64;
+
     required is_counted: bool;
     # simplified from checking the author's is_bot or is_webhook
     # or containers of the message
