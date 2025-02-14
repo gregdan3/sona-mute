@@ -39,6 +39,7 @@ module default {
     required message: Message;
     required words: array<str>;
     required score: float64;
+    required len: int16;
     # NOTE: Will be pre-tokenized with the **toki pona** tokenizer,
     # and pre-cleaned by removing consecutive duplicates.
 
