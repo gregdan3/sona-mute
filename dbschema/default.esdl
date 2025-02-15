@@ -73,7 +73,16 @@ module default {
   alias TPUserSentence := (
     SELECT Sentence FILTER
       .score >= 0.8 AND
-      .message.is_counted
+      .message.is_counted AND
+      .message.score > 0.1 AND
+      # this affects about 0.5% of otherwise counted data
+      (.len >= 3 OR .message.score >= 0.3)
+      # this affects about 1.5% of otherwise counted data
+      # (without the length filter, it would be 4.5%)
+      # shorter sentences have fewer opportunities to be correctly scored
+      # so for those, we pull in more context, the message score
+      # if the entire message or like 90% of it was the sentence, no harm done
+      # if it's embedded in a larger message, we get more confidence
   );
 
   alias NonTPUserSentence := (
