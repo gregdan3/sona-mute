@@ -120,6 +120,8 @@ with
       and .day < <std::datetime>$end
   ) select sum(F.hits);
 """
+# `marked` is ignored because it doesn't constribute to the term count
+# marked terms are already in the unmarked terms, always
 
 TOTAL_AUTHORS_SELECT = """
 with
