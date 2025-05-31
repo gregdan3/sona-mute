@@ -25,6 +25,7 @@ IGNORED_AUTHORS_MAP = {
         1135634171734261830,  # ma musi minecraft logger
         1213156131006845020,  # sona.pona.la logger
         950311805845139506,  # "o sitelen lon lipu sina"
+        790443487912656916,  # ilo ako
     }
 }
 
