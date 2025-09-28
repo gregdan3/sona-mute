@@ -1,5 +1,6 @@
 # STL
 import itertools
+from sys import intern
 from uuid import UUID
 from typing import Tuple, TypeVar
 from collections import Counter, defaultdict
@@ -9,14 +10,12 @@ from collections.abc import Iterable, Iterator, Generator
 from sonamute.ilo import ILO
 from sonamute.utils import fake_uuid
 from sonamute.smtypes import (
-    Attr,
     Stats,
     Message,
-    HitsData,
     Sentence,
+    Attribute,
     PreMessage,
-    Metacounter,
-    RawFrequency,
+    StatsCounter,
     SortedSentence,
 )
 from sonamute.sources.generic import PlatformFetcher, is_countable
@@ -46,7 +45,7 @@ def window_iter(iterable: Iterable[T], n: int) -> Iterable[tuple[T, ...]]:
 
 def window_iter_terms(iterable: Iterable[str], n: int) -> Iterable[str]:
     for item in window_iter(iterable, n):
-        yield " ".join(item)
+        yield intern(" ".join(item))
 
 
 def window_iter_range(
@@ -66,12 +65,12 @@ def window_iter_terms_range(
     iterable: Iterable[str], n: int
 ) -> Iterator[Tuple[str, Tuple[int, int]]]:
     for tup, idx_range in window_iter_range(iterable, n):
-        yield " ".join(tup), idx_range
+        yield intern(" ".join(tup)), idx_range
 
 
 def clean_string(content: str) -> str:
     """
-    EdgeDB-specific string pre-processing.
+    GelDB-specific string pre-processing.
     I note all changes; none of them are semantic.
     """
 
@@ -84,7 +83,7 @@ def clean_string(content: str) -> str:
 
 def process_msg(msg: PreMessage) -> Message:
     """
-    For EdgeDB inserts. Turns a PreMessage into a Message, including all sentences.
+    For GelDB inserts. Turns a PreMessage into a Message, including all sentences.
     """
     is_counted = is_countable(msg)
     msg["content"] = clean_string(msg["content"])
@@ -94,14 +93,12 @@ def process_msg(msg: PreMessage) -> Message:
     sentences: list[Sentence] = []
     for scorecard in ILO.make_scorecards(msg["content"]):
         if not scorecard["cleaned"]:
-            # omit empty sentences
-            continue
-        sentences.append(
-            Sentence(
-                words=scorecard["cleaned"],
-                score=scorecard["score"],
-            )
+            continue  # omit empty sentences
+        sentence = Sentence(
+            words=scorecard["cleaned"],
+            score=scorecard["score"],
         )
+        sentences.append(sentence)
 
     # it's okay to have no sentences
     final_msg: Message = {
@@ -210,19 +207,24 @@ def is_nonsense(sent_len: int, sent: list[str]) -> bool:
     return (count / sent_len) >= 0.5
 
 
-def count_frequencies(
+def get_sentence_stats(
     sents: Iterable[SortedSentence],
     max_term_len: int,
     max_min_sent_len: int,
-    do_sentence_markers: bool = True,
-) -> Metacounter:
-    metacounter: Metacounter = {
-        term_len: {
-            min_sent_len: defaultdict(lambda: HitsData({"hits": 0, "authors": set()}))
-            for min_sent_len in range(term_len, max_min_sent_len + 1)
-        }
-        for term_len in range(1, max_term_len + 1)
-    }
+) -> StatsCounter:
+    freqs: StatsCounter = defaultdict(lambda: Stats({"hits": 0, "authors": set()}))
+
+    def add_freq(
+        term_len: int,
+        msl: int,
+        term: str,
+        attr: Attribute,
+        author: UUID,
+    ):
+        freq = freqs[(term_len, msl, term, attr)]
+        freq["hits"] += 1
+        freq["authors"].add(author)
+
     for sent in sents:
         words = sent["words"]
         author = sent["author"]
@@ -230,18 +232,21 @@ def count_frequencies(
         if not sent_len or is_nonsense(sent_len, words):
             continue
 
-        if do_sentence_markers:
-            # TODO: is there a faster way to do this?
-            words = ["^", *words, "$"]
-            sent_len += 2
+        term_len_cap = min(max_term_len, sent_len) + 1
+        msl_cap = min(max_min_sent_len, sent_len) + 1
+        for term_len in range(1, term_len_cap):
+            terms = window_iter_terms_range(words, term_len)
+            for term, (start, end) in terms:
+                is_start = start == 0
+                is_end = end == sent_len
+                for msl in range(term_len, msl_cap):
+                    # NOTE: if max_msl is less than max_term_len
+                    # this will not go past terms of length max_msl
+                    # terms of must be in sentences of at least their length
+                    add_freq(term_len, msl, term, Attribute.All, author)
+                    if is_start:
+                        add_freq(term_len, msl, term, Attribute.SentenceStart, author)
+                    if is_end:
+                        add_freq(term_len, msl, term, Attribute.SentenceEnd, author)
 
-        local_max_term_len = min(max_term_len, sent_len) + 1
-        local_max_min_sent_len = min(max_min_sent_len, sent_len) + 1
-        for term_len in range(1, local_max_term_len):
-            terms = window_iter_terms(words, term_len)
-            for term in terms:
-                for msl in range(term_len, local_max_min_sent_len):
-                    metacounter[term_len][msl][term]["hits"] += 1
-                    metacounter[term_len][msl][term]["authors"].add(author)
-
-    return metacounter
+    return freqs

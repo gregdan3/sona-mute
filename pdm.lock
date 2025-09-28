@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:ab0ac8b2fe90dabeaf977c2948fab8e40a4013dd5bf66fc6db74ae6f1e3d7a67"
+content_hash = "sha256:112714da5b7b0f26354cfdb482264c04aaee66b25b3e5f5a7cbc88cbf1ccf49c"
 
 [[metadata.targets]]
 requires_python = ">=3.11"
@@ -113,29 +113,6 @@ files = [
 ]
 
 [[package]]
-name = "edgedb"
-version = "2.2.0"
-requires_python = ">=3.8"
-summary = "EdgeDB Python driver"
-groups = ["default"]
-dependencies = [
-    "certifi>=2021.5.30; platform_system == \"Windows\"",
-]
-files = [
-    {file = "edgedb-2.2.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:fc29f02fbe5e3d8132f662dfec5a61ce29601fffa0ed6cbe3452ffe485e1daec"},
-    {file = "edgedb-2.2.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:915c18080edae53cba1e4473dedc1006218f7fed5aa890194eb21d1cb51101b7"},
-    {file = "edgedb-2.2.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:87e42dcae39694e2962c6543bc292fccae09ae57fd92d3df9717d93da84a3d07"},
-    {file = "edgedb-2.2.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:fe9a7b8aa75470d1035fd300b60df9b2fbdcff0880e888849ac4778d7dee5482"},
-    {file = "edgedb-2.2.0-cp311-cp311-win_amd64.whl", hash = "sha256:128bda5fdf5cacabbdc84fc315011e43d2001d17ba4da416e11cec73cb9cc8bd"},
-    {file = "edgedb-2.2.0-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:235fc54f473303452e63c8f865a278ccfd1501bc1086b5f46621b9c7804f86ee"},
-    {file = "edgedb-2.2.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:854ca65508f797474730e9b1c521b46c460a8307b279a88023436afa11e09ce2"},
-    {file = "edgedb-2.2.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:05db28f8dcaaa349fad73bf0217a1dea498e55c7db70acc967d742dc88a63236"},
-    {file = "edgedb-2.2.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:51642e583106873f5fc769dde4f9d85a9fb15d8df5ed1dd8a089b893da572d7e"},
-    {file = "edgedb-2.2.0-cp312-cp312-win_amd64.whl", hash = "sha256:cc013be975519b1428936a2a9391998e4fa2fd0befa865961ae8131834e543cf"},
-    {file = "edgedb-2.2.0.tar.gz", hash = "sha256:3ddbb841fe80d25ede524535dd52878cf74adae8c920e1f5dd912cddf66fe5f8"},
-]
-
-[[package]]
 name = "emoji"
 version = "2.14.1"
 requires_python = ">=3.7"
@@ -158,6 +135,34 @@ groups = ["dev"]
 files = [
     {file = "executing-2.1.0-py2.py3-none-any.whl", hash = "sha256:8d63781349375b5ebccc3142f4b30350c0cd9c79f921cde38be2be4637e98eaf"},
     {file = "executing-2.1.0.tar.gz", hash = "sha256:8ea27ddd260da8150fa5a708269c4a10e76161e2496ec3e587da9e3c0fe4b9ab"},
+]
+
+[[package]]
+name = "gel"
+version = "3.1.0"
+requires_python = ">=3.9.0"
+summary = "Official Gel Python Driver"
+groups = ["default"]
+dependencies = [
+    "certifi>=2021.5.30; platform_system == \"Windows\"",
+]
+files = [
+    {file = "gel-3.1.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:2204985818d2c03f34c3ee35a211ebdb76b1452a0e4bdba6548664b2761c4d91"},
+    {file = "gel-3.1.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:d3782b2d18c75d9a14c7102ca4ea3a31a053128a922f6e0d1ee855cc4262789e"},
+    {file = "gel-3.1.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:43a4dd3ca142171f65b66134c2c0a01bef4742daabd7664b699b43e6c7921a5a"},
+    {file = "gel-3.1.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ad9ce2db8f55d78762e86610ed1d05150e06fb80570a78a4b10de166d9a56545"},
+    {file = "gel-3.1.0-cp311-cp311-win_amd64.whl", hash = "sha256:6c1a83c457c1e3519cb905a2769b97254548b8126098cc948c422560c7c6909c"},
+    {file = "gel-3.1.0-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:42dedd9f691e2e6c82539dc04ff05d6a6dc6e0c13b07192442e142a87f1c37b1"},
+    {file = "gel-3.1.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:b2d7497fe30ae9794f6f24df59071bf9da2d7accd67d4216ebe126c7ef3c173d"},
+    {file = "gel-3.1.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:8421976750c4e8bac052797e8ffee2f082b1268bfc2f1d5a265eedfcf8c4f116"},
+    {file = "gel-3.1.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b059b4d2aac27a1ee95c3bd18add1090a899e7bfd4668f1c99aa3d1f57b7714a"},
+    {file = "gel-3.1.0-cp312-cp312-win_amd64.whl", hash = "sha256:3927e15c98867c71bdfd13d887efc0268c30e657d46d1a7bf916787b445f3d76"},
+    {file = "gel-3.1.0-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:f5e41f4ddc86e054256e81302905e671647577c1aed7249e1781aee1e0cb2f7c"},
+    {file = "gel-3.1.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:cd20c45beec358197293ad5c1fcf7fd383153e0d8d7038322085cf27436dc975"},
+    {file = "gel-3.1.0-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:8a526e11ba696d1cf6c876c08afe6ab5f762a227faaa3b78523ebc2511567609"},
+    {file = "gel-3.1.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c06f11fcde231d6264dbe0b19d7b2942767a196e9c6f2cabf22fbb04094134af"},
+    {file = "gel-3.1.0-cp313-cp313-win_amd64.whl", hash = "sha256:48235a5082f03d7eccbcaa4255260c8a3cdb2cfd123f121dd6b0d3ebc51421ac"},
+    {file = "gel-3.1.0.tar.gz", hash = "sha256:3bb0b21167e00c976675a7d5dd73c21002e659651bf9de7fa46cd418bfa3eb85"},
 ]
 
 [[package]]
@@ -747,7 +752,7 @@ files = [
 
 [[package]]
 name = "sonatoki"
-version = "0.11.1"
+version = "0.11.2"
 requires_python = ">=3.8"
 summary = "ilo li moku e toki li pana e sona ni: ni li toki ala toki pona?"
 groups = ["default"]
@@ -758,8 +763,8 @@ dependencies = [
     "unidecode>=1.3.6",
 ]
 files = [
-    {file = "sonatoki-0.11.1-py3-none-any.whl", hash = "sha256:d325f7ff981aba5b5fb9c4c1c1eb1890d8d6b03fe35742df4dabf4941d4d7acf"},
-    {file = "sonatoki-0.11.1.tar.gz", hash = "sha256:d7d7b69c4891881839c6c2c0965bf3bcaeb41d65a39c62df3643dd9e1d00ce2f"},
+    {file = "sonatoki-0.11.2-py3-none-any.whl", hash = "sha256:2543f9f0f8125a97599356433d132867970088921e7ba4faa24d42800fe4cce8"},
+    {file = "sonatoki-0.11.2.tar.gz", hash = "sha256:a49fa685716ac10baace2922a99b5826565578b0f6501e9b2ea4caf02f9dbab5"},
 ]
 
 [[package]]

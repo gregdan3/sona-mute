@@ -5,28 +5,23 @@ import asyncio
 import argparse
 from uuid import UUID
 from datetime import datetime
-from collections import Counter
 
 # PDM
-from edgedb.errors import EdgeDBError
+from gel.errors import EdgeDBError as GelDBError
 
 # LOCAL
-from sonamute.db import MessageDB, make_edgedb_frequency, load_messagedb_from_env
+from sonamute.db import MessageDB, format_freq_geldb, load_messagedb_from_env
 from sonamute.cli import SOURCES, menu_handler
-from sonamute.ilo import ILO
-from sonamute.utils import T, now, batch_iter, gather_batch, months_in_range
+from sonamute.utils import now, fake_uuid, batch_iter, gather_batch, months_in_range
 from sonamute.smtypes import (
-    Message,
-    HitsData,
-    Sentence,
     PreMessage,
-    Metacounter,
     CommSentence,
-    EDBFrequency,
+    GelFrequency,
+    StatsCounter,
     SortedSentence,
 )
-from sonamute.counters import countables, process_msg, count_frequencies
-from sonamute.constants import MAX_TERM_LEN, MAX_MIN_SENT_LEN
+from sonamute.counters import countables, process_msg, get_sentence_stats
+from sonamute.constants import MAX_TERM_LEN, MIN_HITS_NEEDED, MAX_MIN_SENT_LEN
 from sonamute.gen_sqlite import generate_sqlite
 from sonamute.sources.generic import PlatformFetcher
 
@@ -38,7 +33,7 @@ async def insert_raw_msg(db: MessageDB, msg: PreMessage) -> UUID | None:
     processed = process_msg(msg)
     try:
         _ = await db.insert_message(processed)
-    except EdgeDBError as e:
+    except GelDBError as e:
         print(msg)
         raise (e)
 
@@ -70,23 +65,35 @@ async def source_to_db(db: MessageDB, source: PlatformFetcher, batch_size: int):
     print(f"Final total: {i} messages @ {now()}")
 
 
-def counter_to_insertable_freqs(
-    metacounter: Metacounter,
-    community: UUID,
-    day: datetime,
-) -> list[EDBFrequency]:
-    output: list[EDBFrequency] = list()
-    for term_len, inner in metacounter.items():
-        for min_sent_len, counter in inner.items():
-            formatted = make_edgedb_frequency(
-                counter, community, term_len, min_sent_len, day
-            )
-            output.extend(formatted)
+def format_stats(
+    stats: StatsCounter,
+    community: UUID | None = None,
+    day: datetime | None = None,
+) -> list[GelFrequency]:
+    if community is None:
+        community = fake_uuid("")
+    if day is None:
+        day = datetime.fromtimestamp(0)
+    if community or day:
+        assert community and day
 
+    output: list[GelFrequency] = list()
+    for (term_len, min_sent_len, text, attr), item in stats.items():
+        formatted = format_freq_geldb(
+            text,
+            term_len,
+            attr,
+            community,
+            min_sent_len,
+            day,
+            item["hits"],
+            item["authors"],
+        )
+        output.append(formatted)
     return output
 
 
-async def sentences_to_frequencies(db: MessageDB, batch_size: int, passing: bool):
+async def db_sents_to_freqs(db: MessageDB, batch_size: int, passing: bool):
     first_msg_dt, last_msg_dt = await db.get_msg_date_range()
     for start, end in months_in_range(first_msg_dt, last_msg_dt):
         print(f"gen frequency for {start.date()} - {end.date()}")
@@ -97,35 +104,38 @@ async def sentences_to_frequencies(db: MessageDB, batch_size: int, passing: bool
         # things from it
 
         for community, sents in by_community.items():
-            metacounter = count_frequencies(sents, MAX_TERM_LEN, MAX_MIN_SENT_LEN)
-            formatted = counter_to_insertable_freqs(metacounter, community, start)
+            stats = get_sentence_stats(sents, MAX_TERM_LEN, MAX_MIN_SENT_LEN)
+            formatted = format_stats(stats, community, start)
             _ = await gather_batch(db.insert_frequency, formatted, batch_size)
 
 
-def source_to_frequencies(source: PlatformFetcher):
-    metacounter = count_frequencies(countables(source), MAX_TERM_LEN, MAX_MIN_SENT_LEN)
-    return metacounter
+def source_sents_to_freqs(source: PlatformFetcher) -> list[GelFrequency]:
+    stats = get_sentence_stats(countables(source), MAX_TERM_LEN, MAX_MIN_SENT_LEN)
+    stats = format_stats(stats)
+    return stats
 
 
-def filter_by_hits(
-    counter: dict[str, HitsData], min_val: int = 40
-) -> dict[str, HitsData]:
-    return {k: v for k, v in counter.items() if v["hits"] >= min_val}
+def filter_freqs(freqs: list[GelFrequency], min_val: int) -> list[GelFrequency]:
+    freqs = [f for f in freqs if f["hits"] >= min_val]
+    return freqs
 
 
-def filter_metacounter(counter: Metacounter, min_val: int) -> Metacounter:
-    for i, counter_i in counter.items():
-        for j, counter_j in counter_i.items():
-            counter[i][j] = filter_by_hits(counter_j, min_val)
-    return counter
+def prep_for_dump(stats: list[GelFrequency]) -> list[GelFrequency]:
+    for f in stats:
+        f["authors"] = len(f["authors"])  # full set would be nonsense
+        del f["day"]  # not easy to organize
+        del f["community"]  # doesn't do anything
 
-
-def process_authors(counter: Metacounter):
-    for i, counter_i in counter.items():
-        for j, counter_j in counter_i.items():
-            for term, data in counter_j.items():
-                counter[i][j][term]["authors"] = len(data["authors"])
-    return counter
+    stats.sort(
+        key=lambda f: (
+            f["term_len"],  # 1 to n
+            f["min_sent_len"],  # 1 to n
+            f["attr"],  # one for each Attribute member
+            -f["hits"],  # highest to lowest
+            -f["authors"],  # again highest to lowest
+        )
+    )
+    return stats
 
 
 async def amain(argv: argparse.Namespace):
@@ -146,17 +156,17 @@ async def amain(argv: argparse.Namespace):
             await source_to_db(db, source, batch_size)
         else:
             assert output  # cli guarantees it exists
-            metacounter = source_to_frequencies(source)
-            metacounter = filter_metacounter(metacounter, 40)
-            metacounter = process_authors(metacounter)
-            dumped = json.dumps(metacounter, indent=2, ensure_ascii=False)
+            stats = source_sents_to_freqs(source)
+            stats = filter_freqs(stats, MIN_HITS_NEEDED)
+            stats = prep_for_dump(stats)
+            # TODO: new function to dump these in a sensible way
+            dumped = json.dumps(stats, indent=2, ensure_ascii=False)
             with open(output, "w") as f:
                 _ = f.write(dumped)
 
     if actions["frequency"]:
-
         print("Regenerating frequency data")
-        await sentences_to_frequencies(db, batch_size, True)
+        await db_sents_to_freqs(db, batch_size, True)
 
     if actions["sqlite"]:
         root = actions["sqlite"]["root"]

@@ -8,7 +8,6 @@ authors = [
 dependencies = [
   "sonatoki>=0.11.0",
   "orjson>=3.10.3",
-  "edgedb>=1.9.0",
   "pydantic>=2.7.1",
   "async-lru>=2.0.4",
   "sqlalchemy[asyncio]>=2.0.31",
@@ -20,6 +19,7 @@ dependencies = [
   "lxml>=5.3.0",
   "pyyaml>=5.1.0",
   "python-frontmatter>=1.1.0",
+  "gel>=3.1.0",
 ]
 requires-python = ">=3.11"
 readme = "README.md"

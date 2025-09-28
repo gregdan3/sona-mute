@@ -4,7 +4,7 @@ from random import shuffle
 from collections.abc import Callable
 
 # LOCAL
-from sonamute.counters import count_frequencies
+from sonamute.counters import get_sentence_stats
 
 sentence = "mi en olin mi li tawa ma mute li kama sona e ijo mute la mi pilin wawa mute lon kama sin lon tomo mi lon olin"
 
@@ -39,7 +39,7 @@ def profile_elapsed(iterations: int, func: Callable, *args, **kwargs) -> float:
 def profile_mcf():
     elapsed = profile_elapsed(
         iterations,
-        count_frequencies,
+        get_sentence_stats,
         sents=create_sentences(),
         max_term_len=6,
         max_min_sent_len=6,

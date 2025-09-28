@@ -4,8 +4,8 @@ from typing import Any, Iterable, cast
 from datetime import datetime
 
 # PDM
-import edgedb
-from edgedb import RetryOptions, AsyncIOClient
+import gel
+from gel import RetryOptions, AsyncIOClient, IsolationLevel, TransactionOptions
 from async_lru import alru_cache
 
 # LOCAL
@@ -13,21 +13,21 @@ from sonamute.utils import load_envvar
 from sonamute.smtypes import (
     Author,
     Message,
-    HitsData,
     Platform,
     Sentence,
+    Attribute,
     Community,
     InterFreq,
     PreMessage,
     CommSentence,
-    EDBFrequency,
+    GelFrequency,
     SQLFrequency,
 )
 from sonamute.constants import MIN_HITS_NEEDED, MIN_SENTS_NEEDED
 
 
 def create_client(username: str, password: str, host: str, port: int) -> AsyncIOClient:
-    client = edgedb.create_async_client(
+    client = gel.create_async_client(
         host=host,
         port=port,
         user=username,
@@ -35,7 +35,16 @@ def create_client(username: str, password: str, host: str, port: int) -> AsyncIO
         tls_security="insecure",
         timeout=120,
     )
-    client = client.with_retry_options(options=RetryOptions(attempts=25))
+    client = client.with_retry_options(
+        RetryOptions(attempts=25),
+    )
+    client = client.with_transaction_options(
+        TransactionOptions(
+            isolation=IsolationLevel.RepeatableRead,
+            readonly=False,
+            deferrable=True,
+        )
+    )
     return client
 
 
@@ -110,6 +119,7 @@ AUTHOR_IS_COUNTED_SELECT = """
     MIN_SENTS_NEEDED
 )
 
+# hit and author counts are based on global type, All
 TOTAL_HITS_SELECT = """
 with
   F := (
@@ -117,15 +127,11 @@ with
     filter
       .term.total_hits >= %s
       and .term.len = <int16>$term_len
-      and not .term.marked
+      and .attr = Attribute.All
       and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
   ) select sum(F.hits);
-"""
-# `marked` is ignored because it doesn't constribute to the term count
-# marked terms are already in the unmarked terms, always
-
 """ % (
     MIN_HITS_NEEDED
 )
@@ -136,7 +142,7 @@ with
     filter
       .term.total_hits >= %s
       and .term.len = <int16>$term_len
-      and not .term.marked
+      and .attr = Attribute.All
       and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
@@ -189,7 +195,8 @@ SENT_INSERT = """
 INSERT Sentence {
     message := <Message>$message,
     words := <array<str>>$words,
-    score := <float64>$score
+    score := <float64>$score,
+    len := <int32>$len
 }
 """
 
@@ -197,7 +204,6 @@ TERM_INSERT = """
 INSERT Term {
     text := <str>$text,
     len := <int16>$term_len,
-    marked := <bool>$marked,
 } unless conflict on (.text)
 else (Term)
 """
@@ -207,12 +213,12 @@ with term := (
     INSERT Term {
         text := <str>$text,
         len := <int16>$term_len,
-        marked := <bool>$marked,
     } unless conflict on (.text)
     else (Term)
 )
 INSERT Frequency {
     term := term,
+    attr := <Attribute>$attr,
     community := <Community>$community,
     min_sent_len := <int16>$min_sent_len,
     day := <datetime>$day,
@@ -270,7 +276,6 @@ class MessageDB:
         _id: int,
         name: str,
     ) -> UUID:
-        # TODO: this type is a little bit incorrect; it's an edgedb Object
         result = await self.client.query_required_single(
             query=PLAT_INSERT,
             _id=_id,
@@ -383,6 +388,7 @@ class MessageDB:
             message=message,
             words=words,
             score=score,
+            len=len(words),
         )
 
     @alru_cache
@@ -453,9 +459,9 @@ class MessageDB:
             container=message.get("container", None),
         )
 
-    async def insert_frequency(self, freq: EDBFrequency):
+    async def insert_frequency(self, freq: GelFrequency):
         _ = await self.client.query(FREQ_INSERT, **freq)
-        if freq["term_len"] == freq["min_sent_len"]:
+        if freq["term_len"] == freq["min_sent_len"] and freq["attr"] == Attribute.All:
             _ = await self.client.query(
                 TERM_HITS_UPDATE,
                 text=freq["text"],
@@ -630,42 +636,36 @@ class MessageDB:
         _ = await self.client.execute(UPDATE_NUM_SENTS)
 
 
-def is_marked(text: str) -> bool:
-    return text[0] == "^" or text[-1] == "$"
-
-
-def make_edgedb_frequency(
-    counter: dict[str, HitsData],
-    community: UUID,
+def format_freq_geldb(
+    text: str,
     term_len: int,
+    attr: Attribute,
+    community: UUID,
     min_sent_len: int,
     day: datetime,
-) -> list[EDBFrequency]:
-    word_freq_rows: list[EDBFrequency] = list()
-    for text, hits_data in counter.items():
-        result = EDBFrequency(
-            {
-                "text": text,
-                "term_len": term_len,
-                "marked": is_marked(text),
-                "community": community,
-                "min_sent_len": min_sent_len,
-                "day": day,
-                "hits": hits_data["hits"],
-                "authors": list(hits_data["authors"]),
-                # we track it as a set up to this point
-                # but edgedb needs a subscriptable type
-            }
-        )
-        word_freq_rows.append(result)
-    return word_freq_rows
+    hits: int,
+    authors: set[UUID],
+) -> GelFrequency:
+    result = GelFrequency(
+        {
+            "text": text,
+            "term_len": term_len,
+            "attr": attr,
+            "community": community,
+            "min_sent_len": min_sent_len,
+            "day": day,
+            "hits": hits,
+            "authors": list(authors),
+            # geldb needs a subscriptable type
+        }
+    )
+    return result
 
 
-# TODO: include is_marked in this?
-# you can derive it from the text
 def make_sqlite_frequency(
     text: str,
     term_len: int,
+    attr: Attribute,
     min_sent_len: int,
     day: int,
     hits: int,
@@ -676,6 +676,7 @@ def make_sqlite_frequency(
             "text": text,
             "len": term_len,
         },
+        "attr": attr,
         "min_sent_len": min_sent_len,
         "day": day,
         "hits": hits,
@@ -685,9 +686,9 @@ def make_sqlite_frequency(
 
 
 def load_messagedb_from_env() -> MessageDB:
-    username = load_envvar("EDGEDB_USER")
-    password = load_envvar("EDGEDB_PASS")
-    host = load_envvar("EDGEDB_HOST")
-    port = int(load_envvar("EDGEDB_PORT"))
+    username = load_envvar("GELDB_USER")
+    password = load_envvar("GELDB_PASS")
+    host = load_envvar("GELDB_HOST")
+    port = int(load_envvar("GELDB_PORT"))
     DB = MessageDB(username, password, host, port)
     return DB

@@ -4,6 +4,8 @@
 *.sqlite
 *.sqlite-journal
 *.db
+gel.local.toml
+notes.md
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

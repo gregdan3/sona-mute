@@ -30,14 +30,14 @@ class TupleJSONEncoder(json.JSONEncoder):
         return super().encode(o)
 
 
-class EdgeDBEncoder(json.JSONEncoder):
+class GelDBEncoder(json.JSONEncoder):
     @override
     def default(self, o: JSONable) -> str:
         if isinstance(o, UUID):
             return str(o)
         if isinstance(o, datetime):
             return o.isoformat()
-        return super(EdgeDBEncoder, self).default(o)
+        return super(GelDBEncoder, self).default(o)
 
 
 def try_load_json(data: str) -> JSON | None:

@@ -7,8 +7,6 @@ from collections.abc import Generator
 
 # PDM
 import frontmatter
-from bs4 import Tag, BeautifulSoup
-from bs4.element import Comment
 from typing_extensions import override
 
 # LOCAL
@@ -89,6 +87,9 @@ class PokiLapoFetcher(FileFetcher):
                         continue
                     data.metadata = cast(Frontmatter, data.metadata)
                     if not data.metadata.get("date"):
+                        continue
+                    if data.metadata.get("date-precision") in ("none", "year"):
+                        # we need month precision
                         continue
                     if not data.content:
                         continue

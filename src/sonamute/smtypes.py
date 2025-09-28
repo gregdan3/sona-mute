@@ -1,55 +1,25 @@
 # STL
-from enum import IntEnum
+from enum import Enum, IntEnum
 from uuid import UUID
 from typing import TypedDict, NotRequired
 from datetime import datetime
-from dataclasses import dataclass
 
 
-class Attr(IntEnum):
-    All = 0
-    SentenceStart = 1
-    SentenceEnd = 2
+# Copy of Attribute enum in GelDB
+class Attribute(Enum):
+    All = "All"
+    SentenceStart = "SentenceStart"
+    SentenceEnd = "SentenceEnd"
 
 
 # frequency generation
-class HitsData(TypedDict):
-    hits: int
-    authors: set[UUID]
-
-
 class Stats(TypedDict):
     hits: int
     authors: set[UUID]
 
 
-class RawTerm(TypedDict):
-    text: str
-    len: int
-
-
-class Term(RawTerm):
-    id: int
-
-
-class RawFrequency(TypedDict):
-    term: Term | RawTerm
-    attr: Attr
-
-    min_sent_len: int
-    hits: int
-    authors: list[UUID] | set[UUID]
-
-
-class Frequency(RawFrequency):
-    community: UUID
-    day: datetime
-
-
-Metacounter = dict[int, dict[int, dict[str, HitsData]]]
-
-
-# edgedb and sources
+Metacounter = dict[int, dict[int, dict[str, Stats]]]
+StatsCounter = dict[tuple[int, int, str, Attribute], Stats]
 
 
 class KnownPlatforms(IntEnum):
@@ -124,11 +94,11 @@ class Message(PreMessage):
     sentences: list[Sentence]
 
 
-class EDBFrequency(TypedDict):
+class GelFrequency(TypedDict):
     text: str
     term_len: int
 
-    attr: Attr
+    attr: Attribute
     community: UUID
     min_sent_len: int
     day: datetime

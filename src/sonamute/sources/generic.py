@@ -10,7 +10,7 @@ from sonamute.constants import IGNORED_AUTHORS_MAP, IGNORED_CONTAINERS_MAP
 NULL_CONTAINER = 0
 NULL_AUTHOR = 0
 # I know this is a sin.
-# But EdgeDB is doing that thing where nulls are implicitly omitted from any `filter`,
+# But GelDB is doing that thing where nulls are implicitly omitted from any `filter`,
 # even `NOT` filters for which nulls should intuitively match.
 # Tacking on an `OR exists` made the query significantly slower,
 # so now I'm using 0 for null.
