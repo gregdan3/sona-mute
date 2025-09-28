@@ -1,18 +1,22 @@
 # STL
 import itertools
-from typing import TypeVar
+from uuid import UUID
+from typing import Tuple, TypeVar
 from collections import Counter, defaultdict
-from collections.abc import Iterable, Generator
+from collections.abc import Iterable, Iterator, Generator
 
 # LOCAL
 from sonamute.ilo import ILO
 from sonamute.utils import fake_uuid
 from sonamute.smtypes import (
+    Attr,
+    Stats,
     Message,
     HitsData,
     Sentence,
     PreMessage,
     Metacounter,
+    RawFrequency,
     SortedSentence,
 )
 from sonamute.sources.generic import PlatformFetcher, is_countable
@@ -29,7 +33,7 @@ MED_SENT_LEN_5X = 5 * MED_SENT_LEN
 MED_SENT_LEN_50X = 50 * MED_SENT_LEN
 
 
-def overlapping_ntuples(iterable: Iterable[T], n: int) -> Iterable[T]:
+def window_iter(iterable: Iterable[T], n: int) -> Iterable[tuple[T, ...]]:
     teed = itertools.tee(iterable, n)
     for i in range(1, n):
         for j in range(i):
@@ -40,8 +44,29 @@ def overlapping_ntuples(iterable: Iterable[T], n: int) -> Iterable[T]:
     return zip(*teed)
 
 
-def overlapping_terms(iterable: Iterable[str], n: int) -> Iterable[str]:
-    return [" ".join(item) for item in overlapping_ntuples(iterable, n)]
+def window_iter_terms(iterable: Iterable[str], n: int) -> Iterable[str]:
+    for item in window_iter(iterable, n):
+        yield " ".join(item)
+
+
+def window_iter_range(
+    iterable: Iterable[T],
+    n: int,
+) -> Iterator[tuple[tuple[T, ...], tuple[int, int]]]:
+    teed = itertools.tee(iterable, n)
+    for i in range(1, n):
+        for _ in range(i):
+            next(teed[i], None)  # offset each iterator
+
+    for idx, group in enumerate(zip(*teed)):
+        yield group, (idx, idx + n)
+
+
+def window_iter_terms_range(
+    iterable: Iterable[str], n: int
+) -> Iterator[Tuple[str, Tuple[int, int]]]:
+    for tup, idx_range in window_iter_range(iterable, n):
+        yield " ".join(tup), idx_range
 
 
 def clean_string(content: str) -> str:
@@ -101,7 +126,7 @@ def counted(msgs: Iterable[Message]) -> Generator[Message, None, None]:
 
 
 def sentences_of(
-    msgs: Generator[Message, None, None]
+    msgs: Generator[Message, None, None],
 ) -> Generator[Sentence, None, None]:
     for msg in msgs:
         for sent in msg["sentences"]:
@@ -117,14 +142,14 @@ def with_score(
 
 
 def words_of(
-    sents: Generator[Sentence, None, None]
+    sents: Generator[Sentence, None, None],
 ) -> Generator[list[str], None, None]:
     for sent in sents:
         yield sent["words"]
 
 
 def lowered(
-    sents: Generator[list[str], None, None]
+    sents: Generator[list[str], None, None],
 ) -> Generator[list[str], None, None]:
     for sent in sents:
         sent = [word.lower() for word in sent]
@@ -202,10 +227,7 @@ def count_frequencies(
         words = sent["words"]
         author = sent["author"]
         sent_len = len(words)
-        if not sent_len:
-            continue
-
-        if is_nonsense(sent_len, words):
+        if not sent_len or is_nonsense(sent_len, words):
             continue
 
         if do_sentence_markers:
@@ -213,12 +235,12 @@ def count_frequencies(
             words = ["^", *words, "$"]
             sent_len += 2
 
-        local_max_term_len = min(max_term_len, sent_len)
+        local_max_term_len = min(max_term_len, sent_len) + 1
+        local_max_min_sent_len = min(max_min_sent_len, sent_len) + 1
         for term_len in range(1, local_max_term_len):
-            terms = overlapping_terms(words, term_len)
+            terms = window_iter_terms(words, term_len)
             for term in terms:
-                local_max_min_sent_len = min(max_min_sent_len, sent_len)
-                for msl in range(term_len, local_max_min_sent_len + 1):
+                for msl in range(term_len, local_max_min_sent_len):
                     metacounter[term_len][msl][term]["hits"] += 1
                     metacounter[term_len][msl][term]["authors"].add(author)
 
