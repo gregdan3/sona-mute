@@ -1,7 +1,7 @@
 # STL
 import os
 import re
-from typing import TypedDict, NotRequired, cast
+from typing import Literal, TypedDict, NotRequired, cast
 from datetime import UTC, date, datetime
 from collections.abc import Generator
 
@@ -17,20 +17,32 @@ from sonamute.file_io import try_load_html
 from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
 from sonamute.sources.generic import NULL_AUTHOR, NULL_CONTAINER, FileFetcher
 
+Original = TypedDict(
+    "Original",
+    {
+        "title": str,
+        "authors": list[str],
+    },
+)
+
 Frontmatter = TypedDict(
     "Frontmatter",
     {
         "title": str,
-        "original-title": NotRequired[str],
         "description": NotRequired[str],
         "authors": list[str],
-        "translators": NotRequired[list[str]],
+        "proofreaders": list[str],
         "date": date,
+        "date-precision": Literal["day", "month", "year", None],
+        "original": Original,
         "tags": NotRequired[list[str]],
+        # "translators": NotRequired[list[str]],
         "license": str,
         "sources": list[str],
         "archives": list[str],
         "preprocessing": str | list[str],
+        "accessibility-notes": NotRequired[str],
+        "notes": NotRequired[str],
     },
 )
 
