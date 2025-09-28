@@ -3,8 +3,8 @@ import json
 from uuid import UUID
 from typing import cast
 from datetime import datetime
-from collections.abc import Mapping, Iterable
 from collections import Counter
+from collections.abc import Mapping, Iterable
 
 # PDM
 import orjson
@@ -51,7 +51,6 @@ def try_load_json(data: str) -> JSON | None:
 
 
 def try_load_json_file(filename: str) -> JSON | None:
-    # TODO: what if the file is too large?
     with open(filename, "r") as f:
         content = try_load_json(f.read())
     return content
@@ -81,5 +80,3 @@ def dump(counter: Counter[str] | Counter[tuple[str, ...]]) -> str:
         ensure_ascii=False,
         cls=TupleJSONEncoder,
     )
-
-

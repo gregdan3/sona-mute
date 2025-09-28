@@ -49,6 +49,7 @@ async def configure_sqlite(conn: aiosqlite.Connection):
             f"""
         CREATE TABLE IF NOT EXISTS {table} (
             term_id INTEGER NOT NULL,
+            -- TODO: attr attribute
             min_sent_len INTEGER NOT NULL,
             day INTEGER NOT NULL,
             hits INTEGER NOT NULL,
@@ -132,7 +133,7 @@ class FreqDB:
         term_id_map = await self.upsert_term(terms)
         for d in data:
             d["term_id"] = term_id_map[d["term"]["text"]]
-            d.pop("term")  # TODO: typing
+            d.pop("term")
 
         async with self.session() as s:
             stmt = f"""
