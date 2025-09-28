@@ -23,6 +23,7 @@ from sonamute.smtypes import (
     EDBFrequency,
     SQLFrequency,
 )
+from sonamute.constants import MIN_HITS_NEEDED, MIN_SENTS_NEEDED
 
 
 def create_client(username: str, password: str, host: str, port: int) -> AsyncIOClient:
@@ -71,7 +72,7 @@ with
   F := (
     select Frequency {text := .term.text}
     filter
-      .term.total_hits >= 40
+      .term.total_hits >= %s
       and .term.len = <int16>$term_len
       and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
@@ -87,32 +88,34 @@ with
     hits := sum(.elements.hits),
     authors := .elements.authors,
   };
-"""
-
-# TODO: what if i stopped filtering by term length and min sent len
-# if i did so, i would save a round trip to the term table
-# but query way more data at once
+""" % (
+    MIN_HITS_NEEDED
+)
 
 TERM_DATA_SELECT_NO_GROUP = """
 select Frequency {text := .term.text, hits := .hits, authors := .authors}
 filter
-    .term.total_hits >= 40
+    .term.total_hits >= %s
     and .term.len = <int16>$term_len
     and .min_sent_len = <int16>$min_sent_len
     and .day >= <std::datetime>$start
     and .day < <std::datetime>$end;
-"""
+""" % (
+    MIN_HITS_NEEDED
+)
 
 AUTHOR_IS_COUNTED_SELECT = """
-    select Author filter .id = <std::uuid>$author and .num_tp_sentences >= 20;
-"""
+    select Author filter .id = <std::uuid>$author and .num_tp_sentences >= %s;
+""" % (
+    MIN_SENTS_NEEDED
+)
 
 TOTAL_HITS_SELECT = """
 with
   F := (
     select Frequency
     filter
-      .term.total_hits >= 40
+      .term.total_hits >= %s
       and .term.len = <int16>$term_len
       and not .term.marked
       and .min_sent_len = <int16>$min_sent_len
@@ -123,12 +126,15 @@ with
 # `marked` is ignored because it doesn't constribute to the term count
 # marked terms are already in the unmarked terms, always
 
+""" % (
+    MIN_HITS_NEEDED
+)
 TOTAL_AUTHORS_SELECT = """
 with
   F := (
     select Frequency
     filter
-      .term.total_hits >= 40
+      .term.total_hits >= %s
       and .term.len = <int16>$term_len
       and not .term.marked
       and .min_sent_len = <int16>$min_sent_len
@@ -136,7 +142,10 @@ with
       and .day < <std::datetime>$end
   )
   select F.authors;
-"""  # this is distinct by default. insane. love it.
+""" % (
+    MIN_HITS_NEEDED
+)
+# this is distinct by default. insane. love it.
 
 PLAT_INSERT = """
 INSERT Platform {
