@@ -39,7 +39,7 @@ module default {
     required message: Message;
     required words: array<str>;
     required score: float64;
-    required len: int16;
+    required len: int32;
     # NOTE: Will be pre-tokenized with the **toki pona** tokenizer,
     # and pre-cleaned by removing consecutive duplicates.
 
@@ -94,67 +94,33 @@ module default {
   type Term {
     required text: str;
     required len: int16;
-    total_hits: int64 {
-      default := 0;
-    };
-    required marked: bool;
+
+    total_hits: int64 { default := 0 };
+    multi total_authors: Author;
 
     constraint exclusive on ((.text));
-    index on ((.total_hits, .len, .marked));
-    index on ((.total_hits, .text, .len));
-    index on (.text);
+
+    index on ((.total_hits, .len));
+    index on ((.text, .len));
   }
 
-  type Frequency {
-    # This entire table is essentially computed stats from the rest of the database.
-    required community: Community;  # what community the sentence was taken from
-    required term: Term;
-    required min_sent_len: int16; # these will never be double digit
+  scalar type Attribute extending enum<All, SentenceStart, SentenceEnd>;
 
+  type Frequency {
+    required term: Term;
+    required attr: Attribute;
+    required community: Community;  # what community the sentence was taken from
+
+    required min_sent_len: int16; # these will never be double digit
     required day: datetime; # the day, starting at UTC midnight, of the measured frequency
+
     required hits: int64;
-    # required multi communities: Community; # all communities the term appeared in
-    # NOTE: if i did this, i would save a ton of space but not be able to fetch
-    # data on a per-community basis
     required multi authors: Author;
-    # reportedly, the same author cannot be tracked more than once here. good.
     # required tpt: bool;  # whether the frequency was measured with toki pona sentences (score >=0.8) or all sentences
 
-    constraint exclusive on ((.term, .community, .min_sent_len, .day));
+    constraint exclusive on ((.term, .attr, .community, .min_sent_len, .day));
 
     index on ((.day, .min_sent_len, .term));
     index on ((.term, .min_sent_len, .day));
-
-    # trigger update_total_hits after insert for each
-    # when (__new__.min_sent_len = __new__.term.len)
-    # do (
-    #   update Term
-    #   filter .id = __new__.term.id
-    #   set {
-    #     total_hits := .total_hits + __new__.hits
-    #   }
-    # );
-
-    # trigger update_global_freqs after insert for each
-    # do (
-    #   insert GFrequency {
-    #     total_hits := .total_hits + __new__.hits
-    #   }
-    # );
   }
-
-  # type GFrequency {
-  #   required term: Term;
-  #   required min_sent_len: int16; # these will never be double digit
-
-  #   required day: datetime; # the day, starting at UTC midnight, of the measured frequency
-  #   required hits: int64;
-  #   required multi authors: Author;
-
-  #   constraint exclusive on ((.term, .min_sent_len, .day));
-
-  #   index on ((.day, .min_sent_len, .term));
-  #   index on ((.day));
-  # }
-
 }
