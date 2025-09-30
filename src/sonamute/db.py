@@ -101,7 +101,7 @@ with
     filter
       .term.total_hits >= %s
       and .term.len = <int16>$term_len
-      and .attr = Attribute.All
+      and .attr = <Attribute>$attr
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
   ) select sum(F.hits);
@@ -115,7 +115,7 @@ with
     filter
       .term.total_hits >= %s
       and .term.len = <int16>$term_len
-      and .attr = Attribute.All
+      and .attr = <Attribute>$attr
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
   )
@@ -553,6 +553,7 @@ class MessageDB:
     async def total_hits_in_range(
         self,
         term_len: int,
+        attr: Attribute,
         start: datetime,
         end: datetime,
         # word: str | None = None,
@@ -560,6 +561,7 @@ class MessageDB:
         result: int = await self.client.query_required_single(
             TOTAL_HITS_SELECT,
             term_len=term_len,
+            attr=attr,
             start=start,
             end=end,
         )
@@ -569,6 +571,7 @@ class MessageDB:
     async def total_authors_in_range(
         self,
         term_len: int,
+        attr: Attribute,
         start: datetime,
         end: datetime,
         # word: str | None = None,
@@ -576,6 +579,7 @@ class MessageDB:
         result = await self.client.query(
             TOTAL_AUTHORS_SELECT,
             term_len=term_len,
+            attr=attr,
             start=start,
             end=end,
         )

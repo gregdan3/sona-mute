@@ -1,1 +1,1 @@
-CREATE INDEX MonthlyTotalCovering on total_monthly (term_len, min_sent_len, day, hits, authors);
+CREATE INDEX MonthlyTotalCovering on total_monthly (term_len, attr, day, hits, authors);

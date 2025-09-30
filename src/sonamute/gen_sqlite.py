@@ -13,7 +13,7 @@ from aiosqlite.cursor import Cursor
 # LOCAL
 from sonamute.db import MessageDB
 from sonamute.utils import now, batch_iter, epochs_in_range, months_in_range
-from sonamute.smtypes import SQLTerm, Attribute, SQLFrequency
+from sonamute.smtypes import ATTRIBUTE_IDS, SQLTerm, Attribute, SQLFrequency
 
 # we insert 4 items per row; max sql variables is 999 for, reasons,
 SQLITE_BATCH = 5000
@@ -64,10 +64,11 @@ async def configure_sqlite(conn: aiosqlite.Connection):
             f"""
         CREATE TABLE IF NOT EXISTS {table} (
             day INTEGER NOT NULL,
+            attr INTEGER NOT NULL,
             term_len INTEGER NOT NULL,
             hits INTEGER NOT NULL,
             authors INTEGER NOT NULL,
-            PRIMARY KEY (day, term_len)
+            PRIMARY KEY (day, term_len, attr)
         ) WITHOUT ROWID;
         """
         )
@@ -144,6 +145,7 @@ class FreqDB:
     async def insert_total(
         self,
         term_len: int,
+        attr: int,
         day: int,
         hits: int,
         authors: int,
@@ -152,14 +154,15 @@ class FreqDB:
     ):
         async with self.session() as s:
             stmt = f"""
-            INSERT INTO {table} (day, term_len, hits, authors)
-            VALUES (:day, :term_len, :hits, :authors)
+            INSERT INTO {table} (day, term_len, attr, hits, authors)
+            VALUES (:day, :term_len, :attr, :hits, :authors)
             """
             _ = await s.execute(
                 stmt,
                 {
                     "day": day,
                     "term_len": term_len,
+                    "attr": attr,
                     "hits": hits,
                     "authors": authors,
                 },
@@ -200,25 +203,27 @@ async def copy_totals(
     edb: MessageDB,
     sdb: FreqDB,
     term_len: int,
+    attr: Attribute,
     start: datetime,
     end: datetime,
     table: TotalTable,
 ):
     total_hits = await edb.total_hits_in_range(
         term_len,
+        attr,
         start,
         end,
     )
     total_authors = await edb.total_authors_in_range(
         term_len,
+        attr,
         start,
         end,
     )
-
-    start_ts = int(start.timestamp())
     await sdb.insert_total(
         term_len=term_len,
-        day=start_ts,
+        attr=ATTRIBUTE_IDS[attr],
+        day=int(start.timestamp()),
         hits=total_hits,
         authors=total_authors,
         table=table,
@@ -258,6 +263,7 @@ async def generate_sqlite(
                 edb,
                 sdb,
                 term_len,
+                attr,
                 zero_dt,
                 last_msg_dt,
                 "total_yearly",
@@ -283,6 +289,7 @@ async def generate_sqlite(
                     edb,
                     sdb,
                     term_len,
+                    attr,
                     start,
                     end,
                     "total_yearly",
@@ -304,6 +311,7 @@ async def generate_sqlite(
                     edb,
                     sdb,
                     term_len,
+                    attr,
                     start,
                     end,
                     "total_monthly",
