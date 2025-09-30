@@ -1,4 +1,5 @@
 # STL
+import math
 import itertools
 from sys import intern
 from uuid import UUID
@@ -18,18 +19,19 @@ from sonamute.smtypes import (
     StatsCounter,
     SortedSentence,
 )
+from sonamute.constants import LONG_SENTENCE_LEN
 from sonamute.sources.generic import PlatformFetcher, is_countable
 
 T = TypeVar("T")
 
 
 AVG_SENT_LEN = 4.13557
-AVG_SENT_LEN_5X = 5 * AVG_SENT_LEN
-AVG_SENT_LEN_50X = 50 * AVG_SENT_LEN
+AVG_SENT_LEN_5X = math.ceil(5 * AVG_SENT_LEN)
+AVG_SENT_LEN_25X = math.ceil(25 * AVG_SENT_LEN)
 
 MED_SENT_LEN = 3
 MED_SENT_LEN_5X = 5 * MED_SENT_LEN
-MED_SENT_LEN_50X = 50 * MED_SENT_LEN
+MED_SENT_LEN_25X = 25 * MED_SENT_LEN
 
 
 def window_iter(iterable: Iterable[T], n: int) -> Iterable[tuple[T, ...]]:
@@ -174,7 +176,7 @@ def is_nonsense(sent_len: int, sent: list[str]) -> bool:
     """
     Skip a sentence if it is "nonsense," which means
     - "longer than 5x the average" and "mostly a single word", or
-    - "longer than 50x the average" (instant disqualification)
+    - "longer than 25x the average" (instant disqualification)
 
     This is intentionally a very weak filter.
     As of writing, there are fewer than 1000 sentences with >=40 words,
@@ -195,9 +197,9 @@ def is_nonsense(sent_len: int, sent: list[str]) -> bool:
     So, we omit them.
     """
 
-    if sent_len <= AVG_SENT_LEN_5X:
+    if sent_len < AVG_SENT_LEN_5X:
         return False
-    if sent_len >= AVG_SENT_LEN_50X:
+    if sent_len > AVG_SENT_LEN_25X:
         return True
 
     counter = Counter(sent)
@@ -210,18 +212,16 @@ def is_nonsense(sent_len: int, sent: list[str]) -> bool:
 def get_sentence_stats(
     sents: Iterable[SortedSentence],
     max_term_len: int,
-    max_min_sent_len: int,
 ) -> StatsCounter:
     freqs: StatsCounter = defaultdict(lambda: Stats({"hits": 0, "authors": set()}))
 
     def add_freq(
         term_len: int,
-        msl: int,
         term: str,
         attr: Attribute,
         author: UUID,
     ):
-        freq = freqs[(term_len, msl, term, attr)]
+        freq = freqs[(term_len, term, attr)]
         freq["hits"] += 1
         freq["authors"].add(author)
 
@@ -231,22 +231,24 @@ def get_sentence_stats(
         sent_len = len(words)
         if not sent_len or is_nonsense(sent_len, words):
             continue
+        is_long = sent_len >= LONG_SENTENCE_LEN
 
         term_len_cap = min(max_term_len, sent_len) + 1
-        msl_cap = min(max_min_sent_len, sent_len) + 1
         for term_len in range(1, term_len_cap):
             terms = window_iter_terms_range(words, term_len)
             for term, (start, end) in terms:
                 is_start = start == 0
                 is_end = end == sent_len
-                for msl in range(term_len, msl_cap):
-                    # NOTE: if max_msl is less than max_term_len
-                    # this will not go past terms of length max_msl
-                    # terms of must be in sentences of at least their length
-                    add_freq(term_len, msl, term, Attribute.All, author)
-                    if is_start:
-                        add_freq(term_len, msl, term, Attribute.SentenceStart, author)
-                    if is_end:
-                        add_freq(term_len, msl, term, Attribute.SentenceEnd, author)
+                is_full = is_start and is_end
+
+                add_freq(term_len, term, Attribute.All, author)
+                if is_start:
+                    add_freq(term_len, term, Attribute.Start, author)
+                if is_end:
+                    add_freq(term_len, term, Attribute.End, author)
+                if is_full:
+                    add_freq(term_len, term, Attribute.Full, author)
+                if is_long:
+                    add_freq(term_len, term, Attribute.Long, author)
 
     return freqs

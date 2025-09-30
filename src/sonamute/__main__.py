@@ -21,7 +21,7 @@ from sonamute.smtypes import (
     SortedSentence,
 )
 from sonamute.counters import countables, process_msg, get_sentence_stats
-from sonamute.constants import MAX_TERM_LEN, MIN_HITS_NEEDED, MAX_MIN_SENT_LEN
+from sonamute.constants import MAX_TERM_LEN, MIN_HITS_NEEDED
 from sonamute.gen_sqlite import generate_sqlite
 from sonamute.sources.generic import PlatformFetcher
 
@@ -78,13 +78,12 @@ def format_stats(
         assert community and day
 
     output: list[GelFrequency] = list()
-    for (term_len, min_sent_len, text, attr), item in stats.items():
+    for (term_len, text, attr), item in stats.items():
         formatted = format_freq_geldb(
             text,
             term_len,
             attr,
             community,
-            min_sent_len,
             day,
             item["hits"],
             item["authors"],
@@ -104,13 +103,13 @@ async def db_sents_to_freqs(db: MessageDB, batch_size: int, passing: bool):
         # things from it
 
         for community, sents in by_community.items():
-            stats = get_sentence_stats(sents, MAX_TERM_LEN, MAX_MIN_SENT_LEN)
+            stats = get_sentence_stats(sents, MAX_TERM_LEN)
             formatted = format_stats(stats, community, start)
             _ = await gather_batch(db.insert_frequency, formatted, batch_size)
 
 
 def source_sents_to_freqs(source: PlatformFetcher) -> list[GelFrequency]:
-    stats = get_sentence_stats(countables(source), MAX_TERM_LEN, MAX_MIN_SENT_LEN)
+    stats = get_sentence_stats(countables(source), MAX_TERM_LEN)
     stats = format_stats(stats)
     return stats
 
@@ -129,7 +128,6 @@ def prep_for_dump(stats: list[GelFrequency]) -> list[GelFrequency]:
     stats.sort(
         key=lambda f: (
             f["term_len"],  # 1 to n
-            f["min_sent_len"],  # 1 to n
             f["attr"],  # one for each Attribute member
             -f["hits"],  # highest to lowest
             -f["authors"],  # again highest to lowest
@@ -184,7 +182,6 @@ async def amain(argv: argparse.Namespace):
             min_date,
             max_date,
             MAX_TERM_LEN,
-            MAX_MIN_SENT_LEN,
         )
 
 

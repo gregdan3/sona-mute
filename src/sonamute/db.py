@@ -11,13 +11,14 @@ from async_lru import alru_cache
 # LOCAL
 from sonamute.utils import load_envvar
 from sonamute.smtypes import (
+    ATTRIBUTE_IDS,
+    Stats,
     Author,
     Message,
     Platform,
     Sentence,
     Attribute,
     Community,
-    InterFreq,
     PreMessage,
     CommSentence,
     GelFrequency,
@@ -74,39 +75,12 @@ FAILING_USER_SENTS_SELECT = USER_SENTS_SELECT % "NonTPUserSentence"
 # "invested", but for actual occurrence of terms, this would omit a fairly large
 # number of sentences- around 50k authors speak between 1 and 19 sentences.
 
-
-# needs to merge across communities
 TERM_DATA_SELECT = """
-with
-  F := (
-    select Frequency {text := .term.text}
-    filter
-      .term.total_hits >= %s
-      and .term.len = <int16>$term_len
-      and .min_sent_len = <int16>$min_sent_len
-      and .day >= <std::datetime>$start
-      and .day < <std::datetime>$end
-  ),
-  groups := (
-    group F
-    using text := .text
-    by text
-  )
-  select groups {
-    text := .key.text,
-    hits := sum(.elements.hits),
-    authors := .elements.authors,
-  };
-""" % (
-    MIN_HITS_NEEDED
-)
-
-TERM_DATA_SELECT_NO_GROUP = """
 select Frequency {text := .term.text, hits := .hits, authors := .authors}
 filter
     .term.total_hits >= %s
     and .term.len = <int16>$term_len
-    and .min_sent_len = <int16>$min_sent_len
+    and .attr = <Attribute>$attr
     and .day >= <std::datetime>$start
     and .day < <std::datetime>$end;
 """ % (
@@ -128,7 +102,6 @@ with
       .term.total_hits >= %s
       and .term.len = <int16>$term_len
       and .attr = Attribute.All
-      and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
   ) select sum(F.hits);
@@ -143,7 +116,6 @@ with
       .term.total_hits >= %s
       and .term.len = <int16>$term_len
       and .attr = Attribute.All
-      and .min_sent_len = <int16>$min_sent_len
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
   )
@@ -205,27 +177,24 @@ INSERT Term {
     text := <str>$text,
     len := <int16>$term_len,
 } unless conflict on (.text)
-else (Term)
+else .
 """
 
 FREQ_INSERT = """
-with term := (
-    INSERT Term {
-        text := <str>$text,
-        len := <int16>$term_len,
-    } unless conflict on (.text)
-    else (Term)
-)
 INSERT Frequency {
-    term := term,
+    term := (
+        INSERT Term {
+            text := <str>$text,
+            len := <int16>$term_len,
+        } unless conflict on .text
+        else Term
+    ),
     attr := <Attribute>$attr,
     community := <Community>$community,
-    min_sent_len := <int16>$min_sent_len,
     day := <datetime>$day,
     hits := <int64>$hits,
     authors := (
-        SELECT Author FILTER
-        .id in array_unpack(<array<uuid>>$authors)
+        SELECT Author FILTER .id in array_unpack(<array<uuid>>$authors)
     )
 }
 """
@@ -236,7 +205,7 @@ INSERT Frequency {
 
 
 FREQ_INSERT_CONFLICT = """
-unless conflict on (.term, .community, .min_sent_len, .day)
+unless conflict on (.term, .community, .day)
 else (update Frequency set { hits := <int64>$hits });
 """  # TODO: optionally add to FREQ_INSERT
 
@@ -250,6 +219,20 @@ update Term
 filter .text = <str>$text
 set {
     total_hits := .total_hits + <int64>$hits
+}
+"""
+
+# TODO
+TERM_AUTHORS_UPDATE = """
+update Term
+filter .text = <str>$text
+set {
+    total_authors := .total_authors + <int64>$hits
+
+    authors := (
+        SELECT Author FILTER .id in array_unpack(<array<uuid>>$authors)
+    )
+
 }
 """
 
@@ -461,7 +444,7 @@ class MessageDB:
 
     async def insert_frequency(self, freq: GelFrequency):
         _ = await self.client.query(FREQ_INSERT, **freq)
-        if freq["term_len"] == freq["min_sent_len"] and freq["attr"] == Attribute.All:
+        if freq["attr"] == Attribute.All:
             _ = await self.client.query(
                 TERM_HITS_UPDATE,
                 text=freq["text"],
@@ -526,8 +509,8 @@ class MessageDB:
     async def merge_frequency_data(
         self,
         data: Iterable[Any],
-    ) -> dict[str, InterFreq]:
-        output: dict[str, InterFreq] = dict()
+    ) -> dict[str, Stats]:
+        output: dict[str, Stats] = dict()
         for item in data:
             text = item.text
             if text not in output:
@@ -536,48 +519,18 @@ class MessageDB:
             output[text]["authors"] |= {author.id for author in item.authors}
         return output
 
-    async def select_frequencies_in_range(
+    async def select_freqs_in_range(
         self,
         term_len: int,
-        min_sent_len: int,
+        attr: Attribute,
         start: datetime,
         end: datetime,
     ) -> list[SQLFrequency]:
+        """Groups on client instead of DB"""
         results = await self.client.query(
             TERM_DATA_SELECT,
             term_len=term_len,
-            min_sent_len=min_sent_len,
-            start=start,
-            end=end,
-        )
-        output: list[SQLFrequency] = list()
-        for result in results:
-            counted_authors = await self.count_nontrivial_authors(
-                {author.id for author in result.authors}
-            )
-            formatted = make_sqlite_frequency(
-                text=result.text,
-                term_len=term_len,
-                min_sent_len=min_sent_len,
-                day=int(start.timestamp()),
-                hits=result.hits,
-                authors=counted_authors,
-            )
-            output.append(formatted)
-        return output
-
-    async def select_frequencies_in_range_fast(
-        self,
-        term_len: int,
-        min_sent_len: int,
-        start: datetime,
-        end: datetime,
-    ) -> list[SQLFrequency]:
-        """Do grouping on client instead of DB"""
-        results = await self.client.query(
-            TERM_DATA_SELECT_NO_GROUP,
-            term_len=term_len,
-            min_sent_len=min_sent_len,
+            attr=attr,
             start=start,
             end=end,
         )
@@ -586,11 +539,11 @@ class MessageDB:
         output: list[SQLFrequency] = list()
         for text, result in merged.items():
             counted_authors = await self.count_nontrivial_authors(result["authors"])
-            formatted = make_sqlite_frequency(
+            formatted = format_freq_sqlite(
                 text=text,
                 term_len=term_len,
-                min_sent_len=min_sent_len,
-                day=int(start.timestamp()),
+                attr=attr,
+                day=start,
                 hits=result["hits"],
                 authors=counted_authors,
             )
@@ -600,7 +553,6 @@ class MessageDB:
     async def total_hits_in_range(
         self,
         term_len: int,
-        min_sent_len: int,
         start: datetime,
         end: datetime,
         # word: str | None = None,
@@ -608,7 +560,6 @@ class MessageDB:
         result: int = await self.client.query_required_single(
             TOTAL_HITS_SELECT,
             term_len=term_len,
-            min_sent_len=min_sent_len,
             start=start,
             end=end,
         )
@@ -618,7 +569,6 @@ class MessageDB:
     async def total_authors_in_range(
         self,
         term_len: int,
-        min_sent_len: int,
         start: datetime,
         end: datetime,
         # word: str | None = None,
@@ -626,7 +576,6 @@ class MessageDB:
         result = await self.client.query(
             TOTAL_AUTHORS_SELECT,
             term_len=term_len,
-            min_sent_len=min_sent_len,
             start=start,
             end=end,
         )
@@ -641,7 +590,6 @@ def format_freq_geldb(
     term_len: int,
     attr: Attribute,
     community: UUID,
-    min_sent_len: int,
     day: datetime,
     hits: int,
     authors: set[UUID],
@@ -652,7 +600,6 @@ def format_freq_geldb(
             "term_len": term_len,
             "attr": attr,
             "community": community,
-            "min_sent_len": min_sent_len,
             "day": day,
             "hits": hits,
             "authors": list(authors),
@@ -662,12 +609,11 @@ def format_freq_geldb(
     return result
 
 
-def make_sqlite_frequency(
+def format_freq_sqlite(
     text: str,
     term_len: int,
     attr: Attribute,
-    min_sent_len: int,
-    day: int,
+    day: datetime,
     hits: int,
     authors: int,
 ) -> SQLFrequency:
@@ -676,9 +622,8 @@ def make_sqlite_frequency(
             "text": text,
             "len": term_len,
         },
-        "attr": attr,
-        "min_sent_len": min_sent_len,
-        "day": day,
+        "attr": ATTRIBUTE_IDS[attr],
+        "day": int(day.timestamp()),
         "hits": hits,
         "authors": authors,
     }

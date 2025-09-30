@@ -96,7 +96,9 @@ module default {
     required len: int16;
 
     total_hits: int64 { default := 0 };
-    multi total_authors: Author;
+    multi total_authors: Author {
+      # total_hits: int64;
+    };
 
     constraint exclusive on ((.text));
 
@@ -104,23 +106,19 @@ module default {
     index on ((.text, .len));
   }
 
-  scalar type Attribute extending enum<All, SentenceStart, SentenceEnd>;
-
+  scalar type Attribute extending enum<All, `Start`, `End`, Full, Long>;
   type Frequency {
     required term: Term;
     required attr: Attribute;
     required community: Community;  # what community the sentence was taken from
-
-    required min_sent_len: int16; # these will never be double digit
     required day: datetime; # the day, starting at UTC midnight, of the measured frequency
 
     required hits: int64;
-    required multi authors: Author;
-    # required tpt: bool;  # whether the frequency was measured with toki pona sentences (score >=0.8) or all sentences
+    required multi authors: Author {
+      # hits: int64;
+    };
 
-    constraint exclusive on ((.term, .attr, .community, .min_sent_len, .day));
-
-    index on ((.day, .min_sent_len, .term));
-    index on ((.term, .min_sent_len, .day));
+    constraint exclusive on ((.term, .attr, .community, .day));
+    index on ((.term, .attr, .day));
   }
 }

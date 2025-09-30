@@ -42,7 +42,6 @@ def profile_mcf():
         get_sentence_stats,
         sents=create_sentences(),
         max_term_len=6,
-        max_min_sent_len=6,
     )
 
     print(elapsed)

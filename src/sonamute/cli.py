@@ -167,7 +167,7 @@ def setup_sqlite():
     filename = get_filename("Base name for SQLite DB?", default=f"{today_str()}")
     location = get_directory("Save to where?", default=".")
     min_date = get_date("Minimum date? YYYY-MM", format="%Y-%m", default="2001-08")
-    max_date = get_date("Maximum date? YYYY-MM", format="%Y-%m", default="2024-08")
+    max_date = get_date("Maximum date? YYYY-MM", format="%Y-%m", default="2025-08")
 
     full_filename = filename + "-full.sqlite"
     trimmed_filename = filename + "-trimmed.sqlite"

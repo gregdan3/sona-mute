@@ -13,7 +13,7 @@ from aiosqlite.cursor import Cursor
 # LOCAL
 from sonamute.db import MessageDB
 from sonamute.utils import now, batch_iter, epochs_in_range, months_in_range
-from sonamute.smtypes import SQLTerm, SQLFrequency
+from sonamute.smtypes import SQLTerm, Attribute, SQLFrequency
 
 # we insert 4 items per row; max sql variables is 999 for, reasons,
 SQLITE_BATCH = 5000
@@ -49,12 +49,11 @@ async def configure_sqlite(conn: aiosqlite.Connection):
             f"""
         CREATE TABLE IF NOT EXISTS {table} (
             term_id INTEGER NOT NULL,
-            -- TODO: attr attribute
-            min_sent_len INTEGER NOT NULL,
+            attr INTEGER NOT NULL,
             day INTEGER NOT NULL,
             hits INTEGER NOT NULL,
             authors INTEGER NOT NULL,
-            PRIMARY KEY (term_id, min_sent_len, day),
+            PRIMARY KEY (term_id, attr, day),
             FOREIGN KEY (term_id) REFERENCES term(id)
         ) WITHOUT ROWID;
         """
@@ -66,10 +65,9 @@ async def configure_sqlite(conn: aiosqlite.Connection):
         CREATE TABLE IF NOT EXISTS {table} (
             day INTEGER NOT NULL,
             term_len INTEGER NOT NULL,
-            min_sent_len INTEGER NOT NULL,
             hits INTEGER NOT NULL,
             authors INTEGER NOT NULL,
-            PRIMARY KEY (day, term_len, min_sent_len)
+            PRIMARY KEY (day, term_len)
         ) WITHOUT ROWID;
         """
         )
@@ -137,8 +135,8 @@ class FreqDB:
 
         async with self.session() as s:
             stmt = f"""
-            INSERT INTO {table} (term_id, min_sent_len, day, hits, authors)
-            VALUES (:term_id, :min_sent_len, :day, :hits, :authors)
+            INSERT INTO {table} (term_id, attr, day, hits, authors)
+            VALUES (:term_id, :attr, :day, :hits, :authors)
             """
             _ = await s.executemany(stmt, parameters=data)
             await s.commit()
@@ -146,7 +144,6 @@ class FreqDB:
     async def insert_total(
         self,
         term_len: int,
-        min_sent_len: int,
         day: int,
         hits: int,
         authors: int,
@@ -155,15 +152,14 @@ class FreqDB:
     ):
         async with self.session() as s:
             stmt = f"""
-            INSERT INTO {table} (day, term_len, min_sent_len, hits, authors)
-            VALUES (:day, :term_len, :min_sent_len, :hits, :authors)
+            INSERT INTO {table} (day, term_len, hits, authors)
+            VALUES (:day, :term_len, :hits, :authors)
             """
             _ = await s.execute(
                 stmt,
                 {
                     "day": day,
                     "term_len": term_len,
-                    "min_sent_len": min_sent_len,
                     "hits": hits,
                     "authors": authors,
                 },
@@ -181,15 +177,15 @@ async def copy_freqs(
     edb: MessageDB,
     sdb: FreqDB,
     term_len: int,
-    min_sent_len: int,
+    attr: Attribute,
     start: datetime,
     end: datetime,
     table: FreqTable,
 ):
     # all-time ranking data
-    results = await edb.select_frequencies_in_range_fast(
+    results = await edb.select_freqs_in_range(
         term_len,
-        min_sent_len,
+        attr,
         start,
         end,
         # limit=500,
@@ -204,20 +200,17 @@ async def copy_totals(
     edb: MessageDB,
     sdb: FreqDB,
     term_len: int,
-    min_sent_len: int,
     start: datetime,
     end: datetime,
     table: TotalTable,
 ):
     total_hits = await edb.total_hits_in_range(
         term_len,
-        min_sent_len,
         start,
         end,
     )
     total_authors = await edb.total_authors_in_range(
         term_len,
-        min_sent_len,
         start,
         end,
     )
@@ -225,7 +218,6 @@ async def copy_totals(
     start_ts = int(start.timestamp())
     await sdb.insert_total(
         term_len=term_len,
-        min_sent_len=min_sent_len,
         day=start_ts,
         hits=total_hits,
         authors=total_authors,
@@ -240,7 +232,6 @@ async def generate_sqlite(
     min_date: datetime,
     max_date: datetime,
     max_term_len: int,
-    max_min_sent_len: int,
 ):
     sdb = await freqdb_factory(filename)
     first_msg_dt, last_msg_dt = await edb.get_msg_date_range()
@@ -249,20 +240,17 @@ async def generate_sqlite(
     if last_msg_dt > max_date:
         last_msg_dt = max_date
 
-    print(f"Generating frequency data starting {now()}")
+    print(f"Dumping frequency data to SQLite @ {now()}")
     for term_len in range(1, max_term_len + 1):
-        print(f"Starting term len {term_len} @ {now()}")
-        for min_sent_len in range(term_len, max_min_sent_len + 1):
-            print(f"Starting min sent len {min_sent_len} @ {now()}")
-
-            print(f"all time (pl {term_len}, msl {min_sent_len}) @ {now()}")
-            alltime_start = datetime.fromtimestamp(0, tz=UTC)
+        for attr in Attribute:
+            print(f"all time (term len {term_len}, attr {attr}) @ {now()}")
+            zero_dt = datetime.fromtimestamp(0, tz=UTC)
             await copy_freqs(
                 edb,
                 sdb,
                 term_len,
-                min_sent_len,
-                alltime_start,
+                attr,
+                zero_dt,
                 last_msg_dt,
                 "yearly",
             )
@@ -270,8 +258,7 @@ async def generate_sqlite(
                 edb,
                 sdb,
                 term_len,
-                min_sent_len,
-                alltime_start,
+                zero_dt,
                 last_msg_dt,
                 "total_yearly",
             )
@@ -281,13 +268,13 @@ async def generate_sqlite(
             # from the epochs
             for start, end in epochs_in_range(first_msg_dt, last_msg_dt):
                 print(
-                    f"yearly {start.date()} (pl {term_len}, msl {min_sent_len}) @ {now()}"
+                    f"yearly {start.date()} (term len {term_len}, attr {attr}) @ {now()}"
                 )
                 await copy_freqs(
                     edb,
                     sdb,
                     term_len,
-                    min_sent_len,
+                    attr,
                     start,
                     end,
                     "yearly",
@@ -296,7 +283,6 @@ async def generate_sqlite(
                     edb,
                     sdb,
                     term_len,
-                    min_sent_len,
                     start,
                     end,
                     "total_yearly",
@@ -304,14 +290,12 @@ async def generate_sqlite(
 
             # periodic frequency data
             for start, end in months_in_range(first_msg_dt, last_msg_dt):
-                print(
-                    f"monthly {start.date()} (pl {term_len}, msl {min_sent_len}) @ {now()}"
-                )
+                print(f"monthly {start.date()} (pl {term_len}, attr {attr}) @ {now()}")
                 await copy_freqs(
                     edb,
                     sdb,
                     term_len,
-                    min_sent_len,
+                    attr,
                     start,
                     end,
                     "monthly",
@@ -320,7 +304,6 @@ async def generate_sqlite(
                     edb,
                     sdb,
                     term_len,
-                    min_sent_len,
                     start,
                     end,
                     "total_monthly",

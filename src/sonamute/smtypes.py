@@ -8,8 +8,20 @@ from datetime import datetime
 # Copy of Attribute enum in GelDB
 class Attribute(Enum):
     All = "All"
-    SentenceStart = "SentenceStart"
-    SentenceEnd = "SentenceEnd"
+    Start = "Start"
+    End = "End"
+    Full = "Full"
+    Long = "Long"
+
+
+# For sqlite
+ATTRIBUTE_IDS = {
+    Attribute.All: 0,
+    Attribute.Start: 1,
+    Attribute.End: 2,
+    Attribute.Full: 3,
+    Attribute.Long: 4,
+}
 
 
 # frequency generation
@@ -18,8 +30,7 @@ class Stats(TypedDict):
     authors: set[UUID]
 
 
-Metacounter = dict[int, dict[int, dict[str, Stats]]]
-StatsCounter = dict[tuple[int, int, str, Attribute], Stats]
+StatsCounter = dict[tuple[int, str, Attribute], Stats]
 
 
 class KnownPlatforms(IntEnum):
@@ -100,7 +111,6 @@ class GelFrequency(TypedDict):
 
     attr: Attribute
     community: UUID
-    min_sent_len: int
     day: datetime
     hits: int
     authors: list[UUID]
@@ -112,16 +122,11 @@ class SQLTerm(TypedDict):
     len: int
 
 
-class InterFreq(TypedDict):
-    hits: int
-    authors: set[UUID]
-
-
 class SQLFrequency(TypedDict):
     # NOTE: exactly one of term or term_id are required.
     term: SQLTerm
     term_id: NotRequired[int]
-    min_sent_len: int
+    attr: int
     day: int
     hits: int
     authors: int
