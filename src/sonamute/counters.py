@@ -232,6 +232,7 @@ def get_sentence_stats(
         if not sent_len or is_nonsense(sent_len, words):
             continue
         is_long = sent_len >= LONG_SENTENCE_LEN
+        is_short = not is_long
 
         term_len_cap = min(max_term_len, sent_len) + 1
         for term_len in range(1, term_len_cap):
@@ -240,6 +241,7 @@ def get_sentence_stats(
                 is_start = start == 0
                 is_end = end == sent_len
                 is_full = is_start and is_end
+                is_inner = not is_start and not is_end
 
                 add_freq(term_len, term, Attribute.All, author)
                 if is_start:
@@ -248,7 +250,11 @@ def get_sentence_stats(
                     add_freq(term_len, term, Attribute.End, author)
                 if is_full:
                     add_freq(term_len, term, Attribute.Full, author)
+                if is_inner:
+                    add_freq(term_len, term, Attribute.Inner, author)
                 if is_long:
                     add_freq(term_len, term, Attribute.Long, author)
+                if is_short:
+                    add_freq(term_len, term, Attribute.Short, author)
 
     return freqs

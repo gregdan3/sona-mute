@@ -106,7 +106,8 @@ module default {
     index on ((.text, .len));
   }
 
-  scalar type Attribute extending enum<All, `Start`, `End`, Full, Long>;
+  scalar type Attribute extending enum<All, `Start`, `End`, Full, Long, Short,
+  Inner>;
   type Frequency {
     required term: Term;
     required attr: Attribute;

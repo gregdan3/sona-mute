@@ -12,6 +12,8 @@ class Attribute(Enum):
     End = "End"
     Full = "Full"
     Long = "Long"
+    Short = "Short"
+    Inner = "Inner"
 
 
 # For sqlite
@@ -21,6 +23,8 @@ ATTRIBUTE_IDS = {
     Attribute.End: 2,
     Attribute.Full: 3,
     Attribute.Long: 4,
+    Attribute.Short: 5,
+    Attribute.Inner: 6,
 }
 
 
