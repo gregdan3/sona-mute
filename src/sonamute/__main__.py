@@ -123,13 +123,14 @@ def filter_freqs(freqs: list[GelFrequency], min_val: int) -> list[GelFrequency]:
 def prep_for_dump(stats: list[GelFrequency]) -> list[GelFrequency]:
     for f in stats:
         f["authors"] = len(f["authors"])  # full set would be nonsense
+        f["attr"] = ATTRIBUTE_IDS[f["attr"]]  # can't serialize enum
         del f["day"]  # not easy to organize
         del f["community"]  # doesn't do anything
 
     stats.sort(
         key=lambda f: (
             f["term_len"],  # 1 to n
-            ATTRIBUTE_IDS[f["attr"]],  # one for each Attribute member
+            f["attr"],  # one for each Attribute member
             -f["hits"],  # highest to lowest
             -f["authors"],  # again highest to lowest
         )
