@@ -21,7 +21,7 @@ dependencies = [
   "python-frontmatter>=1.1.0",
   "gel>=3.1.0",
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 readme = "README.md"
 license = { text = "AGPL-3.0-or-later" }
 
