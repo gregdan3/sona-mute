@@ -14,6 +14,7 @@ from sonamute.db import MessageDB, format_freq_geldb, load_messagedb_from_env
 from sonamute.cli import SOURCES, menu_handler
 from sonamute.utils import now, fake_uuid, batch_iter, gather_batch, months_in_range
 from sonamute.smtypes import (
+    ATTRIBUTE_IDS,
     PreMessage,
     CommSentence,
     GelFrequency,
@@ -128,7 +129,7 @@ def prep_for_dump(stats: list[GelFrequency]) -> list[GelFrequency]:
     stats.sort(
         key=lambda f: (
             f["term_len"],  # 1 to n
-            f["attr"],  # one for each Attribute member
+            ATTRIBUTE_IDS[f["attr"]],  # one for each Attribute member
             -f["hits"],  # highest to lowest
             -f["authors"],  # again highest to lowest
         )
