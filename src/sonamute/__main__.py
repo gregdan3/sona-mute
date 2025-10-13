@@ -96,7 +96,7 @@ def format_stats(
 async def db_sents_to_freqs(db: MessageDB, batch_size: int, passing: bool):
     first_msg_dt, last_msg_dt = await db.get_msg_date_range()
     for start, end in months_in_range(first_msg_dt, last_msg_dt):
-        print(f"gen frequency for {start.date()} - {end.date()}")
+        print(f"gen frequency for {start.date()} - {end.date()} @ {now()}")
         result = await db.counted_sents_in_range(start, end, passing)
         by_community = sort_by_community(result)
         # NOTE: community is used behind the scenes; it's probably too
