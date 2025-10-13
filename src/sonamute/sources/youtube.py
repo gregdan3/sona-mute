@@ -274,28 +274,24 @@ class YouTubeFetcher(FileFetcher):
     @override
     def get_messages(self) -> Generator[PreMessage, None, None]:
         for video in self.get_files():
-            # NOTE: We do not check seen on videos, in case a later copy of the same
-            # video's metadata includes new comments; we only check whether a comment
-            # was seen
-            # This is okay so long as video IDs are stable, since the DB doesn't take
-            # duplicate messages anyway
             video_id = youtube_id_to_int(video["id"])
-            video_postdate = datetime.fromtimestamp(video["timestamp"], tz=UTC)
-            video_content = format_video_content(video)
-
             community = self.get_community(video)
-            video_author = self.get_author(video)
 
-            yield PreMessage(
-                {
-                    "_id": video_id,
-                    "author": video_author,
-                    "content": video_content,
-                    "postdate": video_postdate,
-                    "community": community,
-                    "container": NULL_CONTAINER,
-                }
-            )
+            if video_id not in self.__seen:
+                video_postdate = datetime.fromtimestamp(video["timestamp"], tz=UTC)
+                video_content = format_video_content(video)
+                video_author = self.get_author(video)
+                yield PreMessage(
+                    {
+                        "_id": video_id,
+                        "author": video_author,
+                        "content": video_content,
+                        "postdate": video_postdate,
+                        "community": community,
+                        "container": NULL_CONTAINER,
+                    }
+                )
+            self.__seen.add(video_id)
 
             # if comments are off, may be omitted
             for comment in video.get("comments", []):
