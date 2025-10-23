@@ -14,6 +14,7 @@ IGNORED_CONTAINERS_MAP = {
         914305039764426772,  # ma pali/wikipesija
         1128714905932021821,  # mamusi/ako
         1187212477155528804,  # mapona/toki-suli/musitokipiantesitelenwan
+        1031260120904114316,  # ma ante/animal farm spam thing
     }
 }
 
