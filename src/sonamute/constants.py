@@ -33,7 +33,10 @@ IGNORED_AUTHORS_MAP: dict[int, set[int]] = {
         1213156131006845020,  # sona.pona.la logger
         950311805845139506,  # "o sitelen lon lipu sina"
         790443487912656916,  # ilo ako
-    }
+    },
+    KnownPlatforms.Telegram.value: {
+        307460571,  # old welcome bot in telegram
+    },
 }
 
 
