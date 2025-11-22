@@ -14,6 +14,7 @@ from aiosqlite.cursor import Cursor
 from sonamute.db import MessageDB
 from sonamute.utils import now, batch_iter, epochs_in_range, months_in_range
 from sonamute.smtypes import ATTRIBUTE_IDS, SQLTerm, Attribute, SQLFrequency
+from sonamute.constants import LONG_SENTENCE_LEN
 
 # we insert 4 items per row; max sql variables is 999 for, reasons,
 SQLITE_BATCH = 5000
@@ -247,7 +248,16 @@ async def generate_sqlite(
 
     print(f"Dumping frequency data to SQLite @ {now()}")
     for term_len in range(1, max_term_len + 1):
+        term_long = term_len >= LONG_SENTENCE_LEN
         for attr in Attribute:
+            if attr == Attribute.Short and term_long:
+                # don't copy long phrases in short sentences; impossible
+                continue
+
+            if attr == Attribute.Long and term_long:
+                # don't copy long phrases in long sentences; obvious
+                continue
+
             print(f"all time (term len {term_len}, attr {attr}) @ {now()}")
             zero_dt = datetime.fromtimestamp(0, tz=UTC)
             await copy_freqs(
