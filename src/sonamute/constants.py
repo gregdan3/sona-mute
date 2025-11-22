@@ -4,7 +4,14 @@ from datetime import UTC, datetime
 # LOCAL
 from sonamute.smtypes import KnownPlatforms
 
-IGNORED_CONTAINERS_MAP = {
+IGNORED_COMMUNITIES_MAP: dict[int, set[int]] = {
+    KnownPlatforms.Discord.value: {
+        1534630115,  # kokanu server
+    },
+    KnownPlatforms.Telegram.value: set(),
+}
+
+IGNORED_CONTAINERS_MAP: dict[int, set[int]] = {
     KnownPlatforms.Discord.value: {
         316066233755631616,  # mapona/jaki
         759969963992940585,  # ma pona/jaki lawa
@@ -18,7 +25,7 @@ IGNORED_CONTAINERS_MAP = {
     }
 }
 
-IGNORED_AUTHORS_MAP = {
+IGNORED_AUTHORS_MAP: dict[int, set[int]] = {
     KnownPlatforms.Discord.value: {
         937872123085602896,  # old wikipesija logger
         1074390249981096047,  # wikipesija logger

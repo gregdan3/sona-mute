@@ -5,7 +5,11 @@ from collections.abc import Generator
 
 # LOCAL
 from sonamute.smtypes import Author, Community, PreMessage
-from sonamute.constants import IGNORED_AUTHORS_MAP, IGNORED_CONTAINERS_MAP
+from sonamute.constants import (
+    IGNORED_AUTHORS_MAP,
+    IGNORED_CONTAINERS_MAP,
+    IGNORED_COMMUNITIES_MAP,
+)
 
 NULL_CONTAINER = 0
 NULL_AUTHOR = 0
@@ -19,6 +23,11 @@ NULL_AUTHOR = 0
 
 def is_countable(msg: PreMessage) -> bool:
     platform_id = msg["community"]["platform"]["_id"]
+
+    ignored_communities = IGNORED_COMMUNITIES_MAP.get(platform_id, set())
+    if msg["community"]["_id"] in ignored_communities:
+        return False
+
     ignored_containers = IGNORED_CONTAINERS_MAP.get(platform_id, set())
     if msg["container"] in ignored_containers:
         return False
