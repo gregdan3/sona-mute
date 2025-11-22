@@ -231,30 +231,35 @@ def get_sentence_stats(
         sent_len = len(words)
         if not sent_len or is_nonsense(sent_len, words):
             continue
-        is_long = sent_len >= LONG_SENTENCE_LEN
-        is_short = not is_long
+        sent_long = sent_len >= LONG_SENTENCE_LEN
+        sent_short = not sent_long
 
         term_len_cap = min(max_term_len, sent_len) + 1
         for term_len in range(1, term_len_cap):
+            # if term_len >= 4, it follows that its sentence is long
+            term_long = term_len >= LONG_SENTENCE_LEN
+
             terms = window_iter_terms_range(words, term_len)
             for term, (start, end) in terms:
-                is_start = start == 0
-                is_end = end == sent_len
-                is_full = is_start and is_end
-                is_inner = not is_start and not is_end
+                sent_start = start == 0
+                sent_end = end == sent_len
+                sent_full = sent_start and sent_end
+                sent_inner = not sent_start and not sent_end
 
                 add_freq(term_len, term, Attribute.All, author)
-                if is_start:
+                if sent_start:
                     add_freq(term_len, term, Attribute.Start, author)
-                if is_end:
+                if sent_end:
                     add_freq(term_len, term, Attribute.End, author)
-                if is_full:
+                if sent_full:
                     add_freq(term_len, term, Attribute.Full, author)
-                if is_inner:
+                if sent_inner:
                     add_freq(term_len, term, Attribute.Inner, author)
-                if is_long:
+                if sent_long and not term_long:
+                    # long terms are trivially in long sentences
                     add_freq(term_len, term, Attribute.Long, author)
-                if is_short:
+                if sent_short and not term_long:
+                    # long terms cannot be in short sentences
                     add_freq(term_len, term, Attribute.Short, author)
 
     return freqs
