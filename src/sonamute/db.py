@@ -539,6 +539,9 @@ class MessageDB:
         output: list[SQLFrequency] = list()
         for text, result in merged.items():
             counted_authors = await self.count_nontrivial_authors(result["authors"])
+            # if counted_authors == 0:
+            #     # the entire frequency should be discounted
+            #     continue
             formatted = format_freq_sqlite(
                 text=text,
                 term_len=term_len,
