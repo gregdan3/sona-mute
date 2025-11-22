@@ -5,9 +5,8 @@ from datetime import UTC, datetime
 from sonamute.smtypes import KnownPlatforms
 
 IGNORED_COMMUNITIES_MAP: dict[int, set[int]] = {
-    KnownPlatforms.Discord.value: {
-        1534630115,  # kokanu server
-    },
+    KnownPlatforms.Discord.value: set(),
+    # { 1534630115,  # kokanu server },
     KnownPlatforms.Telegram.value: set(),
 }
 
