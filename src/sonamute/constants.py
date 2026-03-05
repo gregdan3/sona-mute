@@ -14,6 +14,14 @@ IGNORED_COMMUNITIES_MAP: dict[int, set[int]] = {
     },
 }
 
+# TODO: ignore #tomo-toki-pini-ante 545467374254555137
+# from 769214584611012628 to 769236383021531217
+# 2020-10-23
+
+# TODO: ignore #tomo-toki-ante 599425964325470209
+# 896905274126917652 to 896908987272933376
+# 2021-10-10 and 11
+
 IGNORED_CONTAINERS_MAP: dict[int, set[int]] = {
     KnownPlatforms.Discord.value: {
         316066233755631616,  # mapona/jaki
