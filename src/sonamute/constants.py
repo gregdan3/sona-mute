@@ -14,14 +14,6 @@ IGNORED_COMMUNITIES_MAP: dict[int, set[int]] = {
     },
 }
 
-# TODO: ignore #tomo-toki-pini-ante 545467374254555137
-# from 769214584611012628 to 769236383021531217
-# 2020-10-23
-
-# TODO: ignore #tomo-toki-ante 599425964325470209
-# 896905274126917652 to 896908987272933376
-# 2021-10-10 and 11
-
 IGNORED_CONTAINERS_MAP: dict[int, set[int]] = {
     KnownPlatforms.Discord.value: {
         316066233755631616,  # mapona/jaki
@@ -50,6 +42,20 @@ IGNORED_AUTHORS_MAP: dict[int, set[int]] = {
     KnownPlatforms.Telegram.value: {
         307460571,  # old welcome bot in telegram
     },
+}
+# platform to container, then container to message ID range
+IGNORED_MESSAGES_MAP: dict[int, dict[int, list[tuple[int, int]]]] = {
+    KnownPlatforms.Discord.value: {
+        # tomo-toki-pini-ante, kapilu and ghoom playing chess
+        545467374254555137: [(769214584611012628, 769236383021531217)],
+        # tomo-toki-ante, lon insa pi tomo mi spam
+        599425964325470209: [
+            # oct10 to oct16, 2020
+            (896905274126917652, 898958125506371665),
+            # nov28 to dec04, 2020
+            (913861525729574912, 916918547152769104),
+        ],
+    }
 }
 
 

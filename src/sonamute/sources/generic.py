@@ -9,6 +9,7 @@ from sonamute.constants import (
     IGNORED_AUTHORS_MAP,
     IGNORED_CONTAINERS_MAP,
     IGNORED_COMMUNITIES_MAP,
+    IGNORED_MESSAGES_MAP,
 )
 
 NULL_CONTAINER = 0
@@ -35,6 +36,12 @@ def is_countable(msg: PreMessage) -> bool:
     ignored_authors = IGNORED_AUTHORS_MAP.get(platform_id, set())
     if msg["author"]["_id"] in ignored_authors:
         return False
+
+    ignored_messages = IGNORED_MESSAGES_MAP.get(platform_id, dict())
+    ignored_ranges = ignored_messages.get(msg["container"], list())
+    for low_id, high_id in ignored_ranges:
+        if low_id <= msg["_id"] and msg["_id"] <= high_id:
+            return False
 
     is_bot = msg["author"]["is_bot"]
     is_webhook = msg["author"]["is_webhook"]
