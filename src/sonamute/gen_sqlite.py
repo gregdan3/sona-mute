@@ -33,8 +33,7 @@ async def configure_sqlite(conn: aiosqlite.Connection):
     _ = await conn.execute("PRAGMA cache_size = 20000;")
     _ = await conn.execute("PRAGMA page_size = 65536;")
 
-    _ = await conn.execute(
-        """
+    _ = await conn.execute("""
     CREATE TABLE IF NOT EXISTS term (
         id INTEGER NOT NULL,
         len INTEGER NOT NULL,
@@ -42,12 +41,10 @@ async def configure_sqlite(conn: aiosqlite.Connection):
         PRIMARY KEY (id),
         UNIQUE (text)
     );
-    """
-    )
+    """)
 
     for table in FREQ_TABLES:
-        _ = await conn.execute(
-            f"""
+        _ = await conn.execute(f"""
         CREATE TABLE IF NOT EXISTS {table} (
             term_id INTEGER NOT NULL,
             attr INTEGER NOT NULL,
@@ -57,12 +54,10 @@ async def configure_sqlite(conn: aiosqlite.Connection):
             PRIMARY KEY (term_id, attr, day),
             FOREIGN KEY (term_id) REFERENCES term(id)
         ) WITHOUT ROWID;
-        """
-        )
+        """)
 
     for table in TOTAL_TABLES:
-        _ = await conn.execute(
-            f"""
+        _ = await conn.execute(f"""
         CREATE TABLE IF NOT EXISTS {table} (
             day INTEGER NOT NULL,
             attr INTEGER NOT NULL,
@@ -71,8 +66,7 @@ async def configure_sqlite(conn: aiosqlite.Connection):
             authors INTEGER NOT NULL,
             PRIMARY KEY (day, term_len, attr)
         ) WITHOUT ROWID;
-        """
-        )
+        """)
 
     await conn.commit()
 
