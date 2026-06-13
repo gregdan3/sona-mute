@@ -241,10 +241,10 @@ async def generate_sqlite(
 ):
     sdb = await freqdb_factory(filename)
     first_msg_dt, last_msg_dt = await edb.get_msg_date_range()
-    if first_msg_dt < min_date:
-        first_msg_dt = min_date
-    if last_msg_dt > max_date:
-        last_msg_dt = max_date
+    if min_date < first_msg_dt:
+        min_date = first_msg_dt
+    if max_date > last_msg_dt:
+        max_date = last_msg_dt
 
     print(f"Dumping frequency data to SQLite @ {now()}")
     for term_len in range(1, max_term_len + 1):
@@ -266,7 +266,7 @@ async def generate_sqlite(
                 term_len,
                 attr,
                 zero_dt,
-                last_msg_dt,
+                max_date,
                 "yearly",
             )
             await copy_totals(
@@ -275,14 +275,14 @@ async def generate_sqlite(
                 term_len,
                 attr,
                 zero_dt,
-                last_msg_dt,
+                max_date,
                 "total_yearly",
             )
 
             # per-epoch (aug 1-aug 1) ranking data
             # TODO: what if the period is smaller than or significantly offset
             # from the epochs
-            for start, end in epochs_in_range(first_msg_dt, last_msg_dt):
+            for start, end in epochs_in_range(min_date, max_date):
                 print(
                     f"yearly {start.date()} (term len {term_len}, attr {attr}) @ {now()}"
                 )
@@ -306,7 +306,7 @@ async def generate_sqlite(
                 )
 
             # periodic frequency data
-            for start, end in months_in_range(first_msg_dt, last_msg_dt):
+            for start, end in months_in_range(min_date, max_date):
                 print(f"monthly {start.date()} (pl {term_len}, attr {attr}) @ {now()}")
                 await copy_freqs(
                     edb,
