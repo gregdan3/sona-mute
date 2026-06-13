@@ -57,6 +57,9 @@ IGNORED_MESSAGES_MAP: dict[int, dict[int, list[tuple[int, int]]]] = {
             # nov28 to dec04, 2020
             (913861525729574912, 916918547152769104),
         ],
+        # 851665652452556840 : [
+        #     (1, 1),
+        # ]
     }
 }
 
