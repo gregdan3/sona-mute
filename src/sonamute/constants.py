@@ -22,10 +22,12 @@ IGNORED_CONTAINERS_MAP: dict[int, set[int]] = {
         842196795756249118,  # ma pona/invite lawa
         895303838662295572,  # maponasewi/tokinanpa; this is a pluralkit user.
         914305039764426772,  # ma pali/wikipesija
+        1031260120904114316,  # ma ante/animal farm spam thing
         1128714905932021821,  # mamusi/ako
         1187212477155528804,  # mapona/toki-suli/musitokipiantesitelenwan
         1279459569160163440,  # mapona/toki-suli/musi Ako nanpa tu
-        1031260120904114316,  # ma ante/animal farm spam thing
+        1366284542834376755,  # mapona/toki-suli/o ike e sona ilo
+        1510089529246224455,  # mapona/toki-suli/toki Gibberish
     }
 }
 
