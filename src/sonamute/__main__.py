@@ -142,7 +142,13 @@ async def amain(argv: argparse.Namespace):
     actions = menu_handler()
 
     batch_size: int = argv.batch_size
-    db = load_messagedb_from_env()
+    needs_db = (
+        any(source["to_db"] for source in actions["sources"])
+        or actions["frequency"]
+        or actions["sqlite"]
+    )
+    db = load_messagedb_from_env() if needs_db else None
+
     for sourcedata in actions["sources"]:
         platform = sourcedata["source"]
         root = sourcedata["root"]
@@ -153,6 +159,7 @@ async def amain(argv: argparse.Namespace):
 
         print(f"Fetching {platform} data from {root}")
         if to_db:
+            assert db is not None
             await source_to_db(db, source, batch_size)
         else:
             assert output  # cli guarantees it exists
@@ -166,6 +173,7 @@ async def amain(argv: argparse.Namespace):
 
     if actions["frequency"]:
         print("Regenerating frequency data")
+        assert db is not None
         await db_sents_to_freqs(db, batch_size, True)
 
     if actions["sqlite"]:
@@ -177,6 +185,7 @@ async def amain(argv: argparse.Namespace):
         max_date = actions["sqlite"]["max_date"]
 
         print(f"Dumping frequency data to {dbpath}")
+        assert db is not None
         await generate_sqlite(
             db,
             dbpath,
