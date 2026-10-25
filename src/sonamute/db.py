@@ -83,15 +83,11 @@ filter
     and .attr = <Attribute>$attr
     and .day >= <std::datetime>$start
     and .day < <std::datetime>$end;
-""" % (
-    MIN_HITS_NEEDED
-)
+""" % (MIN_HITS_NEEDED)
 
 AUTHOR_IS_COUNTED_SELECT = """
     select Author filter .id = <std::uuid>$author and .num_tp_sentences >= %s;
-""" % (
-    MIN_SENTS_NEEDED
-)
+""" % (MIN_SENTS_NEEDED)
 
 # hit and author counts are based on global type, All
 TOTAL_HITS_SELECT = """
@@ -105,9 +101,7 @@ with
       and .day >= <std::datetime>$start
       and .day < <std::datetime>$end
   ) select sum(F.hits);
-""" % (
-    MIN_HITS_NEEDED
-)
+""" % (MIN_HITS_NEEDED)
 TOTAL_AUTHORS_SELECT = """
 with
   F := (
@@ -120,9 +114,7 @@ with
       and .day < <std::datetime>$end
   )
   select F.authors;
-""" % (
-    MIN_HITS_NEEDED
-)
+""" % (MIN_HITS_NEEDED)
 # this is distinct by default. insane. love it.
 
 PLAT_INSERT = """
