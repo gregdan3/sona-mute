@@ -20,6 +20,7 @@ dependencies = [
   "pyyaml>=5.1.0",
   "python-frontmatter>=1.1.0",
   "gel>=3.1.0",
+  "asyncpg>=0.32.0",
 ]
 requires-python = ">=3.13"
 readme = "README.md"
