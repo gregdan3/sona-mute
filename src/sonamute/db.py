@@ -636,3 +636,14 @@ def load_messagedb_from_env() -> MessageDB:
     port = int(load_envvar("GELDB_PORT"))
     DB = MessageDB(username, password, host, port)
     return DB
+
+
+def load_pg_messagedb_from_env() -> MessageDB:
+    username = load_envvar("POSTGRES_USER")
+    password = load_envvar("POSTGRES_PASSWORD")
+    host = load_envvar("POSTGRES_HOST")
+    port = int(load_envvar("POSTGRES_PORT"))
+    database = load_envvar("POSTGRES_DB")
+    # TODO: update call
+    DB = MessageDB(username, password, host, port)
+    return DB

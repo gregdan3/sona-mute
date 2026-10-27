@@ -5,7 +5,8 @@ from typing import TypedDict, NotRequired
 from datetime import datetime
 
 
-# Copy of Attribute enum in GelDB
+# Copy of Attribute enum in GelDB and PostgreSQL
+# see also db/default.esdl, db/default.sql
 class Attribute(Enum):
     All = "All"
     Start = "Start"
@@ -15,17 +16,25 @@ class Attribute(Enum):
     Short = "Short"
     Inner = "Inner"
 
+    Subject = "Subject"
+    Verb = "Verb"
+    Object = "Object"
+    PrepositionalObject = "PrepositionalObject"
+
+    Head = "Head"
+    Modifier = "Modifier"
+    Preposition = "Preposition"
+    Preverb = "Preverb"
+    Noun = "Noun"
+    Particle = "Particle"
+
+    TransitiveVerb = "TransitiveVerb"
+    IntransitiveVerb = "IntransitiveVerb"
+    PrepositionalVerb = "PrepositionalVerb"
+
 
 # For sqlite
-ATTRIBUTE_IDS = {
-    Attribute.All: 0,
-    Attribute.Start: 1,
-    Attribute.End: 2,
-    Attribute.Full: 3,
-    Attribute.Long: 4,
-    Attribute.Short: 5,
-    Attribute.Inner: 6,
-}
+ATTRIBUTE_IDS = {attribute: i for i, attribute in enumerate(Attribute)}
 
 
 # frequency generation
