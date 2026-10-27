@@ -12,6 +12,7 @@ from typing_extensions import override
 from sonamute.file_io import try_load_json_file
 from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
 from sonamute.sources.generic import NULL_CONTAINER, FileFetcher
+from sonamute.log import LOG
 
 
 class YouTubeVideoFormat(TypedDict):
@@ -202,18 +203,22 @@ class YouTubeFetcher(FileFetcher):
         for root, _, files in os.walk(self.root):
             for filename in files:
                 if not filename.endswith(".json"):
+                    LOG.debug(f"Skip youtube file {root}/{filename}; wrong extension")
                     continue
 
                 data = cast(
                     YouTubeJSON, try_load_json_file(os.path.join(root, filename))
                 )
                 if not data:
+                    LOG.debug(f"Skip youtube file {root}/{filename}; no data")
                     continue
 
                 # not a video
                 if "formats" not in data:
+                    LOG.debug(f"Skip youtube file {root}/{filename}; no `formats`")
                     continue
 
+                LOG.info(f"Reading youtube file {root}/{filename}")
                 yield data
 
     @override
@@ -295,7 +300,6 @@ class YouTubeFetcher(FileFetcher):
 
             # if comments are off, may be omitted
             for comment in video.get("comments", []):
-
                 comment_id = fetch_comment_id(comment)
 
                 if comment_id in self.__seen:

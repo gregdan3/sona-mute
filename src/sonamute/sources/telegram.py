@@ -11,6 +11,7 @@ from typing_extensions import override
 from sonamute.file_io import try_load_json_file
 from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
 from sonamute.sources.generic import NULL_CONTAINER, FileFetcher
+from sonamute.log import LOG
 
 # TODO: special handling?
 ONECHAT_BRIDGE_ID = 128026086
@@ -188,15 +189,19 @@ class TelegramFetcher(FileFetcher):
 
             for filename in files:
                 if not filename.endswith(".json"):
+                    LOG.debug(f"Skip telegram file {root}/{filename}; wrong extension")
                     continue
 
                 data = cast(
                     TelegramJSON, try_load_json_file(os.path.join(root, filename))
                 )
                 if not data:
+                    LOG.debug(f"Skip telegram file {root}/{filename}; no data")
                     continue
                 if "name" not in data and "type" not in data:
+                    LOG.debug(f"Skip telegram file {root}/{filename}; no name or type")
                     continue
+                LOG.info(f"Reading telegram file {root}/{filename}")
                 yield data
 
     @override

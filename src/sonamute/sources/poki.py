@@ -14,6 +14,7 @@ from sonamute.utils import fake_id
 from sonamute.file_io import try_load_html
 from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
 from sonamute.sources.generic import NULL_AUTHOR, NULL_CONTAINER, FileFetcher
+from sonamute.log import LOG
 
 Original = TypedDict(
     "Original",
@@ -77,23 +78,27 @@ class PokiLapoFetcher(FileFetcher):
     def get_files(self) -> Generator[frontmatter.Post, None, None]:
         for root, _, files in os.walk(self.root):
             for filename in files:
-                # TODO: safety checking?
                 if not filename.endswith(".md"):
+                    LOG.debug(f"Skip poki file {root}/{filename}; wrong extension")
                     continue
 
                 with open(os.path.join(root, filename), "r") as f:
                     data = frontmatter.loads(f.read())
                     if not data or not data.metadata:
+                        LOG.debug(f"Skip poki file {root}/{filename}; missing data")
                         continue
                     data.metadata = cast(Frontmatter, data.metadata)
                     if not data.metadata.get("date"):
+                        LOG.debug(f"Skip poki file {root}/{filename}; no date")
                         continue
-                    if data.metadata.get("date-precision") in ("none", "year"):
-                        # we need month precision
+                    if data.metadata.get("date-precision") not in ("day", "month"):
+                        LOG.debug(f"Skip poki file {root}/{filename}; imprecise date")
                         continue
                     if not data.content:
+                        LOG.debug(f"Skip poki file {root}/{filename}; no content")
                         continue
 
+                    LOG.info(f"Opening poki file {root}/{filename}")
                     yield data
 
     @override

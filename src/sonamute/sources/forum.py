@@ -188,7 +188,6 @@ class ForumFetcher(FileFetcher):
     @override
     def get_messages(self) -> Generator[PreMessage, None, None]:
         for post in self.get_files():
-
             post_id_obj = post.select_one(POST_ID_SELECTOR)
             assert post_id_obj, (post, post_id_obj)
 

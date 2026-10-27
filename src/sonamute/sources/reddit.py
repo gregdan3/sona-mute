@@ -11,6 +11,7 @@ from typing_extensions import override
 from sonamute.file_io import try_load_json
 from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
 from sonamute.sources.generic import NULL_AUTHOR, NULL_CONTAINER, FileFetcher
+from sonamute.log import LOG
 
 
 class RedditSubmission(TypedDict):
@@ -213,23 +214,38 @@ class RedditFetcher(FileFetcher):
         for root, _, files in os.walk(self.root):
             for filename in files:
                 if ("comments" not in filename) and ("submissions" not in filename):
+                    LOG.debug(f"Ignoring reddit file {root}/{filename}; wrong name")
                     continue
                 if filename.endswith(".zst"):
+                    LOG.debug(f"Ignoring reddit file {root}/{filename}; compressed")
                     continue
                 # TODO: safety checking?
                 with open(os.path.join(root, filename), "r") as f:
-                    for line in f:
+                    for i, line in enumerate(f):
                         data = cast(RedditJSON, try_load_json(line))
                         if not data:
+                            LOG.debug(
+                                f"Ignoring reddit line {i} in {root}/{filename}; no data"
+                            )
                             continue
                         # NOTE: ONE COMMENT LACKS AN ID. WHY??
-                        # if "id" not in data:
-                        #     continue
+                        if "id" not in data:
+                            LOG.debug(
+                                f"Ignoring reddit line {i} in {root}/{filename}; no id"
+                            )
+                            continue
                         if "subreddit" not in data:
+                            LOG.debug(
+                                f"Ignoring reddit line {i} in {root}/{filename}; no subreddit"
+                            )
                             continue
                         if "subreddit_id" not in data:
+                            LOG.debug(
+                                f"Ignoring reddit line {i} in {root}/{filename}; no subreddit id"
+                            )
                             continue
 
+                        LOG.info(f"Reading reddit line {i} in {root}/{filename}")
                         yield data
 
     @override

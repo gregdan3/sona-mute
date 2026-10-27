@@ -11,6 +11,7 @@ from typing_extensions import override
 from sonamute.file_io import try_load_json_file
 from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
 from sonamute.sources.generic import FileFetcher
+from sonamute.log import LOG
 
 
 class DiscordGuildJSON(TypedDict):
@@ -124,15 +125,24 @@ class DiscordFetcher(FileFetcher):
 
             for filename in files:
                 if not filename.endswith(".json"):
+                    LOG.debug(
+                        f"Ignoring discord file {root}/{filename}; wrong extension"
+                    )
                     continue
 
                 data = cast(
                     DiscordJSON, try_load_json_file(os.path.join(root, filename))
                 )
                 if not data:
+                    LOG.debug(f"Ignoring discord file {root}/{filename}; no data")
                     continue
                 if "messageCount" not in data:
+                    LOG.debug(
+                        f"Ignoring discord file {root}/{filename}; missing `messageCount`"
+                    )
                     continue
+
+                LOG.info(f"Reading discord file {root}/{filename}")
                 yield data
 
     @override

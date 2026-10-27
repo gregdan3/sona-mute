@@ -25,6 +25,7 @@ from sonamute.counters import countables, process_msg, get_sentence_stats
 from sonamute.constants import MAX_TERM_LEN, MIN_HITS_NEEDED
 from sonamute.gen_sqlite import generate_sqlite
 from sonamute.sources.generic import PlatformFetcher
+from sonamute.log import configure
 
 
 async def insert_raw_msg(db: MessageDB, msg: PreMessage) -> UUID | None:
@@ -210,5 +211,12 @@ if __name__ == "__main__":
         type=int,
         default=150,
     )
+    _ = parser.add_argument(
+        "--log-level",
+        help="Set the log level.",
+        choices=("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"),
+        default="INFO",
+    )
     ARGV = parser.parse_args()
+    configure(ARGV.log_level)
     main(ARGV)

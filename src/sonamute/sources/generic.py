@@ -11,6 +11,7 @@ from sonamute.constants import (
     IGNORED_COMMUNITIES_MAP,
     IGNORED_MESSAGES_MAP,
 )
+from sonamute.log import LOG
 
 NULL_CONTAINER = 0
 NULL_AUTHOR = 0
