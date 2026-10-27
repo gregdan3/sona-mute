@@ -1,4 +1,5 @@
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 CREATE TYPE attribute AS ENUM (
     'All',
@@ -49,8 +50,7 @@ CREATE TABLE community (
     num_sentences bigint NOT NULL DEFAULT 0,
     num_tp_sentences bigint NOT NULL DEFAULT 0,
 
-    CONSTRAINT community__id_platform_unique
-    UNIQUE (_id, platform_id)
+    CONSTRAINT community__id_platform_unique UNIQUE (_id, platform_id)
 );
 
 
@@ -66,8 +66,16 @@ CREATE TABLE author (
     num_sentences bigint NOT NULL DEFAULT 0,
     num_tp_sentences bigint NOT NULL DEFAULT 0,
 
-    CONSTRAINT author__id_name_platform_unique
-    UNIQUE (_id, platform_id)
+    CONSTRAINT author__id_name_platform_unique UNIQUE (_id, platform_id)
+);
+
+CREATE TABLE related_authors (
+    -- can merge authors across platforms, e.g. if two accounts are for the same person
+    author_id_1 uuid NOT NULL REFERENCES author (id),
+    author_id_2 uuid NOT NULL REFERENCES author (id),
+
+    CONSTRAINT related_authors__order CHECK (author_id_1 < author_id_2),
+    CONSTRAINT related_authors__unique UNIQUE (author_id_1, author_id_2)
 );
 
 
@@ -76,23 +84,29 @@ CREATE TABLE message (
     _id bigint NOT NULL,
     author_id uuid NOT NULL REFERENCES author (id),
     community_id uuid NOT NULL REFERENCES community (id),
-    container bigint NOT NULL,
+    container_id bigint NOT NULL, -- for levels of organization beyond community
 
     postdate timestamptz NOT NULL,
     content text NOT NULL,
     score double precision NOT NULL,
     is_counted boolean NOT NULL,
 
-    CONSTRAINT message__id_community_unique
-    UNIQUE (_id, community_id)
+    CONSTRAINT message__id_community_unique UNIQUE (_id, community_id)
 );
 CREATE INDEX message_is_counted_postdate_idx
 ON message (postdate)
 WHERE is_counted = true;
 
+CREATE TABLE message_annotation(
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  message_id uuid NOT NULL REFERENCES message (id),
+  pluralkit_author author_id NULL REFERENCES author (id)
+)
+
 
 CREATE TABLE sentence (
     -- tracks a unique sequence of words
+    -- NOTE: the UUID should be a UUID5 generated on the client
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     words text[] NOT NULL UNIQUE,
     len integer NOT NULL
@@ -153,14 +167,11 @@ ON frequency_context (community_id, day, attr);
 
 CREATE TABLE frequency (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    context_id uuid NOT NULL REFERENCES frequency_context (
-        id
-    ) ON DELETE CASCADE,
+    context_id uuid NOT NULL REFERENCES frequency_context (id) ON DELETE CASCADE,
     term_id uuid NOT NULL REFERENCES term (id) ON DELETE CASCADE,
     hits bigint NOT NULL,
 
-    CONSTRAINT frequency_context_term_unique
-    UNIQUE (context_id, term_id)
+    CONSTRAINT frequency_context_term_unique UNIQUE (context_id, term_id)
 );
 CREATE INDEX frequency_term_idx ON frequency (term_id);
 CREATE INDEX frequency_context_id_idx ON frequency (context_id);
