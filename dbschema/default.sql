@@ -1,6 +1,3 @@
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
 CREATE TYPE attribute AS ENUM (
     'All',
 
@@ -16,7 +13,7 @@ CREATE TYPE attribute AS ENUM (
     'Subject',      -- before li
     'Verb',         -- after li and before e
     'Object',       -- after e and before prep
-    'Prepositional Object', -- after prep
+    'PrepositionalObject', -- after prep
 
     -- functions
     'Head',         -- first word in any part of speech
@@ -27,101 +24,87 @@ CREATE TYPE attribute AS ENUM (
     'Particle',     -- TODO: probably duplicate with each particle
 
     -- more specific parts of speech
-    'Transitive Verb', -- after li, with e
-    'Intransitive Verb', -- after li, without e
-    'Prepositional Verb' -- after li, is first prep+prep object
+    'TransitiveVerb', -- after li, with e
+    'IntransitiveVerb', -- after li, without e
+    'PrepositionalVerb' -- after li, is first prep+prep object
 );
 
 
 CREATE TABLE platform (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    _id smallint NOT NULL UNIQUE,
+    id smallint PRIMARY KEY,
     name text NOT NULL
 );
 
 
 CREATE TABLE community (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    _id bigint NOT NULL,
-    platform_id uuid NOT NULL REFERENCES platform (id),
+    id bigint NOT NULL,
+    platform_id smallint NOT NULL REFERENCES platform (id),
 
     name text,
 
-    num_sentences bigint NOT NULL DEFAULT 0,
-    num_tp_sentences bigint NOT NULL DEFAULT 0,
+    num_sentences int NOT NULL DEFAULT 0,
+    num_tp_sentences int NOT NULL DEFAULT 0,
 
-    CONSTRAINT community__id_platform_unique UNIQUE (_id, platform_id)
+    PRIMARY KEY (id, platform_id)
 );
 
 
 CREATE TABLE author (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    _id bigint NOT NULL,
-    platform_id uuid NOT NULL REFERENCES platform (id),
+    id bigint NOT NULL,
+    platform_id smallint NOT NULL REFERENCES platform (id),
 
     name text NOT NULL,
     is_bot boolean NOT NULL,
     is_webhook boolean NOT NULL,
 
-    num_sentences bigint NOT NULL DEFAULT 0,
-    num_tp_sentences bigint NOT NULL DEFAULT 0,
+    num_sentences int NOT NULL DEFAULT 0,
+    num_tp_sentences int NOT NULL DEFAULT 0,
 
-    CONSTRAINT author__id_name_platform_unique UNIQUE (_id, platform_id)
-);
-
-CREATE TABLE related_authors (
-    -- can merge authors across platforms, e.g. if two accounts are for the same person
-    author_id_1 uuid NOT NULL REFERENCES author (id),
-    author_id_2 uuid NOT NULL REFERENCES author (id),
-
-    CONSTRAINT related_authors__order CHECK (author_id_1 < author_id_2),
-    CONSTRAINT related_authors__unique UNIQUE (author_id_1, author_id_2)
+    PRIMARY KEY (id, platform_id)
 );
 
 
 CREATE TABLE message (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    _id bigint NOT NULL,
-    author_id uuid NOT NULL REFERENCES author (id),
-    community_id uuid NOT NULL REFERENCES community (id),
+    id bigint NOT NULL,
+    platform_id smallint NOT NULL REFERENCES platform (id),
+
+    author_id bigint NOT NULL,
+    community_id bigint NOT NULL,
     container_id bigint NOT NULL, -- for levels of organization beyond community
 
     postdate timestamptz NOT NULL,
     content text NOT NULL,
-    score double precision NOT NULL,
+    score real NOT NULL,
     is_counted boolean NOT NULL,
 
-    CONSTRAINT message__id_community_unique UNIQUE (_id, community_id)
+    PRIMARY KEY (id, platform_id),
+    CONSTRAINT message_id_community_unique UNIQUE (id, community_id),
+    FOREIGN KEY (author_id, platform_id) REFERENCES author (id, platform_id) ON DELETE CASCADE,
+    FOREIGN KEY (community_id, platform_id) REFERENCES community (id, platform_id) ON DELETE CASCADE
 );
 CREATE INDEX message_is_counted_postdate_idx
 ON message (postdate)
 WHERE is_counted = true;
 
-CREATE TABLE message_annotation(
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  message_id uuid NOT NULL REFERENCES message (id),
-  pluralkit_author author_id NULL REFERENCES author (id)
-)
-
 
 CREATE TABLE sentence (
-    -- tracks a unique sequence of words
-    -- NOTE: the UUID should be a UUID5 generated on the client
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    -- tracks a unique sequence of words as spoken by a user
+    id int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     words text[] NOT NULL UNIQUE,
-    len integer NOT NULL
+    len smallint GENERATED ALWAYS AS (cardinality(words)) STORED
 );
 CREATE INDEX sentence_len_idx ON sentence (len);
 
 
 CREATE TABLE message_sentence (
-    message_id uuid NOT NULL REFERENCES message (id) ON DELETE CASCADE,
-    sentence_id uuid NOT NULL REFERENCES sentence (id) ON DELETE CASCADE,
-    idx integer NOT NULL, -- order of sentences in message
-    -- sent scores can differ by context (not implemented as of 2026-10-25)
-    score double precision NOT NULL,
+    message_id bigint NOT NULL,
+    platform_id smallint NOT NULL,
+    sentence_id int NOT NULL REFERENCES sentence (id) ON DELETE CASCADE,
+    idx smallint NOT NULL, -- order of sentences in message
+    score real NOT NULL,
 
-    PRIMARY KEY (message_id, idx)
+    PRIMARY KEY (message_id, platform_id, idx),
+    FOREIGN KEY (message_id, platform_id) REFERENCES message (id, platform_id) ON DELETE CASCADE
 );
 CREATE INDEX message_sentence_score_idx ON message_sentence (score);
 
@@ -134,55 +117,60 @@ CREATE INDEX message_sentence_score_idx ON message_sentence (score);
 
 
 CREATE TABLE term (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    text text NOT NULL UNIQUE,
-    len smallint NOT NULL,
-    hits bigint NOT NULL DEFAULT 0
+    -- tracks a unique sequence of words as an ngram
+    id int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    words text[] NOT NULL UNIQUE,
+    len smallint GENERATED ALWAYS AS (cardinality(words)) STORED,
+    -- hits int NOT NULL DEFAULT 0
   -- NOTE: all counted+sufficiently scored times the term was used; computed after ingest
+  -- hits per term can be calculated from
+  -- SELECT f.term_id, SUM(fhits) FROM frequency f JOIN context c WHERE c.attr = 0 GROUP BY f.term_id
 );
-CREATE INDEX term_hits_len_idx ON term (hits, len) INCLUDE (text); -- text fetchable from index
-CREATE INDEX term_text_idx ON term (text);
+-- CREATE INDEX term_hits_len_idx ON term (hits, len) INCLUDE (text); -- text fetchable from index
 
 CREATE TABLE term_author (
     -- unrolled from `term` to make unique authors countable
-    term_id uuid NOT NULL REFERENCES term (id) ON DELETE CASCADE,
-    author_id uuid NOT NULL REFERENCES author (id) ON DELETE CASCADE,
-    hits bigint NOT NULL DEFAULT 0,
-  -- NOTE: same as hits in term but only for this author using this term
+    term_id int NOT NULL REFERENCES term (id) ON DELETE CASCADE,
+    author_id bigint NOT NULL,
+    platform_id smallint NOT NULL,
+    hits int NOT NULL DEFAULT 0,
+    -- NOTE: same as hits in term but only for this author using this term
+    -- hits per author is not calculable from frequency+context; must be inserted
 
-    PRIMARY KEY (term_id, author_id)
+    PRIMARY KEY (term_id, author_id, platform_id),
+    FOREIGN KEY (author_id, platform_id) REFERENCES author (id, platform_id) ON DELETE CASCADE
 );
 
-CREATE TABLE frequency_context (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    community_id uuid NOT NULL REFERENCES community (id) ON DELETE CASCADE,
+CREATE TABLE context (
+    id int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    community_id bigint NOT NULL,
+    platform_id smallint NOT NULL,
     day date NOT NULL,
     attr attribute NOT NULL,
 
-    CONSTRAINT frequency_context_unique UNIQUE (community_id, day, attr)
+    CONSTRAINT context_unique UNIQUE (community_id, platform_id, day, attr),
+    FOREIGN KEY (community_id, platform_id) REFERENCES community (id, platform_id) ON DELETE CASCADE
 );
-CREATE INDEX frequency_context_idx
-ON frequency_context (community_id, day, attr);
-
 
 CREATE TABLE frequency (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    context_id uuid NOT NULL REFERENCES frequency_context (id) ON DELETE CASCADE,
-    term_id uuid NOT NULL REFERENCES term (id) ON DELETE CASCADE,
-    hits bigint NOT NULL,
+    id int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    context_id int NOT NULL REFERENCES context (id) ON DELETE CASCADE,
+    term_id int NOT NULL REFERENCES term (id) ON DELETE CASCADE,
+    hits int NOT NULL,
 
-    CONSTRAINT frequency_context_term_unique UNIQUE (context_id, term_id)
+    CONSTRAINT context_term_unique UNIQUE (context_id, term_id)
 );
 CREATE INDEX frequency_term_idx ON frequency (term_id);
-CREATE INDEX frequency_context_id_idx ON frequency (context_id);
 
 CREATE TABLE frequency_author (
-    frequency_id uuid NOT NULL REFERENCES frequency (id) ON DELETE CASCADE,
-    author_id uuid NOT NULL REFERENCES author (id) ON DELETE CASCADE,
-    hits bigint NOT NULL,
+    frequency_id int NOT NULL REFERENCES frequency (id) ON DELETE CASCADE,
+    author_id bigint NOT NULL,
+    platform_id smallint NOT NULL,
+    hits int NOT NULL,
     -- NOTE: same as hits in term/term_author but now just in this context
 
-    PRIMARY KEY (frequency_id, author_id)
+    PRIMARY KEY (frequency_id, author_id, platform_id),
+    FOREIGN KEY (author_id, platform_id) REFERENCES author (id, platform_id) ON DELETE CASCADE
 );
 
 CREATE MATERIALIZED VIEW tp_user_sentence AS
