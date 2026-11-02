@@ -4,14 +4,14 @@ from typing import Any
 from collections.abc import Generator
 
 # LOCAL
+from sonamute.log import LOG
 from sonamute.smtypes import Author, Community, PreMessage
 from sonamute.constants import (
     IGNORED_AUTHORS_MAP,
+    IGNORED_MESSAGES_MAP,
     IGNORED_CONTAINERS_MAP,
     IGNORED_COMMUNITIES_MAP,
-    IGNORED_MESSAGES_MAP,
 )
-from sonamute.log import LOG
 
 NULL_CONTAINER = 0
 NULL_AUTHOR = 0

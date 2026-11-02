@@ -8,10 +8,10 @@ from collections.abc import Generator
 from typing_extensions import override
 
 # LOCAL
+from sonamute.log import LOG
 from sonamute.file_io import try_load_json_file
 from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
 from sonamute.sources.generic import FileFetcher
-from sonamute.log import LOG
 
 
 class DiscordGuildJSON(TypedDict):

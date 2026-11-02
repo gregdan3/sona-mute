@@ -3,21 +3,22 @@ import os
 import json
 import asyncio
 import argparse
-from uuid import UUID
-from datetime import datetime
+from datetime import date, datetime
 
 # PDM
-from gel.errors import EdgeDBError as GelDBError
+import asyncpg
 
 # LOCAL
-from sonamute.db import MessageDB, format_freq_geldb, load_messagedb_from_env
+from sonamute.db import MessageDB, format_freq_pg, load_messagedb_from_env
 from sonamute.cli import SOURCES, menu_handler
-from sonamute.utils import now, fake_uuid, batch_iter, gather_batch, months_in_range
+from sonamute.log import configure
+from sonamute.utils import now, batch_iter, gather_batch, months_in_range
 from sonamute.smtypes import (
     ATTRIBUTE_IDS,
     PreMessage,
+    PGFrequency,
     CommSentence,
-    GelFrequency,
+    CommunityKey,
     StatsCounter,
     SortedSentence,
 )
@@ -25,7 +26,6 @@ from sonamute.counters import countables, process_msg, get_sentence_stats
 from sonamute.constants import MAX_TERM_LEN, MIN_HITS_NEEDED
 from sonamute.gen_sqlite import generate_sqlite
 from sonamute.sources.generic import PlatformFetcher
-from sonamute.log import configure
 
 
 async def insert_raw_msg(db: MessageDB, msg: PreMessage) -> UUID | None:

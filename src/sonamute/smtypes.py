@@ -1,8 +1,7 @@
 # STL
 from enum import Enum, IntEnum
-from uuid import UUID
 from typing import TypedDict, NotRequired
-from datetime import datetime
+from datetime import date, datetime
 
 
 # Copy of Attribute enum in GelDB and PostgreSQL

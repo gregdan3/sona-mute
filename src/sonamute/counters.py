@@ -2,19 +2,18 @@
 import math
 import itertools
 from sys import intern
-from uuid import UUID
 from typing import Tuple, TypeVar
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Iterator, Generator
 
 # LOCAL
 from sonamute.ilo import ILO
-from sonamute.utils import fake_uuid
 from sonamute.smtypes import (
     Stats,
     Message,
     Sentence,
     Attribute,
+    AuthorKey,
     PreMessage,
     StatsCounter,
     SortedSentence,

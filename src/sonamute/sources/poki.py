@@ -10,11 +10,11 @@ import frontmatter
 from typing_extensions import override
 
 # LOCAL
+from sonamute.log import LOG
 from sonamute.utils import fake_id
 from sonamute.file_io import try_load_html
 from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
 from sonamute.sources.generic import NULL_AUTHOR, NULL_CONTAINER, FileFetcher
-from sonamute.log import LOG
 
 Original = TypedDict(
     "Original",

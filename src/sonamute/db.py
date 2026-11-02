@@ -1,11 +1,10 @@
 # STL
-from uuid import UUID
-from typing import Any, Iterable, cast
-from datetime import datetime
+from datetime import date, datetime
+from contextlib import asynccontextmanager
+from collections.abc import Iterable, AsyncGenerator
 
 # PDM
-import gel
-from gel import RetryOptions, AsyncIOClient, IsolationLevel, TransactionOptions
+import asyncpg
 from async_lru import alru_cache
 
 # LOCAL
@@ -13,15 +12,12 @@ from sonamute.utils import load_envvar
 from sonamute.smtypes import (
     ATTRIBUTE_IDS,
     Stats,
-    Author,
     Message,
-    Platform,
-    Sentence,
     Attribute,
-    Community,
+    PlatObjKey,
     PreMessage,
+    PGFrequency,
     CommSentence,
-    GelFrequency,
     SQLFrequency,
 )
 from sonamute.constants import MIN_HITS_NEEDED, MIN_SENTS_NEEDED

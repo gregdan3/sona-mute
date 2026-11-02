@@ -8,10 +8,10 @@ from collections.abc import Generator
 from typing_extensions import override
 
 # LOCAL
+from sonamute.log import LOG
 from sonamute.file_io import try_load_json_file
 from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
 from sonamute.sources.generic import NULL_CONTAINER, FileFetcher
-from sonamute.log import LOG
 
 # TODO: special handling?
 ONECHAT_BRIDGE_ID = 128026086
