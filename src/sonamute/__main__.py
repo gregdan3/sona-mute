@@ -3,6 +3,7 @@ import os
 import json
 import asyncio
 import argparse
+from uuid import UUID
 from datetime import date, datetime
 
 # PDM
@@ -15,39 +16,45 @@ from sonamute.log import configure
 from sonamute.utils import now, batch_iter, gather_batch, months_in_range
 from sonamute.smtypes import (
     ATTRIBUTE_IDS,
+    PlatObjKey,
     PreMessage,
     PGFrequency,
     CommSentence,
-    CommunityKey,
     StatsCounter,
     SortedSentence,
 )
 from sonamute.counters import countables, process_msg, get_sentence_stats
 from sonamute.constants import MAX_TERM_LEN, MIN_HITS_NEEDED
 from sonamute.gen_sqlite import generate_sqlite
-from sonamute.sources.generic import PlatformFetcher
+from sonamute.sources.generic import NULL_UUID, NULL_INT_ID, PlatformFetcher
 
 
-async def insert_raw_msg(db: MessageDB, msg: PreMessage) -> UUID | None:
+async def insert_raw_msg(db: MessageDB, msg: PreMessage) -> None:
     if await db.message_in_db(msg):
         return
 
     processed = process_msg(msg)
     try:
-        _ = await db.insert_message(processed)
-    except GelDBError as e:
+        await db.insert_message(processed)
+    except asyncpg.PostgresError as e:
         print(msg)
-        raise (e)
+        raise e
 
 
 def sort_by_community(
     tagged_sents: list[CommSentence],
-) -> dict[UUID, list[SortedSentence]]:
-    output: dict[UUID, list[SortedSentence]] = dict()
+) -> dict[PlatObjKey, list[SortedSentence]]:
+    output: dict[PlatObjKey, list[SortedSentence]] = dict()
     for s in tagged_sents:
-        if s["community"] not in output:
-            output[s["community"]] = list()
-        output[s["community"]].append({"words": s["words"], "author": s["author"]})
+        key: PlatObjKey = (s["community"]["id"], s["platform"]["id"])
+        if key not in output:
+            output[key] = list()
+        output[key].append(
+            {
+                "words": s["words"],
+                "author": (s["author"]["id"], s["platform"]["id"]),
+            }
+        )
     return output
 
 
@@ -69,26 +76,23 @@ async def source_to_db(db: MessageDB, source: PlatformFetcher, batch_size: int):
 
 def format_stats(
     stats: StatsCounter,
-    community: UUID | None = None,
-    day: datetime | None = None,
-) -> list[GelFrequency]:
-    if community is None:
-        community = fake_uuid("")
+    community_id: UUID = NULL_UUID,
+    platform_id: int = NULL_INT_ID,
+    day: date | datetime | None = None,
+) -> list[PGFrequency]:
     if day is None:
-        day = datetime.fromtimestamp(0)
-    if community or day:
-        assert community and day
+        day = date.fromtimestamp(0)
 
-    output: list[GelFrequency] = list()
+    output: list[PGFrequency] = list()
     for (term_len, text, attr), item in stats.items():
-        formatted = format_freq_geldb(
-            text,
-            term_len,
-            attr,
-            community,
-            day,
-            item["hits"],
-            item["authors"],
+        formatted = format_freq_pg(
+            text=text,
+            attr=attr,
+            community_id=community_id,
+            platform_id=platform_id,
+            day=day,
+            hits=item["hits"],
+            authors=item["authors"],
         )
         output.append(formatted)
     return output
@@ -100,43 +104,43 @@ async def db_sents_to_freqs(db: MessageDB, batch_size: int, passing: bool):
         print(f"gen frequency for {start.date()} - {end.date()} @ {now()}")
         result = await db.counted_sents_in_range(start, end, passing)
         by_community = sort_by_community(result)
-        # NOTE: community is used behind the scenes; it's probably too
-        # identifying and too much to deliver, but i can still derive useful
-        # things from it
 
-        for community, sents in by_community.items():
+        for (community_id, platform_id), sents in by_community.items():
             stats = get_sentence_stats(sents, MAX_TERM_LEN)
-            formatted = format_stats(stats, community, start)
+            formatted = format_stats(stats, community_id, platform_id, start)
             _ = await gather_batch(db.insert_frequency, formatted, batch_size)
 
 
-def source_sents_to_freqs(source: PlatformFetcher) -> list[GelFrequency]:
+def source_sents_to_freqs(source: PlatformFetcher) -> list[PGFrequency]:
     stats = get_sentence_stats(countables(source), MAX_TERM_LEN)
-    stats = format_stats(stats)
-    return stats
+    formatted = format_stats(stats)
+    return formatted
 
 
-def filter_freqs(freqs: list[GelFrequency], min_val: int) -> list[GelFrequency]:
+def filter_freqs(freqs: list[PGFrequency], min_val: int) -> list[PGFrequency]:
     freqs = [f for f in freqs if f["hits"] >= min_val]
     return freqs
 
 
-def prep_for_dump(stats: list[GelFrequency]) -> list[GelFrequency]:
+def prep_for_dump(stats: list[PGFrequency]) -> list[dict]:
+    output = []
     for f in stats:
-        f["authors"] = len(f["authors"])  # full set would be nonsense
-        f["attr"] = ATTRIBUTE_IDS[f["attr"]]  # can't serialize enum
-        del f["day"]  # not easy to organize
-        del f["community"]  # doesn't do anything
+        item = {
+            "text": f["text"],
+            "attr": ATTRIBUTE_IDS[f["attr"]],
+            "hits": f["hits"],
+            "authors": len(f["authors"]),
+        }
+        output.append(item)
 
-    stats.sort(
+    output.sort(
         key=lambda f: (
-            f["term_len"],  # 1 to n
-            f["attr"],  # one for each Attribute member
-            -f["hits"],  # highest to lowest
-            -f["authors"],  # again highest to lowest
+            f["attr"],
+            -f["hits"],
+            -f["authors"],
         )
     )
-    return stats
+    return output
 
 
 async def amain(argv: argparse.Namespace):
@@ -149,52 +153,57 @@ async def amain(argv: argparse.Namespace):
         or actions["sqlite"]
     )
     db = load_messagedb_from_env() if needs_db else None
+    if db:
+        _ = await db.get_pool()  # initialize
 
-    for sourcedata in actions["sources"]:
-        platform = sourcedata["source"]
-        root = sourcedata["root"]
-        to_db = sourcedata["to_db"]
-        output = sourcedata["output"]
+    try:
+        for sourcedata in actions["sources"]:
+            platform = sourcedata["source"]
+            root = sourcedata["root"]
+            to_db = sourcedata["to_db"]
+            output = sourcedata["output"]
 
-        source = SOURCES[platform](root)
+            source = SOURCES[platform](root)
 
-        print(f"Fetching {platform} data from {root}")
-        if to_db:
+            print(f"Fetching {platform} data from {root}")
+            if to_db:
+                assert db is not None
+                await source_to_db(db, source, batch_size)
+            else:
+                assert output  # cli guarantees it exists
+                stats = source_sents_to_freqs(source)
+                stats = filter_freqs(stats, MIN_HITS_NEEDED)
+                dump_data = prep_for_dump(stats)
+                dumped = json.dumps(dump_data, indent=2, ensure_ascii=False)
+                with open(output, "w") as f:
+                    _ = f.write(dumped)
+
+        if actions["frequency"]:
+            print("Regenerating frequency data")
             assert db is not None
-            await source_to_db(db, source, batch_size)
-        else:
-            assert output  # cli guarantees it exists
-            stats = source_sents_to_freqs(source)
-            stats = filter_freqs(stats, MIN_HITS_NEEDED)
-            stats = prep_for_dump(stats)
-            # TODO: new function to dump these in a sensible way
-            dumped = json.dumps(stats, indent=2, ensure_ascii=False)
-            with open(output, "w") as f:
-                _ = f.write(dumped)
+            await db_sents_to_freqs(db, batch_size, True)
 
-    if actions["frequency"]:
-        print("Regenerating frequency data")
-        assert db is not None
-        await db_sents_to_freqs(db, batch_size, True)
+        if actions["sqlite"]:
+            root = actions["sqlite"]["root"]
+            filename = actions["sqlite"]["filename"]
+            dbpath = os.path.join(root, filename)
+            trimmed_filename = actions["sqlite"]["filename_trimmed"]
+            min_date = actions["sqlite"]["min_date"]
+            max_date = actions["sqlite"]["max_date"]
 
-    if actions["sqlite"]:
-        root = actions["sqlite"]["root"]
-        filename = actions["sqlite"]["filename"]
-        dbpath = os.path.join(root, filename)
-        trimmed_filename = actions["sqlite"]["filename_trimmed"]
-        min_date = actions["sqlite"]["min_date"]
-        max_date = actions["sqlite"]["max_date"]
-
-        print(f"Dumping frequency data to {dbpath}")
-        assert db is not None
-        await generate_sqlite(
-            db,
-            dbpath,
-            trimmed_filename,
-            min_date,
-            max_date,
-            MAX_TERM_LEN,
-        )
+            print(f"Dumping frequency data to {dbpath}")
+            assert db is not None
+            await generate_sqlite(
+                db,
+                dbpath,
+                trimmed_filename,
+                min_date,
+                max_date,
+                MAX_TERM_LEN,
+            )
+    finally:
+        if db is not None:
+            await db.close()
 
 
 def main(argv: argparse.Namespace):

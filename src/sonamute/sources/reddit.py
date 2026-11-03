@@ -9,9 +9,10 @@ from typing_extensions import override
 
 # LOCAL
 from sonamute.log import LOG
+from sonamute.utils import int_to_uuid
 from sonamute.file_io import try_load_json
 from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
-from sonamute.sources.generic import NULL_AUTHOR, NULL_CONTAINER, FileFetcher
+from sonamute.sources.generic import NULL_UUID, NULL_INT_ID, FileFetcher
 
 
 class RedditSubmission(TypedDict):
@@ -204,10 +205,9 @@ def format_post(msg: RedditJSON) -> str:
 
 class RedditFetcher(FileFetcher):
     platform: Platform = {
-        "_id": KnownPlatforms.Reddit.value,
+        "id": KnownPlatforms.Reddit.value,
         "name": KnownPlatforms.Reddit.name,
     }
-    __seen: set[int] = set()
 
     @override
     def get_files(self) -> Generator[RedditJSON, None, None]:
@@ -256,7 +256,7 @@ class RedditFetcher(FileFetcher):
         community_name = raw_src["subreddit"]
 
         community: Community = {
-            "_id": community_id,
+            "id": community_id,
             "name": community_name,
             "platform": self.platform,
         }
@@ -266,14 +266,14 @@ class RedditFetcher(FileFetcher):
     def get_author(self, raw_msg: RedditJSON) -> Author:
 
         author_fullname = raw_msg.get("author_fullname")
-        author_id = NULL_AUTHOR
+        author_id = NULL_UUID
         if author_fullname:
             _, author_id = split_type_id(author_fullname)
 
         author_name = raw_msg["author"]
 
         author: Author = {
-            "_id": author_id,
+            "id": author_id,
             "name": author_name,
             "platform": self.platform,
             # there are bots but resp doesn't tell us
@@ -287,14 +287,9 @@ class RedditFetcher(FileFetcher):
         for msg in self.get_files():
             # reddit data is line-by-line
             # so get_files emits each line as json here
-
-            # check if deleted
-
-            _id = b36decode(msg["id"])
-
-            if _id in self.__seen:
+            id = int_to_uuid(b36decode(msg["id"]))
+            if self.seen(id):
                 continue
-            self.__seen.add(_id)
 
             # community is stored with each message
             community = self.get_community(msg)
@@ -306,9 +301,9 @@ class RedditFetcher(FileFetcher):
             postdate = datetime.fromtimestamp(timestamp, tz=UTC)
 
             message: PreMessage = {
-                "_id": _id,
+                "id": id,
                 "content": content,
-                "container": NULL_CONTAINER,
+                "container": NULL_INT_ID,
                 "community": community,
                 "author": author,
                 "postdate": postdate,

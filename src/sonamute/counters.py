@@ -2,7 +2,7 @@
 import math
 import itertools
 from sys import intern
-from typing import Tuple, TypeVar
+from typing import TypeVar
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Iterator, Generator
 
@@ -13,13 +13,13 @@ from sonamute.smtypes import (
     Message,
     Sentence,
     Attribute,
-    AuthorKey,
+    PlatObjKey,
     PreMessage,
     StatsCounter,
     SortedSentence,
 )
 from sonamute.constants import LONG_SENTENCE_LEN
-from sonamute.sources.generic import PlatformFetcher, is_countable
+from sonamute.sources.generic import NULL_UUID, PlatformFetcher, is_countable
 
 T = TypeVar("T")
 
@@ -64,7 +64,7 @@ def window_iter_range(
 
 def window_iter_terms_range(
     iterable: Iterable[str], n: int
-) -> Iterator[Tuple[str, Tuple[int, int]]]:
+) -> Iterator[tuple[str, tuple[int, int]]]:
     for tup, idx_range in window_iter_range(iterable, n):
         yield intern(" ".join(tup)), idx_range
 
@@ -84,7 +84,7 @@ def clean_string(content: str) -> str:
 
 def process_msg(msg: PreMessage) -> Message:
     """
-    For GelDB inserts. Turns a PreMessage into a Message, including all sentences.
+    For inserts. Turns a PreMessage into a Message, including all sentences.
     """
     is_counted = is_countable(msg)
     msg["content"] = clean_string(msg["content"])
@@ -96,7 +96,7 @@ def process_msg(msg: PreMessage) -> Message:
         if not scorecard["cleaned"]:
             continue  # omit empty sentences
         sentence = Sentence(
-            words=scorecard["cleaned"],
+            words=tuple(scorecard["cleaned"]),
             score=scorecard["score"],
         )
         sentences.append(sentence)
@@ -111,52 +111,44 @@ def process_msg(msg: PreMessage) -> Message:
     return final_msg
 
 
-def process_msgs(msgs: Iterable[PreMessage]) -> Generator[Message, None, None]:
+def process_msgs(msgs: Iterable[PreMessage]) -> Generator[Message]:
     for msg in msgs:
         msg = process_msg(msg)
         yield msg
 
 
-def counted(msgs: Iterable[Message]) -> Generator[Message, None, None]:
+def counted(msgs: Iterable[Message]) -> Generator[Message]:
     for msg in msgs:
         if msg["is_counted"]:
             yield msg
 
 
-def sentences_of(
-    msgs: Generator[Message, None, None],
-) -> Generator[Sentence, None, None]:
+def sentences_of(msgs: Generator[Message]) -> Generator[Sentence]:
     for msg in msgs:
         for sent in msg["sentences"]:
             yield sent
 
 
-def with_score(
-    sents: Generator[Sentence, None, None], score: float = 0.8
-) -> Generator[Sentence, None, None]:
+def with_score(sents: Generator[Sentence], score: float = 0.8) -> Generator[Sentence]:
     for sent in sents:
         if sent["score"] >= score:
             yield sent
 
 
-def words_of(
-    sents: Generator[Sentence, None, None],
-) -> Generator[list[str], None, None]:
+def words_of(sents: Generator[Sentence]) -> Generator[tuple[str, ...]]:
     for sent in sents:
         yield sent["words"]
 
 
-def lowered(
-    sents: Generator[list[str], None, None],
-) -> Generator[list[str], None, None]:
+def lowered(sents: Generator[tuple[str, ...]]) -> Generator[tuple[str, ...]]:
     for sent in sents:
-        sent = [word.lower() for word in sent]
+        sent = tuple(word.lower() for word in sent)
         yield sent
 
 
 def countables(
     source: PlatformFetcher,
-) -> Generator[SortedSentence, None, None]:
+) -> Generator[SortedSentence]:
 
     # why did i write this
     msgs = source.get_messages()
@@ -167,11 +159,10 @@ def countables(
     sents = words_of(sents)
     sents = lowered(sents)
     for sent in sents:
-        yield {"words": sent, "author": fake_uuid("")}
-        # TODO: get actual msg author's name to fake authorship better
+        yield {"words": sent, "author": (NULL_UUID, source.platform["id"])}
 
 
-def is_nonsense(sent_len: int, sent: list[str]) -> bool:
+def is_nonsense(sent_len: int, sent: tuple[str]) -> bool:
     """
     Skip a sentence if it is "nonsense," which means
     - "longer than 5x the average" and "mostly a single word", or
@@ -218,7 +209,7 @@ def get_sentence_stats(
         term_len: int,
         term: str,
         attr: Attribute,
-        author: UUID,
+        author: PlatObjKey,
     ):
         freq = freqs[(term_len, term, attr)]
         freq["hits"] += 1

@@ -1,4 +1,7 @@
 # STL
+import asyncio
+from typing import cast
+from uuid import UUID
 from datetime import date, datetime
 from contextlib import asynccontextmanager
 from collections.abc import Iterable, AsyncGenerator
@@ -8,6 +11,7 @@ import asyncpg
 from async_lru import alru_cache
 
 # LOCAL
+from sonamute.log import LOG
 from sonamute.utils import load_envvar
 from sonamute.smtypes import (
     ATTRIBUTE_IDS,
@@ -23,436 +27,217 @@ from sonamute.smtypes import (
 from sonamute.constants import MIN_HITS_NEEDED, MIN_SENTS_NEEDED
 
 
-def create_client(username: str, password: str, host: str, port: int) -> AsyncIOClient:
-    client = gel.create_async_client(
-        host=host,
-        port=port,
-        user=username,
-        password=password,
-        tls_security="insecure",
-        timeout=120,
-    )
-    client = client.with_retry_options(
-        RetryOptions(attempts=25),
-    )
-    client = client.with_transaction_options(
-        TransactionOptions(
-            isolation=IsolationLevel.RepeatableRead,
-            readonly=False,
-            deferrable=True,
-        )
-    )
-    return client
-
-
-PLAT_SELECT = """
-select Platform filter ._id = <int16>$_id
-"""
-
-COMM_SELECT = """
-select Community filter ._id = <bigint>$_id and .platform = <Platform>$platform
-"""
-
-MSG_SELECT = """
-select Message filter ._id = <bigint>$_id and .community = <Community>$community
-"""
-
-# author := .message.author.id,
-USER_SENTS_SELECT = """
-SELECT %s { community := .message.community.id, author := .message.author.id, words } FILTER
-    .message.postdate >= <std::datetime>$start AND
-    .message.postdate < <std::datetime>$end
-"""
-PASSING_USER_SENTS_SELECT = USER_SENTS_SELECT % "TPUserSentence"
-FAILING_USER_SENTS_SELECT = USER_SENTS_SELECT % "NonTPUserSentence"
-# NOTE: we don't omit sentences based on the number of sentences spoken by the
-# author, because it would actually omit a huge amount of meaningful data.
-# i chose a line of 20 sentences in order to measure authors who are visibly
-# "invested", but for actual occurrence of terms, this would omit a fairly large
-# number of sentences- around 50k authors speak between 1 and 19 sentences.
-
-TERM_DATA_SELECT = """
-select Frequency {text := .term.text, hits := .hits, authors := .authors}
-filter
-    .term.total_hits >= %s
-    and .term.len = <int16>$term_len
-    and .attr = <Attribute>$attr
-    and .day >= <std::datetime>$start
-    and .day < <std::datetime>$end;
-""" % (MIN_HITS_NEEDED)
-
-AUTHOR_IS_COUNTED_SELECT = """
-    select Author filter .id = <std::uuid>$author and .num_tp_sentences >= %s;
-""" % (MIN_SENTS_NEEDED)
-
-# hit and author counts are based on global type, All
-TOTAL_HITS_SELECT = """
-with
-  F := (
-    select Frequency
-    filter
-      .term.total_hits >= %s
-      and .term.len = <int16>$term_len
-      and .attr = <Attribute>$attr
-      and .day >= <std::datetime>$start
-      and .day < <std::datetime>$end
-  ) select sum(F.hits);
-""" % (MIN_HITS_NEEDED)
-TOTAL_AUTHORS_SELECT = """
-with
-  F := (
-    select Frequency
-    filter
-      .term.total_hits >= %s
-      and .term.len = <int16>$term_len
-      and .attr = <Attribute>$attr
-      and .day >= <std::datetime>$start
-      and .day < <std::datetime>$end
-  )
-  select F.authors;
-""" % (MIN_HITS_NEEDED)
-# this is distinct by default. insane. love it.
-
-PLAT_INSERT = """
-INSERT Platform {
-    _id := <int16>$_id,
-    name := <str>$name,
-} unless conflict on (._id)
-else Platform"""
-
-COMM_INSERT = """
-INSERT Community {
-    _id := <bigint>$_id,
-    name := <str>$name,
-    platform := <Platform>$platform,
-} unless conflict on (._id, .platform)
-else Community"""
-
-AUTHOR_INSERT = """
-INSERT Author {
-    _id := <bigint>$_id,
-    name := <optional str>$name,
-    platform := <Platform>$platform,
-    is_bot := <bool>$is_bot,
-    is_webhook := <bool>$is_webhook,
-} unless conflict on (._id, .name, .platform)
-else Author"""
-
-MSG_INSERT = """
-INSERT Message {
-    _id := <bigint>$_id,
-    community := <Community>$community,
-    container := <bigint>$container,
-    author := <Author>$author,
-    postdate := <std::datetime>$postdate,
-    content := <str>$content,
-    score := <float64>$score,
-    is_counted := <bool>$is_counted
-}
-"""
-
-SENT_INSERT = """
-INSERT Sentence {
-    message := <Message>$message,
-    words := <array<str>>$words,
-    score := <float64>$score,
-    len := <int32>$len
-}
-"""
-
-TERM_INSERT = """
-INSERT Term {
-    text := <str>$text,
-    len := <int16>$term_len,
-} unless conflict on (.text)
-else .
-"""
-
-FREQ_INSERT = """
-INSERT Frequency {
-    term := (
-        INSERT Term {
-            text := <str>$text,
-            len := <int16>$term_len,
-        } unless conflict on .text
-        else Term
-    ),
-    attr := <Attribute>$attr,
-    community := <Community>$community,
-    day := <datetime>$day,
-    hits := <int64>$hits,
-    authors := (
-        SELECT Author FILTER .id in array_unpack(<array<uuid>>$authors)
-    )
-}
-"""
-# community := (
-#     SELECT Community FILTER
-#     .id in array_unpack(<array<uuid>>$communities)
-# ),
-
-
-FREQ_INSERT_CONFLICT = """
-unless conflict on (.term, .community, .day)
-else (update Frequency set { hits := <int64>$hits });
-"""  # TODO: optionally add to FREQ_INSERT
-
-UPDATE_NUM_SENTS = """
-update Author
-    set { num_tp_sentences := (select count(.<author[is Message].tp_sentences)) }
-"""
-
-TERM_HITS_UPDATE = """
-update Term
-filter .text = <str>$text
-set {
-    total_hits := .total_hits + <int64>$hits
-}
-"""
-
-# TODO
-TERM_AUTHORS_UPDATE = """
-update Term
-filter .text = <str>$text
-set {
-    total_authors := .total_authors + <int64>$hits
-
-    authors := (
-        SELECT Author FILTER .id in array_unpack(<array<uuid>>$authors)
-    )
-
-}
-"""
-
-
 class MessageDB:
-    client: AsyncIOClient
-
-    def __init__(self, username: str, password: str, host: str, port: int) -> None:
-        self.client = create_client(username, password, host, port)
-
-    @alru_cache
-    async def __select_platform(self, _id: int) -> UUID | None:
-        result = await self.client.query_single(PLAT_SELECT, _id=_id)
-        if not result:
-            return
-        return cast(UUID, result.id)
-
-    async def select_platform(self, platform: Platform) -> UUID | None:
-        return await self.__select_platform(_id=platform["_id"])
-
-    @alru_cache
-    async def __insert_platform(
+    def __init__(
         self,
-        _id: int,
+        username: str,
+        password: str,
+        host: str,
+        port: int,
+        database: str,
+    ) -> None:
+        self.username: str = username
+        self.password: str = password
+        self.host: str = host
+        self.port: int = port
+        self.database: str = database
+        self.pool: asyncpg.Pool | None = None
+        self._pool_lock = asyncio.Lock()
+
+    async def get_pool(self) -> asyncpg.Pool:
+        async with self._pool_lock:
+            if self.pool is None:
+                self.pool = await asyncpg.create_pool(
+                    user=self.username,
+                    password=self.password,
+                    host=self.host,
+                    port=self.port,
+                    database=self.database,
+                    min_size=20,  # TODO: too much?
+                    max_size=50,
+                    server_settings={
+                        "application_name": "sonamute",
+                    },
+                )
+                LOG.debug("Created pool with %s connections", self.pool.get_size())
+            return self.pool
+
+    @asynccontextmanager
+    async def acquire(self) -> AsyncGenerator[asyncpg.Connection]:
+        pool = await self.get_pool()
+        async with pool.acquire() as conn:
+            LOG.debug("Connected to DB")
+            yield conn
+
+    async def close(self) -> None:
+        if self.pool is not None:
+            await self.pool.close()
+            self.pool = None
+
+    @alru_cache(maxsize=32)
+    async def insert_platform(self, id: int, name: str) -> int:
+        query = """
+            INSERT INTO platform (id, name)
+            VALUES ($1, $2)
+            -- ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
+            RETURNING id;
+        """
+        async with self.acquire() as conn:
+            row = await conn.fetchrow(query, id, name)
+            assert row  # this always succeeds
+            return cast(int, row["id"])
+
+    @alru_cache(maxsize=512)
+    async def insert_community(
+        self,
+        id: UUID,
+        platform_id: int,
         name: str,
-    ) -> UUID:
-        result = await self.client.query_required_single(
-            query=PLAT_INSERT,
-            _id=_id,
-            name=name,
-        )
-        found_id = cast(UUID, result.id)
-        return found_id
+        *args,
+        **kwargs,
+    ) -> PlatObjKey:
+        query = """
+            INSERT INTO community (id, platform_id, name)
+            VALUES ($1, $2, $3)
+            -- ON CONFLICT (id, platform_id) DO UPDATE SET name = COALESCE(EXCLUDED.name, community.name)
+            RETURNING id, platform_id;
+        """
+        async with self.acquire() as conn:
+            row = await conn.fetchrow(query, id, platform_id, name)
+            assert row
+            return cast(UUID, row["id"]), cast(int, row["platform_id"])
 
-    async def insert_platform(
+    @alru_cache(maxsize=32768)
+    async def insert_author(
         self,
-        platform: Platform,
-    ) -> UUID:
-        if isinstance(platform, UUID):
-            # insert_platform is called twice so we may mutate platform early
-            return platform
-        result = await self.__insert_platform(
-            _id=platform["_id"],
-            name=platform["name"],
-        )
-        return result
-
-    @alru_cache
-    async def __insert_author(
-        self,
-        _id: int,
+        author_id: int,
+        platform_id: int,
         name: str,
         is_bot: bool,
         is_webhook: bool,
-        platform: UUID,
-    ) -> UUID:
-        result = await self.client.query_required_single(
-            query=AUTHOR_INSERT,
-            _id=_id,
-            name=name,
-            platform=platform,
-            is_bot=is_bot,
-            is_webhook=is_webhook,
-        )
-
-        found_id = cast(UUID, result.id)
-        return found_id
-
-    async def insert_author(
-        self,
-        author: Author,
-    ) -> UUID:
-        if isinstance(author, UUID):
-            return author
-        platform_id = await self.insert_platform(author["platform"])
-        return await self.__insert_author(
-            _id=author["_id"],
-            name=author["name"],
-            is_bot=author["is_bot"],
-            is_webhook=author["is_webhook"],
-            platform=platform_id,
-        )
-
-    @alru_cache
-    async def __select_community(self, _id: int, platform: UUID) -> UUID | None:
-        result = await self.client.query_single(COMM_SELECT, _id=_id, platform=platform)
-        if not result:
-            return
-        return cast(UUID, result.id)
-
-    async def select_community(self, community: Community) -> UUID | None:
-        platform = await self.select_platform(community["platform"])
-        if not platform:
-            return
-        return await self.__select_community(_id=community["_id"], platform=platform)
-
-    @alru_cache
-    async def __insert_community(
-        self,
-        _id: int,
-        name: str,
-        platform: UUID,
-    ) -> UUID:
-        result = await self.client.query_required_single(
-            query=COMM_INSERT,
-            _id=_id,
-            name=name,
-            platform=platform,
-        )
-
-        found_id = cast(UUID, result.id)
-        return found_id
-
-    async def insert_community(
-        self,
-        community: Community,
-    ) -> UUID:
-        if isinstance(community, UUID):
-            return community
-        platform_id = await self.insert_platform(community["platform"])
-        return await self.__insert_community(
-            # I was ** splatting the dict into this call, but it doesn't work beecause the dicts appear to globally mutate eachother...
-            _id=community["_id"],
-            name=community["name"],
-            platform=platform_id,
-        )
-
-    async def __insert_sentence(
-        self,
-        message: UUID,
-        words: list[str],
-        score: float,
-    ):
-        _ = await self.client.query(
-            query=SENT_INSERT,
-            message=message,
-            words=words,
-            score=score,
-            len=len(words),
-        )
-
-    @alru_cache
-    async def __select_message(self, _id: int, community: UUID) -> UUID | None:
-        result = await self.client.query_single(
-            MSG_SELECT,
-            _id=_id,
-            community=community,
-        )
-        if not result:
-            return
-        return cast(UUID, result.id)
-
-    async def select_message(self, message: Message | PreMessage) -> UUID | None:
-        community = await self.select_community(message["community"])
-        if not community:
-            return
-        return await self.__select_message(_id=message["_id"], community=community)
-
-    async def __insert_message(
-        self,
-        _id: int,
-        community: UUID,
-        author: UUID,
-        postdate: datetime,
-        content: str,
-        score: float,
-        sentences: list[Sentence],
-        is_counted: bool,
-        container: int | None = None,
-    ):
-        result = await self.client.query_single(
-            query=MSG_INSERT,
-            _id=_id,
-            community=community,
-            author=author,
-            postdate=postdate,
-            content=content,
-            score=score,
-            is_counted=is_counted,
-            container=container,
-        )
-        if not result:
-            # conflict occurred; message exists, so do not write
-            return
-        found_id = cast(UUID, result.id)
-
-        for sentence in sentences:
-            await self.__insert_sentence(
-                message=found_id,
-                words=sentence["words"],
-                score=sentence["score"],
+    ) -> PlatObjKey:
+        query = """
+            INSERT INTO author (id, platform_id, name, is_bot, is_webhook)
+            VALUES ($1, $2, COALESCE($3, ''), $4, $5)
+            -- ON CONFLICT (id, platform_id) DO UPDATE SET
+                -- name = EXCLUDED.name,
+                -- is_bot = EXCLUDED.is_bot,
+                -- is_webhook = EXCLUDED.is_webhook
+            RETURNING id, platform_id;
+        """
+        async with self.acquire() as conn:
+            row = await conn.fetchrow(
+                query,
+                author_id,
+                platform_id,
+                name,
+                is_bot,
+                is_webhook,
             )
-        return found_id
+            assert row
+            return row["id"], row["platform_id"]
 
-    async def insert_message(self, message: Message):
-        community_id = await self.insert_community(message["community"])
-        author_id = await self.insert_author(message["author"])
-        message_id = await self.__insert_message(
-            _id=message["_id"],
-            author=author_id,
-            community=community_id,
-            postdate=message["postdate"],
-            content=message["content"],
-            score=message["score"],
-            sentences=message["sentences"],
-            is_counted=message["is_counted"],
-            container=message.get("container", None),
+    async def insert_message(self, message: Message) -> None:
+        author = message["author"]
+        community = message["community"]
+        platform = community["platform"]
+
+        platform_id = await self.insert_platform(**platform)
+        community_id, _ = await self.insert_community(
+            community["id"], platform_id, community["name"]
         )
 
-    async def insert_frequency(self, freq: GelFrequency):
-        _ = await self.client.query(FREQ_INSERT, **freq)
-        if freq["attr"] == Attribute.All:
-            _ = await self.client.query(
-                TERM_HITS_UPDATE,
-                text=freq["text"],
-                hits=freq["hits"],
-            )
+        author_id, _ = await self.insert_author(
+            author["id"],
+            platform_id,
+            author["name"],
+            author["is_bot"],
+            author["is_webhook"],
+        )
 
-    ###########################
+        async with self.acquire() as conn:
+            async with conn.transaction():
+                msg_row = await conn.fetchrow(
+                    """
+                    INSERT INTO message (
+                        id, platform_id, author_id, community_id, container_id,
+                        postdate, content, score, is_counted
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    -- ON CONFLICT (id, platform_id) DO NOTHING
+                    RETURNING id;
+                    """,
+                    message["id"],
+                    platform_id,
+                    author_id,
+                    community_id,
+                    message.get("container", 0),
+                    message["postdate"],
+                    message["content"],
+                    message["score"],
+                    message["is_counted"],
+                )
+                if not msg_row:
+                    return
+
+                sentence_ids: dict[tuple[str, ...], int] = {}
+                for words in sorted({s["words"] for s in message["sentences"]}):
+                    sent_row = await conn.fetchrow(
+                        """
+                        INSERT INTO sentence (words)
+                        VALUES ($1)
+                        ON CONFLICT (words) DO NOTHING
+                        RETURNING id;
+                        """,
+                        words,
+                    )
+                    if sent_row is None:
+                        sent_row = await conn.fetchrow(
+                            "SELECT id FROM sentence WHERE words = $1;",
+                            words,
+                        )
+
+                    assert sent_row  # it necessarily exists now
+                    sentence_ids[words] = sent_row["id"]
+
+                for idx, sentence in enumerate(message["sentences"]):
+                    await conn.execute(
+                        """
+                        INSERT INTO message_sentence (message_id, platform_id, sentence_id, idx, score)
+                        VALUES ($1, $2, $3, $4, $5)
+                        -- ON CONFLICT (message_id, platform_id, idx) DO NOTHING;
+                        """,
+                        message["id"],
+                        platform_id,
+                        sentence_ids[sentence["words"]],
+                        idx,
+                        sentence["score"],
+                    )
+
+    async def message_in_db(self, message: PreMessage) -> bool:
+        platform_id = message["community"].get("platform", {}).get("id", None)
+        async with self.acquire() as conn:
+            val = await conn.fetchval(
+                "SELECT 1 FROM message WHERE id = $1 AND platform_id = $2;",
+                message["id"],
+                platform_id,
+            )
+            return val is not None
+
     async def get_msg_date_range(self) -> tuple[datetime, datetime]:
-        """Fetch the earliest and latest date of any message in the DB. Return as a pair `(start, end,)`."""
-        min_date = await self.client.query_required_single(
-            "SELECT min(Message.postdate)"
-        )
-        max_date = await self.client.query_required_single(
-            "SELECT max(Message.postdate)"
-        )
-        return min_date, max_date
+        async with self.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT min(postdate) AS min_d, max(postdate) AS max_d FROM message;"
+            )
+            if not row or row["min_d"] is None or row["max_d"] is None:
+                now_dt = datetime.now()
+                return now_dt, now_dt
+            return row["min_d"], row["max_d"]
 
-    async def message_in_db(self, msg: PreMessage) -> bool:
-        maybe_id = await self.select_message(msg)
-        return not not maybe_id
+    async def refresh_materialized_views(self) -> None:
+        async with self.acquire() as conn:
+            await conn.execute("REFRESH MATERIALIZED VIEW tp_user_sentence;")
+            await conn.execute("REFRESH MATERIALIZED VIEW non_tp_user_sentence;")
 
     async def counted_sents_in_range(
         self,
@@ -460,52 +245,117 @@ class MessageDB:
         end: datetime,
         passing: bool = True,
     ) -> list[CommSentence]:
-        query = FAILING_USER_SENTS_SELECT
-        if passing:
-            query = PASSING_USER_SENTS_SELECT
+        view = "tp_user_sentence" if passing else "non_tp_user_sentence"
+        query = f"""
+            SELECT
+                v.words,
+                m.community_id,
+                m.platform_id,
+                m.author_id
+            FROM {view} v
+            JOIN message m ON m.id = v.message_id AND m.platform_id = v.platform_id
+            WHERE m.postdate >= $1 AND m.postdate < $2;
+        """
+        async with self.acquire() as conn:
+            rows = await conn.fetch(query, start, end)
+            return [
+                CommSentence(
+                    words=[w.lower() for w in row["words"]],
+                    community_id=row["community_id"],
+                    platform_id=row["platform_id"],
+                    author_id=row["author_id"],
+                )
+                for row in rows
+            ]
 
-        results = await self.client.query(query, start=start, end=end)
-        output: list[CommSentence] = list()
+    async def insert_frequency(self, freq: PGFrequency) -> None:
+        async with self.acquire() as conn:
+            async with conn.transaction():
+                # Upsert term (len is generated by the database)
+                term_row = await conn.fetchrow(
+                    """
+                    INSERT INTO term (words)
+                    VALUES ($1)
+                    -- ON CONFLICT (words) DO UPDATE SET words = EXCLUDED.words
+                    RETURNING id;
+                    """,
+                    freq["words"],
+                )
+                term_id = term_row["id"]
 
-        for result in results:
-            out: CommSentence = {
-                "words": [word.lower() for word in result.words],
-                "community": result.community,
-                "author": result.author,
-            }
-            output.append(out)
-        return output
+                # Upsert context
+                day_val = (
+                    freq["day"] if isinstance(freq["day"], date) else freq["day"].date()
+                )
+                ctx_row = await conn.fetchrow(
+                    """
+                    INSERT INTO context (community_id, platform_id, day, attr)
+                    VALUES ($1, $2, $3, $4::attribute)
+                    -- ON CONFLICT (community_id, platform_id, day, attr)
+                    DO UPDATE SET community_id = EXCLUDED.community_id
+                    RETURNING id;
+                    """,
+                    freq["community_id"],
+                    freq["platform_id"],
+                    day_val,
+                    freq["attr"].value,
+                )
+                context_id = ctx_row["id"]
 
-    @alru_cache(maxsize=None)
-    async def is_author_counted(self, author: UUID) -> bool:
-        result = await self.client.query_single(
-            AUTHOR_IS_COUNTED_SELECT,
-            author=author,
-        )
-        return not not result
+                # Upsert frequency
+                freq_row = await conn.fetchrow(
+                    """
+                    INSERT INTO frequency (context_id, term_id, hits)
+                    VALUES ($1, $2, $3)
+                    -- ON CONFLICT (context_id, term_id)
+                    DO UPDATE SET hits = frequency.hits + EXCLUDED.hits
+                    RETURNING id;
+                    """,
+                    context_id,
+                    term_id,
+                    freq["hits"],
+                )
+                frequency_id = freq_row["id"]
 
-    async def count_nontrivial_authors(self, authors: Iterable[UUID]) -> int:
-        # NOTE: I tried asyncio.gather. it's genuinely slower, but the
-        # difference is tiny
+                # Frequency author records
+                author_hits: dict[PlatObjKey, int] = {}
+                for auth in freq["authors"]:
+                    author_hits[auth] = author_hits.get(auth, 0) + 1
+
+                for (author_id, platform_id), a_hits in author_hits.items():
+                    await conn.execute(
+                        """
+                        INSERT INTO frequency_author (frequency_id, author_id, platform_id, hits)
+                        VALUES ($1, $2, $3, $4)
+                        -- ON CONFLICT (frequency_id, author_id, platform_id)
+                        DO UPDATE SET hits = frequency_author.hits + EXCLUDED.hits;
+                        """,
+                        frequency_id,
+                        author_id,
+                        platform_id,
+                        a_hits,
+                    )
+
+    @alru_cache(maxsize=16384)
+    async def is_author_counted(self, author_id: int, platform_id: int) -> bool:
+        async with self.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT 1 FROM author
+                WHERE id = $1 AND platform_id = $2 AND num_tp_sentences >= $3;
+                """,
+                author_id,
+                platform_id,
+                MIN_SENTS_NEEDED,
+            )
+            return row is not None
+
+    async def count_nontrivial_authors(self, authors: Iterable[PlatObjKey]) -> int:
         counted_authors = 0
-        for author in authors:
-            counted = await self.is_author_counted(author)
-            if counted:
+        for author_id, platform_id in authors:
+            if await self.is_author_counted(author_id, platform_id):
                 counted_authors += 1
         return counted_authors
-
-    async def merge_frequency_data(
-        self,
-        data: Iterable[Any],
-    ) -> dict[str, Stats]:
-        output: dict[str, Stats] = dict()
-        for item in data:
-            text = item.text
-            if text not in output:
-                output[text] = {"hits": 0, "authors": set()}
-            output[text]["hits"] += item.hits
-            output[text]["authors"] |= {author.id for author in item.authors}
-        return output
 
     async def select_freqs_in_range(
         self,
@@ -514,25 +364,46 @@ class MessageDB:
         start: datetime,
         end: datetime,
     ) -> list[SQLFrequency]:
-        """Groups on client instead of DB"""
-        results = await self.client.query(
-            TERM_DATA_SELECT,
-            term_len=term_len,
-            attr=attr,
-            start=start,
-            end=end,
-        )
-        merged = await self.merge_frequency_data(results)
+        start_date = start.date() if isinstance(start, datetime) else start
+        end_date = end.date() if isinstance(end, datetime) else end
 
-        output: list[SQLFrequency] = list()
+        query = f"""
+            SELECT
+                array_to_string(t.words, ' ') AS text,
+                f.hits,
+                fa.author_id,
+                fa.platform_id
+            FROM frequency f
+            JOIN context c ON c.id = f.context_id
+            JOIN term t ON t.id = f.term_id
+            LEFT JOIN frequency_author fa ON fa.frequency_id = f.id
+            WHERE t.len = $1
+              AND c.attr = $2::attribute
+              AND c.day >= $3
+              AND c.day < $4
+              AND (
+                  SELECT SUM(f_sub.hits)
+                  FROM frequency f_sub
+                  WHERE f_sub.term_id = t.id
+              ) >= {MIN_HITS_NEEDED};
+        """
+        async with self.acquire() as conn:
+            rows = await conn.fetch(query, term_len, attr.value, start_date, end_date)
+
+        merged: dict[str, Stats] = {}
+        for r in rows:
+            txt = r["text"]
+            if txt not in merged:
+                merged[txt] = {"hits": 0, "authors": set()}
+            merged[txt]["hits"] += r["hits"]
+            if r["author_id"] is not None:
+                merged[txt]["authors"].add((r["author_id"], r["platform_id"]))
+
+        output: list[SQLFrequency] = []
         for text, result in merged.items():
             counted_authors = await self.count_nontrivial_authors(result["authors"])
-            # if counted_authors == 0:
-            #     # the entire frequency should be discounted
-            #     continue
             formatted = format_freq_sqlite(
                 text=text,
-                term_len=term_len,
                 attr=attr,
                 day=start,
                 hits=result["hits"],
@@ -547,17 +418,28 @@ class MessageDB:
         attr: Attribute,
         start: datetime,
         end: datetime,
-        # word: str | None = None,
     ) -> int:
-        result: int = await self.client.query_required_single(
-            TOTAL_HITS_SELECT,
-            term_len=term_len,
-            attr=attr,
-            start=start,
-            end=end,
-        )
+        start_date = start.date() if isinstance(start, datetime) else start
+        end_date = end.date() if isinstance(end, datetime) else end
 
-        return result
+        query = f"""
+            SELECT COALESCE(SUM(f.hits), 0) AS total_hits
+            FROM frequency f
+            JOIN context c ON c.id = f.context_id
+            JOIN term t ON t.id = f.term_id
+            WHERE t.len = $1
+              AND c.attr = $2::attribute
+              AND c.day >= $3
+              AND c.day < $4
+              AND (
+                  SELECT SUM(f_sub.hits)
+                  FROM frequency f_sub
+                  WHERE f_sub.term_id = t.id
+              ) >= {MIN_HITS_NEEDED};
+        """
+        async with self.acquire() as conn:
+            val = await conn.fetchval(query, term_len, attr.value, start_date, end_date)
+            return int(val or 0)
 
     async def total_authors_in_range(
         self,
@@ -565,48 +447,110 @@ class MessageDB:
         attr: Attribute,
         start: datetime,
         end: datetime,
-        # word: str | None = None,
     ) -> int:
-        result = await self.client.query(
-            TOTAL_AUTHORS_SELECT,
-            term_len=term_len,
-            attr=attr,
-            start=start,
-            end=end,
-        )
-        return await self.count_nontrivial_authors({author.id for author in result})
+        start_date = start.date() if isinstance(start, datetime) else start
+        end_date = end.date() if isinstance(end, datetime) else end
+
+        query = f"""
+            SELECT DISTINCT fa.author_id, fa.platform_id
+            FROM frequency_author fa
+            JOIN frequency f ON f.id = fa.frequency_id
+            JOIN context c ON c.id = f.context_id
+            JOIN term t ON t.id = f.term_id
+            WHERE t.len = $1
+              AND c.attr = $2::attribute
+              AND c.day >= $3
+              AND c.day < $4
+              AND (
+                  SELECT SUM(f_sub.hits)
+                  FROM frequency f_sub
+                  WHERE f_sub.term_id = t.id
+              ) >= {MIN_HITS_NEEDED};
+        """
+        async with self.acquire() as conn:
+            rows = await conn.fetch(query, term_len, attr.value, start_date, end_date)
+            unique_authors: set[PlatObjKey] = {
+                (r["author_id"], r["platform_id"]) for r in rows
+            }
+            return await self.count_nontrivial_authors(unique_authors)
 
     async def update_author_tpt_sents(self) -> None:
-        _ = await self.client.execute(UPDATE_NUM_SENTS)
+        async with self.acquire() as conn:
+            await self.refresh_materialized_views()
+            await conn.execute("""
+                UPDATE author a
+                SET num_sentences = sub.cnt
+                FROM (
+                    SELECT m.author_id, m.platform_id, COUNT(ms.sentence_id) AS cnt
+                    FROM message m
+                    JOIN message_sentence ms ON ms.message_id = m.id AND ms.platform_id = m.platform_id
+                    WHERE m.is_counted
+                    GROUP BY m.author_id, m.platform_id
+                ) sub
+                WHERE a.id = sub.author_id AND a.platform_id = sub.platform_id;
+                """)
+            await conn.execute("""
+                UPDATE author a
+                SET num_tp_sentences = sub.cnt
+                FROM (
+                    SELECT m.author_id, m.platform_id, COUNT(*) AS cnt
+                    FROM tp_user_sentence tp
+                    JOIN message m ON m.id = tp.message_id AND m.platform_id = tp.platform_id
+                    GROUP BY m.author_id, m.platform_id
+                ) sub
+                WHERE a.id = sub.author_id AND a.platform_id = sub.platform_id;
+                """)
+            await conn.execute("""
+                UPDATE community c
+                SET num_sentences = sub.cnt
+                FROM (
+                    SELECT m.community_id, m.platform_id, COUNT(ms.sentence_id) AS cnt
+                    FROM message m
+                    JOIN message_sentence ms ON ms.message_id = m.id AND ms.platform_id = m.platform_id
+                    WHERE m.is_counted
+                    GROUP BY m.community_id, m.platform_id
+                ) sub
+                WHERE c.id = sub.community_id AND c.platform_id = sub.platform_id;
+                """)
+            await conn.execute("""
+                UPDATE community c
+                SET num_tp_sentences = sub.cnt
+                FROM (
+                    SELECT m.community_id, m.platform_id, COUNT(*) AS cnt
+                    FROM tp_user_sentence tp
+                    JOIN message m ON m.id = tp.message_id AND m.platform_id = tp.platform_id
+                    GROUP BY m.community_id, m.platform_id
+                ) sub
+                WHERE c.id = sub.community_id AND c.platform_id = sub.platform_id;
+                """)
 
 
-def format_freq_geldb(
+def format_freq_pg(
     text: str,
-    term_len: int,
     attr: Attribute,
-    community: UUID,
-    day: datetime,
+    community_id: UUID,
+    platform_id: int,
+    day: date | datetime,
     hits: int,
-    authors: set[UUID],
-) -> GelFrequency:
-    result = GelFrequency(
+    authors: set[PlatObjKey],
+) -> PGFrequency:
+    d = day.date() if isinstance(day, datetime) else day
+    return PGFrequency(
         {
             "text": text,
-            "term_len": term_len,
+            "words": text.split(),
             "attr": attr,
-            "community": community,
-            "day": day,
+            "community_id": community_id,
+            "platform_id": platform_id,
+            "day": d,
             "hits": hits,
             "authors": list(authors),
-            # geldb needs a subscriptable type
         }
     )
-    return result
 
 
 def format_freq_sqlite(
     text: str,
-    term_len: int,
     attr: Attribute,
     day: datetime,
     hits: int,
@@ -615,7 +559,7 @@ def format_freq_sqlite(
     d: SQLFrequency = {
         "term": {
             "text": text,
-            "len": term_len,
+            "len": len(text.split()),
         },
         "attr": ATTRIBUTE_IDS[attr],
         "day": int(day.timestamp()),
@@ -626,20 +570,9 @@ def format_freq_sqlite(
 
 
 def load_messagedb_from_env() -> MessageDB:
-    username = load_envvar("GELDB_USER")
-    password = load_envvar("GELDB_PASS")
-    host = load_envvar("GELDB_HOST")
-    port = int(load_envvar("GELDB_PORT"))
-    DB = MessageDB(username, password, host, port)
-    return DB
-
-
-def load_pg_messagedb_from_env() -> MessageDB:
-    username = load_envvar("POSTGRES_USER")
-    password = load_envvar("POSTGRES_PASSWORD")
-    host = load_envvar("POSTGRES_HOST")
-    port = int(load_envvar("POSTGRES_PORT"))
-    database = load_envvar("POSTGRES_DB")
-    # TODO: update call
-    DB = MessageDB(username, password, host, port)
-    return DB
+    username = load_envvar("POSTGRES_USER", "postgres")
+    password = load_envvar("POSTGRES_PASSWORD", "postgres")
+    host = load_envvar("POSTGRES_HOST", "localhost")
+    port = int(load_envvar("POSTGRES_PORT", "5432"))
+    database = load_envvar("POSTGRES_DB", "postgres")
+    return MessageDB(username, password, host, port, database)

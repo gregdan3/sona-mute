@@ -1,5 +1,6 @@
 # STL
 from enum import Enum, IntEnum
+from uuid import UUID
 from typing import TypedDict, NotRequired
 from datetime import date, datetime
 
@@ -8,6 +9,8 @@ from datetime import date, datetime
 # see also db/default.esdl, db/default.sql
 class Attribute(Enum):
     All = "All"
+
+    # position
     Start = "Start"
     End = "End"
     Full = "Full"
@@ -15,31 +18,44 @@ class Attribute(Enum):
     Short = "Short"
     Inner = "Inner"
 
+    # parts of speech
     Subject = "Subject"
     Verb = "Verb"
     Object = "Object"
     PrepositionalObject = "PrepositionalObject"
+    Predicate = "Predicate"
+    Interjection = "Interjection"
 
+    # more specific parts of speech
+    TransitiveVerb = "TransitiveVerb"
+    IntransitiveVerb = "IntransitiveVerb"
+    PrepositionalVerb = "PrepositionalVerb"
+
+    # functions
+    Content = "Content"
+    Particle = "Particle"
     Head = "Head"
     Modifier = "Modifier"
     Preposition = "Preposition"
     Preverb = "Preverb"
     Noun = "Noun"
-    Particle = "Particle"
 
-    TransitiveVerb = "TransitiveVerb"
-    IntransitiveVerb = "IntransitiveVerb"
-    PrepositionalVerb = "PrepositionalVerb"
+    # other
+    Unknown = "Unknown"
 
 
 # For sqlite
 ATTRIBUTE_IDS = {attribute: i for i, attribute in enumerate(Attribute)}
 
+PlatformKey = int  # int16
+ObjectKey = UUID
+PlatObjKey = tuple[ObjectKey, PlatformKey]
+
 
 # frequency generation
 class Stats(TypedDict):
     hits: int
-    authors: set[UUID]
+    authors: set[PlatObjKey]
 
 
 StatsCounter = dict[tuple[int, str, Attribute], Stats]
@@ -68,42 +84,44 @@ class KnownPlatforms(IntEnum):
 
 
 class Platform(TypedDict):
-    _id: int
+    id: int
     name: str
 
 
 class Community(TypedDict):
-    _id: int
+    id: UUID
+    platform: NotRequired[Platform]
     name: str
-    platform: Platform
 
 
 class Author(TypedDict):
-    _id: int
-    name: str | None
-    platform: Platform
+    id: UUID
+    platform: NotRequired[Platform]
+    name: str
     is_bot: bool
     is_webhook: bool
 
 
 class Sentence(TypedDict):
-    words: list[str]
+    words: tuple[str, ...]
     score: float
 
 
 class CommSentence(TypedDict):
-    words: list[str]
-    community: UUID
-    author: UUID
+    words: tuple[str, ...]
+    community: Community
+    platform: NotRequired[Platform]
+    author: Author
 
 
 class SortedSentence(TypedDict):
-    words: list[str]
-    author: UUID
+    words: tuple[str, ...]
+    author: PlatObjKey
 
 
 class PreMessage(TypedDict):
-    _id: int
+    id: UUID
+    platform: NotRequired[Platform]
     community: Community
     container: int
     author: Author
@@ -117,15 +135,16 @@ class Message(PreMessage):
     sentences: list[Sentence]
 
 
-class GelFrequency(TypedDict):
+class PGFrequency(TypedDict):
     text: str
-    term_len: int
+    words: tuple[str, ...]
 
     attr: Attribute
-    community: UUID
-    day: datetime
+    community_id: UUID
+    platform_id: int
+    day: date
     hits: int
-    authors: list[UUID]
+    authors: list[PlatObjKey]
 
 
 # sqlite generation

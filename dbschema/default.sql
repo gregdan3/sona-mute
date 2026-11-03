@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
 CREATE TYPE attribute AS ENUM (
     'All',
 
@@ -9,24 +11,30 @@ CREATE TYPE attribute AS ENUM (
     'Short',        -- in sentence with < 4 words
     'Inner',        -- does not start on idx 0 or end on idx -1
 
-    -- discrete parts of speech
+    -- parts of speech
     'Subject',      -- before li
     'Verb',         -- after li and before e
     'Object',       -- after e and before prep
     'PrepositionalObject', -- after prep
+    'Predicate'     -- anything after li
+    'Interjection', -- non-sentence use; probably duplicate with 'full'?
+
+    -- more specific parts of speech
+    'TransitiveVerb',   -- after li, with e
+    'IntransitiveVerb', -- after li, without e
+    'PrepositionalVerb' -- after li, is first prep+prep object
 
     -- functions
+    'Content',
+    'Particle',     -- duplicate with exclusive particles, but not nanpa/preps
     'Head',         -- first word in any part of speech
     'Modifier',     -- following any head in the same part of speech
     'Preposition',  -- prep itself: tawa lon tan sama kepeken
     'Preverb',      -- preverb itself: kama awen lukin alasa ken wile sona
     'Noun',         -- subject or object or prep object
-    'Particle',     -- TODO: probably duplicate with each particle
 
-    -- more specific parts of speech
-    'TransitiveVerb', -- after li, with e
-    'IntransitiveVerb', -- after li, without e
-    'PrepositionalVerb' -- after li, is first prep+prep object
+    -- other
+    'Unknown'       -- part or function cannot be determined
 );
 
 
@@ -37,10 +45,9 @@ CREATE TABLE platform (
 
 
 CREATE TABLE community (
-    id bigint NOT NULL,
+    id uuid NOT NULL,
     platform_id smallint NOT NULL REFERENCES platform (id),
-
-    name text,
+    name text NOT NULL,
 
     num_sentences int NOT NULL DEFAULT 0,
     num_tp_sentences int NOT NULL DEFAULT 0,
@@ -50,10 +57,10 @@ CREATE TABLE community (
 
 
 CREATE TABLE author (
-    id bigint NOT NULL,
+    id uuid NOT NULL,
     platform_id smallint NOT NULL REFERENCES platform (id),
-
     name text NOT NULL,
+
     is_bot boolean NOT NULL,
     is_webhook boolean NOT NULL,
 
@@ -65,12 +72,12 @@ CREATE TABLE author (
 
 
 CREATE TABLE message (
-    id bigint NOT NULL,
+    id uuid NOT NULL,
     platform_id smallint NOT NULL REFERENCES platform (id),
 
-    author_id bigint NOT NULL,
-    community_id bigint NOT NULL,
-    container_id bigint NOT NULL, -- for levels of organization beyond community
+    author_id uuid NOT NULL,
+    community_id uuid NOT NULL,
+    container_id int NOT NULL, -- for levels of organization beyond community
 
     postdate timestamptz NOT NULL,
     content text NOT NULL,
@@ -78,7 +85,8 @@ CREATE TABLE message (
     is_counted boolean NOT NULL,
 
     PRIMARY KEY (id, platform_id),
-    CONSTRAINT message_id_community_unique UNIQUE (id, community_id),
+    CONSTRAINT message_id_community_unique UNIQUE (id, platform_id, community_id),
+
     FOREIGN KEY (author_id, platform_id) REFERENCES author (id, platform_id) ON DELETE CASCADE,
     FOREIGN KEY (community_id, platform_id) REFERENCES community (id, platform_id) ON DELETE CASCADE
 );
@@ -97,7 +105,7 @@ CREATE INDEX sentence_len_idx ON sentence (len);
 
 
 CREATE TABLE message_sentence (
-    message_id bigint NOT NULL,
+    message_id uuid NOT NULL,
     platform_id smallint NOT NULL,
     sentence_id int NOT NULL REFERENCES sentence (id) ON DELETE CASCADE,
     idx smallint NOT NULL, -- order of sentences in message
@@ -120,7 +128,7 @@ CREATE TABLE term (
     -- tracks a unique sequence of words as an ngram
     id int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     words text[] NOT NULL UNIQUE,
-    len smallint GENERATED ALWAYS AS (cardinality(words)) STORED,
+    len smallint GENERATED ALWAYS AS (cardinality(words)) STORED
     -- hits int NOT NULL DEFAULT 0
   -- NOTE: all counted+sufficiently scored times the term was used; computed after ingest
   -- hits per term can be calculated from
@@ -131,7 +139,7 @@ CREATE TABLE term (
 CREATE TABLE term_author (
     -- unrolled from `term` to make unique authors countable
     term_id int NOT NULL REFERENCES term (id) ON DELETE CASCADE,
-    author_id bigint NOT NULL,
+    author_id uuid NOT NULL,
     platform_id smallint NOT NULL,
     hits int NOT NULL DEFAULT 0,
     -- NOTE: same as hits in term but only for this author using this term
@@ -143,7 +151,7 @@ CREATE TABLE term_author (
 
 CREATE TABLE context (
     id int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    community_id bigint NOT NULL,
+    community_id uuid NOT NULL,
     platform_id smallint NOT NULL,
     day date NOT NULL,
     attr attribute NOT NULL,
@@ -164,7 +172,7 @@ CREATE INDEX frequency_term_idx ON frequency (term_id);
 
 CREATE TABLE frequency_author (
     frequency_id int NOT NULL REFERENCES frequency (id) ON DELETE CASCADE,
-    author_id bigint NOT NULL,
+    author_id uuid NOT NULL,
     platform_id smallint NOT NULL,
     hits int NOT NULL,
     -- NOTE: same as hits in term/term_author but now just in this context
@@ -177,15 +185,14 @@ CREATE MATERIALIZED VIEW tp_user_sentence AS
 SELECT
     s.id,
     ms.message_id,
+    ms.platform_id,
     s.words,
     ms.score,
     s.len,
     ms.idx
 FROM message_sentence ms
-JOIN sentence s
-    ON s.id = ms.sentence_id
-JOIN message m
-    ON m.id = ms.message_id
+JOIN sentence s ON s.id = ms.sentence_id
+JOIN message m ON m.id = ms.message_id
 WHERE
     ms.score >= 0.8
     AND m.is_counted
@@ -199,6 +206,7 @@ CREATE MATERIALIZED VIEW non_tp_user_sentence AS
 SELECT
     s.id,
     ms.message_id,
+    ms.platform_id,
     s.words,
     ms.score,
     s.len,
@@ -210,51 +218,9 @@ JOIN message m
     ON m.id = ms.message_id
 WHERE
     ms.score < 0.8
-    AND m.is_counted;
-
-/*
-TODO: later
-
-UPDATE author a
-SET num_sentences = sub.cnt
-FROM (
-    SELECT m.author_id, COUNT(ms.sentence_id) AS cnt
-    FROM message m
-    JOIN message_sentence ms ON ms.message_id = m.id
-    WHERE m.is_counted
-    GROUP BY m.author_id
-) sub
-WHERE a.id = sub.author_id;
-
-UPDATE author a
-SET num_tp_sentences = sub.cnt
-FROM (
-    SELECT m.author_id, COUNT(*) AS cnt
-    FROM tp_user_sentence tp
-    JOIN message m ON m.id = tp.message_id
-    GROUP BY m.author_id
-) sub
-WHERE a.id = sub.author_id;
-
-UPDATE community c
-SET num_sentences = sub.cnt
-FROM (
-    SELECT m.community_id, COUNT(ms.sentence_id) AS cnt
-    FROM message m
-    JOIN message_sentence ms ON ms.message_id = m.id
-    WHERE m.is_counted
-    GROUP BY m.community_id
-) sub
-WHERE c.id = sub.community_id;
-
-UPDATE community c
-SET num_tp_sentences = sub.cnt
-FROM (
-    SELECT m.community_id, COUNT(*) AS cnt
-    FROM tp_user_sentence tp
-    JOIN message m ON m.id = tp.message_id
-    GROUP BY m.community_id
-) sub
-WHERE c.id = sub.community_id;
-
-*/
+    OR NOT m.is_counted
+    OR m.score <= 0.1
+    OR (
+        s.len < 3
+        AND m.score < 0.3
+    );

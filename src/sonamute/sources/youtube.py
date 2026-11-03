@@ -1,18 +1,16 @@
 # STL
 import os
 import base64
-from typing import Literal, TypedDict, cast
+from typing import Literal, TypedDict, cast, override
 from datetime import UTC, datetime
 from collections.abc import Generator
 
-# PDM
-from typing_extensions import override
-
 # LOCAL
 from sonamute.log import LOG
+from sonamute.utils import int_to_uuid
 from sonamute.file_io import try_load_json_file
 from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
-from sonamute.sources.generic import NULL_CONTAINER, FileFetcher
+from sonamute.sources.generic import NULL_INT_ID, FileFetcher
 
 
 class YouTubeVideoFormat(TypedDict):
@@ -193,10 +191,9 @@ def fetch_user_id(
 
 class YouTubeFetcher(FileFetcher):
     platform: Platform = {
-        "_id": KnownPlatforms.YouTube.value,
+        "id": KnownPlatforms.YouTube.value,
         "name": KnownPlatforms.YouTube.name,
     }
-    __seen: set[int] = set()
 
     @override
     def get_files(self) -> Generator[YouTubeJSON, None, None]:
@@ -233,7 +230,7 @@ class YouTubeFetcher(FileFetcher):
         # community_name = fetch_video_author_name(raw_src)
         # return Community(
         #     {
-        #         "_id": community_id,
+        #         "id": community_id,
         #         "name": community_name,
         #         "platform": self.platform,
         #     }
@@ -246,7 +243,7 @@ class YouTubeFetcher(FileFetcher):
         # but they would be arbitrary with respect to the work I'm doing
         return Community(
             {
-                "_id": self.platform["_id"],
+                "id": self.platform["id"],
                 "name": self.platform["name"],
                 "platform": self.platform,
             }
@@ -267,7 +264,7 @@ class YouTubeFetcher(FileFetcher):
 
         return Author(
             {
-                "_id": _id,
+                "id": _id,
                 "name": name,
                 "platform": self.platform,
                 # youtube has neither
@@ -279,32 +276,30 @@ class YouTubeFetcher(FileFetcher):
     @override
     def get_messages(self) -> Generator[PreMessage, None, None]:
         for video in self.get_files():
-            video_id = youtube_id_to_int(video["id"])
+            video_id = int_to_uuid(youtube_id_to_int(video["id"]))
             community = self.get_community(video)
 
-            if video_id not in self.__seen:
+            if not self.seen(video_id):
                 video_postdate = datetime.fromtimestamp(video["timestamp"], tz=UTC)
                 video_content = format_video_content(video)
                 video_author = self.get_author(video)
                 yield PreMessage(
                     {
-                        "_id": video_id,
+                        "id": video_id,
                         "author": video_author,
                         "content": video_content,
                         "postdate": video_postdate,
                         "community": community,
-                        "container": NULL_CONTAINER,
+                        "container": NULL_INT_ID,
                     }
                 )
-            self.__seen.add(video_id)
 
             # if comments are off, may be omitted
             for comment in video.get("comments", []):
-                comment_id = fetch_comment_id(comment)
+                comment_id = int_to_uuid(fetch_comment_id(comment))
 
-                if comment_id in self.__seen:
+                if self.seen(comment_id):
                     continue
-                self.__seen.add(comment_id)
 
                 comment_content = comment["text"]
                 comment_postdate = datetime.fromtimestamp(comment["timestamp"], tz=UTC)
@@ -313,10 +308,10 @@ class YouTubeFetcher(FileFetcher):
 
                 yield PreMessage(
                     {
-                        "_id": comment_id,
+                        "id": comment_id,
                         "author": comment_author,
                         "community": community,
-                        "container": NULL_CONTAINER,
+                        "container": NULL_INT_ID,
                         "content": comment_content,
                         "postdate": comment_postdate,
                     }

@@ -1,19 +1,19 @@
 # STL
 import os
 import re
+from typing import override
 from datetime import UTC, datetime
 from urllib.parse import parse_qs, urlparse
 from collections.abc import Generator
 
 # PDM
 from bs4.element import Tag
-from typing_extensions import override
 
 # LOCAL
-from sonamute.utils import T, fake_id
+from sonamute.utils import T, fake_uuid, int_to_uuid
 from sonamute.file_io import try_load_html_file
 from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
-from sonamute.sources.generic import NULL_CONTAINER, FileFetcher
+from sonamute.sources.generic import NULL_INT_ID, FileFetcher
 
 """
 it's really not that bad since all i care about is user generated content, and it's a very straightforward forum
@@ -120,10 +120,9 @@ def get_post_text(raw_src: Tag) -> str:
 
 class ForumFetcher(FileFetcher):
     platform: Platform = {
-        "_id": KnownPlatforms.Forum.value,
+        "id": KnownPlatforms.Forum.value,
         "name": KnownPlatforms.Forum.name,
     }
-    __seen: set[int] = set()
 
     @override
     def get_files(self) -> Generator[Tag, None, None]:
@@ -153,7 +152,7 @@ class ForumFetcher(FileFetcher):
             name = FORUM_NAME
 
         community: Community = {
-            "_id": fake_id(name),
+            "id": fake_uuid(name),
             "name": name,
             "platform": self.platform,
         }
@@ -166,13 +165,10 @@ class ForumFetcher(FileFetcher):
         author_name = author_obj.text  # name is always present
         assert author_name, (raw_msg, author_obj, author_name)
 
-        author_id = fake_id(author_name)
-
         author: Author = {
-            "_id": author_id,
+            "id": fake_uuid(author_name),
             "name": author_name,
             "platform": self.platform,
-            # there are bots but resp doesn't tell us
             "is_bot": False,
             "is_webhook": False,
         }
@@ -181,12 +177,11 @@ class ForumFetcher(FileFetcher):
         if not u_param:
             return author
 
-        author_id = int(u_param)
-        author["_id"] = author_id
+        author["id"] = int_to_uuid(int(u_param))
         return author
 
     @override
-    def get_messages(self) -> Generator[PreMessage, None, None]:
+    def get_messages(self) -> Generator[PreMessage]:
         for post in self.get_files():
             post_id_obj = post.select_one(POST_ID_SELECTOR)
             assert post_id_obj, (post, post_id_obj)
@@ -194,25 +189,23 @@ class ForumFetcher(FileFetcher):
             p_param = get_url_param_from_a(post_id_obj, "p")
             assert p_param, (post, post_id_obj, p_param)
             assert p_param.isnumeric(), p_param
-            _id = int(p_param)
-
-            if _id in self.__seen:
+            id = int_to_uuid(int(p_param))
+            if self.seen(id):
                 continue
-            self.__seen.add(_id)
 
             author = self.get_author(post)
             community = self.get_community(post)
             postdate = get_postdate(post)
 
             post_content_obj = post.select_one(CONTENT_SELECTOR)
-            assert post_content_obj, (post, _id, post_content_obj)
+            assert post_content_obj, (post, id, post_content_obj)
 
             content = get_post_text(post_content_obj)
 
             message: PreMessage = {
-                "_id": _id,
+                "id": id,
                 "content": content,
-                "container": NULL_CONTAINER,
+                "container": NULL_INT_ID,
                 "community": community,
                 "author": author,
                 "postdate": postdate,

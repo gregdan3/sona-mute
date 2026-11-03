@@ -9,6 +9,7 @@ from typing_extensions import override
 
 # LOCAL
 from sonamute.log import LOG
+from sonamute.utils import int_to_uuid
 from sonamute.file_io import try_load_json_file
 from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
 from sonamute.sources.generic import FileFetcher
@@ -113,7 +114,7 @@ def is_system(m: DiscordMessageJSON) -> bool:
 
 class DiscordFetcher(FileFetcher):
     platform: Platform = {
-        "_id": KnownPlatforms.Discord.value,
+        "id": KnownPlatforms.Discord.value,
         "name": KnownPlatforms.Discord.name,
     }
     __seen: set[int] = set()
@@ -149,10 +150,10 @@ class DiscordFetcher(FileFetcher):
     def get_messages(self) -> Generator[PreMessage, None, None]:
         for f in self.get_files():
             container_id = int(f["channel"]["id"])
-            community_id = int(f["guild"]["id"])
+            community_id = int_to_uuid(int(f["guild"]["id"]))
             community_name: str = f["guild"]["name"]
             community: Community = {
-                "_id": community_id,
+                "id": community_id,
                 "name": community_name,
                 "platform": self.platform,
             }
@@ -163,18 +164,19 @@ class DiscordFetcher(FileFetcher):
                     # but they're system messages e.g. boosts
                     continue
 
-                _id = int(m["id"])
                 # discord IDs are globally unique across all objects
-                if _id in self.__seen:
+                # but we only check against messages
+                # two instances of the same channel could have different history
+                id = int_to_uuid(int(m["id"]))
+                if self.seen(id):
                     continue
-                self.__seen.add(_id)
 
-                author_id = int(m["author"]["id"])
+                author_id = int_to_uuid(int(m["author"]["id"]))
                 author_name: str = m["author"]["name"]
                 is_bot: bool = m["author"]["isBot"]
                 is_webhook_: bool = is_webhook(m)
                 author: Author = {
-                    "_id": author_id,
+                    "id": author_id,
                     "name": author_name,
                     "platform": self.platform,
                     "is_bot": is_bot,
@@ -187,7 +189,7 @@ class DiscordFetcher(FileFetcher):
 
                 content: str = m["content"]
                 message: PreMessage = {
-                    "_id": _id,
+                    "id": id,
                     "content": content,
                     "container": container_id,
                     "community": community,

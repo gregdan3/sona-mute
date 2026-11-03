@@ -1,10 +1,12 @@
 # STL
 from abc import abstractmethod
+from uuid import UUID
 from typing import Any
 from collections.abc import Generator
 
 # LOCAL
 from sonamute.log import LOG
+from sonamute.utils import int_to_uuid
 from sonamute.smtypes import Author, Community, PreMessage
 from sonamute.constants import (
     IGNORED_AUTHORS_MAP,
@@ -13,8 +15,8 @@ from sonamute.constants import (
     IGNORED_COMMUNITIES_MAP,
 )
 
-NULL_CONTAINER = 0
-NULL_AUTHOR = 0
+NULL_INT_ID = 0
+NULL_UUID = int_to_uuid(0)
 # I know this is a sin.
 # But GelDB is doing that thing where nulls are implicitly omitted from any `filter`,
 # even `NOT` filters for which nulls should intuitively match.
@@ -24,10 +26,10 @@ NULL_AUTHOR = 0
 
 
 def is_countable(msg: PreMessage) -> bool:
-    platform_id = msg["community"]["platform"]["_id"]
+    platform_id = msg["community"]["platform"]["id"]
 
     ignored_communities = IGNORED_COMMUNITIES_MAP.get(platform_id, set())
-    if msg["community"]["_id"] in ignored_communities:
+    if msg["community"]["id"] in ignored_communities:
         return False
 
     ignored_containers = IGNORED_CONTAINERS_MAP.get(platform_id, set())
@@ -35,13 +37,13 @@ def is_countable(msg: PreMessage) -> bool:
         return False
 
     ignored_authors = IGNORED_AUTHORS_MAP.get(platform_id, set())
-    if msg["author"]["_id"] in ignored_authors:
+    if msg["author"]["id"] in ignored_authors:
         return False
 
     ignored_messages = IGNORED_MESSAGES_MAP.get(platform_id, dict())
     ignored_ranges = ignored_messages.get(msg["container"], list())
     for low_id, high_id in ignored_ranges:
-        if low_id <= msg["_id"] and msg["_id"] <= high_id:
+        if low_id <= msg["id"] and msg["id"] <= high_id:
             return False
 
     is_bot = msg["author"]["is_bot"]
@@ -53,8 +55,17 @@ def is_countable(msg: PreMessage) -> bool:
 
 
 class PlatformFetcher:
-    @abstractmethod
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+    __seen: set[int]
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__()
+        self.__seen = set()
+
+    def seen(self, id: UUID) -> bool:
+        if id.int in self.__seen:
+            return True
+        self.__seen.add(id.int)
+        return False
 
     @abstractmethod
     def get_community(self, raw_src: Any) -> Community: ...
@@ -73,8 +84,8 @@ class FileFetcher(PlatformFetcher):
     root: str
 
     def __init__(self, root: str):
-        self.root = root
         super().__init__()
+        self.root = root
 
     @abstractmethod
     def get_files(self) -> Generator[Any, None, None]:

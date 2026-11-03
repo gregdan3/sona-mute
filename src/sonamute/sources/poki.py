@@ -1,20 +1,20 @@
 # STL
 import os
 import re
-from typing import Literal, TypedDict, NotRequired, cast
+from typing import Literal, TypedDict, NotRequired, cast, override
 from datetime import UTC, date, datetime
 from collections.abc import Generator
 
 # PDM
 import frontmatter
-from typing_extensions import override
 
 # LOCAL
+from sonamute.constants import IGNORED_MESSAGES_MAP
 from sonamute.log import LOG
-from sonamute.utils import fake_id
+from sonamute.utils import fake_uuid, int_to_uuid
 from sonamute.file_io import try_load_html
 from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
-from sonamute.sources.generic import NULL_AUTHOR, NULL_CONTAINER, FileFetcher
+from sonamute.sources.generic import NULL_UUID, NULL_INT_ID, FileFetcher
 
 Original = TypedDict(
     "Original",
@@ -59,20 +59,25 @@ def coalesce_postdate(s: str | date) -> datetime:
     return datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=UTC)
 
 
-def clean_content(raw: str) -> str:
+def clean_content(raw: str, omit: list[str] | None = None) -> str:
     soup = try_load_html(raw)
     for s in soup(NON_VIS_ELEMS):
         s.extract()
-        # TODO: html comments?
+
+    if omit:
+        for selector in omit:
+            for s in soup.select(selector):
+                s.extract()
+
+    # TODO: html comments?
     return soup.get_text("\n")
 
 
 class PokiLapoFetcher(FileFetcher):
     platform: Platform = {
-        "_id": KnownPlatforms.Publication.value,
+        "id": KnownPlatforms.Publication.value,
         "name": KnownPlatforms.Publication.name,
     }
-    __seen: set[int] = set()
 
     @override
     def get_files(self) -> Generator[frontmatter.Post, None, None]:
@@ -105,7 +110,7 @@ class PokiLapoFetcher(FileFetcher):
     def get_community(self, raw_src: frontmatter.Post) -> Community:
         return Community(
             {
-                "_id": self.platform["_id"],
+                "id": int_to_uuid(self.platform["id"]),
                 "name": self.platform["name"],
                 "platform": self.platform,
             }
@@ -113,18 +118,18 @@ class PokiLapoFetcher(FileFetcher):
 
     @override
     def get_author(self, raw_msg: frontmatter.Post) -> Author:
-        authors: list[str] = raw_msg.metadata.get("authors", list())
+        authors: list[str] = raw_msg.metadata.get("authors", [])
         author_name = ""
-        author_id = NULL_AUTHOR
+        author_id = NULL_UUID
         # NOTE: this is a concession. i cannot multiple-attribute.
         # i could do some convoluted compromise, like assigning lines
         # round-robin or in splits to each author? but eugh
         if authors and authors[0]:
             author_name = authors[0]
-            author_id = fake_id(author_name)
+            author_id = fake_uuid(author_name)
 
         author: Author = {
-            "_id": author_id,
+            "id": author_id,
             "name": author_name,
             "platform": self.platform,
             "is_bot": False,
@@ -135,13 +140,16 @@ class PokiLapoFetcher(FileFetcher):
     @override
     def get_messages(self) -> Generator[PreMessage, None, None]:
         for msg in self.get_files():
-            _id = fake_id(msg.content)
+            id = fake_uuid(msg.content)
             # file content is stable, but cleaning process may not be
-            content = clean_content(msg.content)
 
-            if _id in self.__seen:
+            key = f"{msg.metadata['date']}/{msg.metadata['title']}"
+            ignore_selector = IGNORED_MESSAGES_MAP[
+                KnownPlatforms.Publication.value
+            ].get(key)
+            content = clean_content(msg.content, ignore_selector)
+            if self.seen(id):
                 continue
-            self.__seen.add(_id)
 
             # community is stored with each message
             community = self.get_community(msg)
@@ -150,9 +158,9 @@ class PokiLapoFetcher(FileFetcher):
             postdate = coalesce_postdate(msg.metadata["date"])
 
             message: PreMessage = {
-                "_id": _id,
+                "id": id,
                 "content": content,
-                "container": NULL_CONTAINER,
+                "container": NULL_INT_ID,
                 "community": community,
                 "author": author,
                 "postdate": postdate,

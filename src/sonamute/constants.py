@@ -2,6 +2,7 @@
 from datetime import UTC, datetime
 
 # LOCAL
+from sonamute.utils import int_to_uuid
 from sonamute.smtypes import KnownPlatforms
 
 IGNORED_COMMUNITIES_MAP: dict[int, set[int]] = {
@@ -46,7 +47,14 @@ IGNORED_AUTHORS_MAP: dict[int, set[int]] = {
     },
 }
 # platform to container, then container to message ID range
-IGNORED_MESSAGES_MAP: dict[int, dict[int, list[tuple[int, int]]]] = {
+IGNORED_MESSAGES_MAP: dict[
+    int,
+    dict[
+        int,
+        list[tuple[int, int]],
+    ]
+    | dict[str, list[str]],
+] = {
     KnownPlatforms.Discord.value: {
         # tomo-toki-pini-ante, kapilu and ghoom playing chess
         545467374254555137: [(769214584611012628, 769236383021531217)],
@@ -60,7 +68,13 @@ IGNORED_MESSAGES_MAP: dict[int, dict[int, list[tuple[int, int]]]] = {
         # 851665652452556840 : [
         #     (1, 1),
         # ]
-    }
+    },
+    KnownPlatforms.Publication.value: {
+        "2023-08-15/Nasi": [
+            "#len",
+            'span[style*="overflow-wrap: anywhere"][style*="text-align: center"]',
+        ],  # nasi has two massive individual lines that are part of its ARG
+    },
 }
 
 

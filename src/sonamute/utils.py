@@ -4,9 +4,9 @@ import asyncio
 import hashlib
 import itertools
 from uuid import UUID
-from typing import Any, TypeVar, Callable
+from typing import Any, TypeVar
 from datetime import datetime, timedelta
-from collections.abc import Iterable, Coroutine, Generator
+from collections.abc import Callable, Iterable, Coroutine, Generator
 
 # PDM
 import dotenv
@@ -37,8 +37,12 @@ def fake_id(s: str) -> int:
     return int(md5_hash, 16)
 
 
+def int_to_uuid(i: int) -> UUID:
+    return UUID(int=i)
+
+
 def fake_uuid(s: str) -> UUID:
-    return UUID(int=fake_id(s))
+    return int_to_uuid(fake_id(s))
 
 
 def now() -> str:
