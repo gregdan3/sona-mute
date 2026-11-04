@@ -27,6 +27,7 @@ from sonamute.counters import countables, process_msg, get_sentence_stats
 from sonamute.constants import MAX_TERM_LEN, MIN_HITS_NEEDED
 from sonamute.gen_sqlite import generate_sqlite
 from sonamute.sources.generic import NULL_UUID, NULL_INT_ID, PlatformFetcher
+from sonamute.log import LOG
 
 
 async def insert_raw_msg(db: MessageDB, msg: PreMessage) -> None:
@@ -37,7 +38,7 @@ async def insert_raw_msg(db: MessageDB, msg: PreMessage) -> None:
     try:
         await db.insert_message(processed)
     except asyncpg.PostgresError as e:
-        print(msg)
+        LOG.error(msg)
         raise e
 
 
@@ -66,12 +67,12 @@ async def source_to_db(db: MessageDB, source: PlatformFetcher, batch_size: int):
 
         i += len(inserts)
         if i % (batch_size * 100) == 0:
-            print(f"Processed {i} messages @ {now()}")
+            LOG.info(f"Processed {i} messages @ {now()}")
 
-    print("Calculating tpt sentences per author...")
+    LOG.info("Calculating tpt sentences per author...")
     await db.update_author_tpt_sents()
 
-    print(f"Final total: {i} messages @ {now()}")
+    LOG.info(f"Final total: {i} messages @ {now()}")
 
 
 def format_stats(
@@ -101,7 +102,7 @@ def format_stats(
 async def db_sents_to_freqs(db: MessageDB, batch_size: int, passing: bool):
     first_msg_dt, last_msg_dt = await db.get_msg_date_range()
     for start, end in months_in_range(first_msg_dt, last_msg_dt):
-        print(f"gen frequency for {start.date()} - {end.date()} @ {now()}")
+        LOG.info(f"gen frequency for {start.date()} - {end.date()} @ {now()}")
         result = await db.counted_sents_in_range(start, end, passing)
         by_community = sort_by_community(result)
 
@@ -165,7 +166,7 @@ async def amain(argv: argparse.Namespace):
 
             source = SOURCES[platform](root)
 
-            print(f"Fetching {platform} data from {root}")
+            LOG.info(f"Fetching {platform} data from {root}")
             if to_db:
                 assert db is not None
                 await source_to_db(db, source, batch_size)
@@ -179,7 +180,7 @@ async def amain(argv: argparse.Namespace):
                     _ = f.write(dumped)
 
         if actions["frequency"]:
-            print("Regenerating frequency data")
+            LOG.info("Regenerating frequency data")
             assert db is not None
             await db_sents_to_freqs(db, batch_size, True)
 
@@ -191,7 +192,7 @@ async def amain(argv: argparse.Namespace):
             min_date = actions["sqlite"]["min_date"]
             max_date = actions["sqlite"]["max_date"]
 
-            print(f"Dumping frequency data to {dbpath}")
+            LOG.info(f"Dumping frequency data to {dbpath}")
             assert db is not None
             await generate_sqlite(
                 db,
