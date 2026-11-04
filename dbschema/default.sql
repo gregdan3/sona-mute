@@ -77,7 +77,7 @@ CREATE TABLE message (
 
     author_id uuid NOT NULL,
     community_id uuid NOT NULL,
-    container_id int NOT NULL, -- for levels of organization beyond community
+    container_id bigint NOT NULL, -- for levels of organization beyond community
 
     postdate timestamptz NOT NULL,
     content text NOT NULL,
