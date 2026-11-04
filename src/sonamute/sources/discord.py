@@ -94,12 +94,12 @@ SYSTEM_MESSAGE_TYPES = {
 }
 
 
-def is_webhook(m: DiscordMessageJSON) -> bool:
+def is_msg_from_webhook(m: DiscordMessageJSON) -> bool:
     if not m["author"]["isBot"]:
         return False
     # must be a bot
 
-    has_roles = not not m["author"].get("roles")
+    has_roles = m["author"].get("roles")
     has_discrim = m["author"]["discriminator"] != "0000"
 
     # webhooks cannot have roles or have discrim other than 0000
@@ -174,13 +174,13 @@ class DiscordFetcher(FileFetcher):
                 author_id = int_to_uuid(int(m["author"]["id"]))
                 author_name: str = m["author"]["name"]
                 is_bot: bool = m["author"]["isBot"]
-                is_webhook_: bool = is_webhook(m)
+                is_webhook: bool = is_msg_from_webhook(m)
                 author: Author = {
                     "id": author_id,
                     "name": author_name,
                     "platform": self.platform,
                     "is_bot": is_bot,
-                    "is_webhook": is_webhook_,
+                    "is_webhook": is_webhook,
                     # NOTE: If an author is a webhook, we know to check it later in PluralKit
                 }
 
