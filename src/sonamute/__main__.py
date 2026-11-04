@@ -45,7 +45,7 @@ async def insert_raw_msg(db: MessageDB, msg: PreMessage) -> None:
 def sort_by_community(
     tagged_sents: list[CommSentence],
 ) -> dict[PlatObjKey, list[SortedSentence]]:
-    output: dict[PlatObjKey, list[SortedSentence]] = dict()
+    output: dict[PlatObjKey, list[SortedSentence]] = {}
     for s in tagged_sents:
         key: PlatObjKey = (s["community"]["id"], s["platform"]["id"])
         if key not in output:
