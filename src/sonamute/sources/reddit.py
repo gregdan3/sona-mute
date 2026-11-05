@@ -9,7 +9,7 @@ from typing_extensions import override
 
 # LOCAL
 from sonamute.log import LOG
-from sonamute.utils import int_to_uuid
+from sonamute.utils import fake_uuid, int_to_uuid
 from sonamute.file_io import try_load_json
 from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
 from sonamute.sources.generic import NULL_UUID, NULL_INT_ID, FileFetcher
@@ -265,14 +265,13 @@ class RedditFetcher(FileFetcher):
 
     @override
     def get_author(self, raw_msg: RedditJSON) -> Author:
-
-        author_fullname = raw_msg.get("author_fullname")
-        author_id = NULL_UUID
+        author_name = raw_msg["author"]
+        author_fullname = raw_msg.get("author_fullname")  # really type wart and b36id
+        # FIXME: this can cause collisions with reddit's own IDs.
+        author_id = fake_uuid(author_name)
         if author_fullname:
             _, author_id = split_type_id(author_fullname)
-
-        author_name = raw_msg["author"]
-
+            author_id = int_to_uuid(author_id)
         author: Author = {
             "id": author_id,
             "name": author_name,
