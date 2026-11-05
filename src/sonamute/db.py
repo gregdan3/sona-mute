@@ -235,9 +235,19 @@ class MessageDB:
             return row["min_d"], row["max_d"]
 
     async def refresh_materialized_views(self) -> None:
+        views: tuple[str, ...] = (
+            "message_sentence_tp",
+            "message_sentence_nontp",
+            "author_stats",
+            "community_stats",
+            "monthly_stats",
+            "monthly_community_stats",
+            "yearly_stats",
+            "yearly_community_stats",
+        )
         async with self.acquire() as conn:
-            await conn.execute("REFRESH MATERIALIZED VIEW tp_user_sentence;")
-            await conn.execute("REFRESH MATERIALIZED VIEW non_tp_user_sentence;")
+            for v in views:
+                await conn.execute(f"REFRESH MATERIALIZED VIEW {v};")
 
     async def counted_sents_in_range(
         self,
@@ -473,56 +483,6 @@ class MessageDB:
                 (r["author_id"], r["platform_id"]) for r in rows
             }
             return await self.count_nontrivial_authors(unique_authors)
-
-    async def update_author_tpt_sents(self) -> None:
-        async with self.acquire() as conn:
-            await self.refresh_materialized_views()
-            await conn.execute("""
-                UPDATE author a
-                SET num_sentences = sub.cnt
-                FROM (
-                    SELECT m.author_id, m.platform_id, COUNT(ms.sentence_id) AS cnt
-                    FROM message m
-                    JOIN message_sentence ms ON ms.message_id = m.id AND ms.platform_id = m.platform_id
-                    WHERE m.is_counted
-                    GROUP BY m.author_id, m.platform_id
-                ) sub
-                WHERE a.id = sub.author_id AND a.platform_id = sub.platform_id;
-                """)
-            await conn.execute("""
-                UPDATE author a
-                SET num_tp_sentences = sub.cnt
-                FROM (
-                    SELECT m.author_id, m.platform_id, COUNT(*) AS cnt
-                    FROM tp_user_sentence tp
-                    JOIN message m ON m.id = tp.message_id AND m.platform_id = tp.platform_id
-                    GROUP BY m.author_id, m.platform_id
-                ) sub
-                WHERE a.id = sub.author_id AND a.platform_id = sub.platform_id;
-                """)
-            await conn.execute("""
-                UPDATE community c
-                SET num_sentences = sub.cnt
-                FROM (
-                    SELECT m.community_id, m.platform_id, COUNT(ms.sentence_id) AS cnt
-                    FROM message m
-                    JOIN message_sentence ms ON ms.message_id = m.id AND ms.platform_id = m.platform_id
-                    WHERE m.is_counted
-                    GROUP BY m.community_id, m.platform_id
-                ) sub
-                WHERE c.id = sub.community_id AND c.platform_id = sub.platform_id;
-                """)
-            await conn.execute("""
-                UPDATE community c
-                SET num_tp_sentences = sub.cnt
-                FROM (
-                    SELECT m.community_id, m.platform_id, COUNT(*) AS cnt
-                    FROM tp_user_sentence tp
-                    JOIN message m ON m.id = tp.message_id AND m.platform_id = tp.platform_id
-                    GROUP BY m.community_id, m.platform_id
-                ) sub
-                WHERE c.id = sub.community_id AND c.platform_id = sub.platform_id;
-                """)
 
 
 def format_freq_pg(

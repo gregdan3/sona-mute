@@ -10,7 +10,7 @@ services:
       - "${POSTGRES_PORT}:5432"
     volumes:
       - pgdata:/var/lib/postgresql
-      - ./dbschema/default.sql:/docker-entrypoint-initdb.d/schema.sql
+      - ./dbschema:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d sonamute"]
       interval: 30s

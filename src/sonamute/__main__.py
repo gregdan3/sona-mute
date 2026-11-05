@@ -68,10 +68,6 @@ async def source_to_db(db: MessageDB, source: PlatformFetcher, batch_size: int):
         i += len(inserts)
         if i % (batch_size * 100) == 0:
             LOG.info(f"Processed {i} messages @ {now()}")
-
-    LOG.info("Calculating tpt sentences per author...")
-    await db.update_author_tpt_sents()
-
     LOG.info(f"Final total: {i} messages @ {now()}")
 
 
@@ -154,6 +150,7 @@ async def amain(argv: argparse.Namespace):
         or actions["sqlite"]
     )
     db = load_messagedb_from_env() if needs_db else None
+    did_write = False
     if db:
         _ = await db.get_pool()  # initialize
 
@@ -170,6 +167,7 @@ async def amain(argv: argparse.Namespace):
             if to_db:
                 assert db is not None
                 await source_to_db(db, source, batch_size)
+                did_write = True
             else:
                 assert output  # cli guarantees it exists
                 stats = source_sents_to_freqs(source)
@@ -178,6 +176,9 @@ async def amain(argv: argparse.Namespace):
                 dumped = json.dumps(dump_data, indent=2, ensure_ascii=False)
                 with open(output, "w") as f:
                     _ = f.write(dumped)
+
+        if did_write:
+            await db.refresh_materialized_views()
 
         if actions["frequency"]:
             LOG.info("Regenerating frequency data")
