@@ -45,38 +45,34 @@ CREATE TABLE platform (
 
 
 CREATE TABLE community (
-    id uuid NOT NULL,
+    id int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    orig_id uuid NOT NULL,
     platform_id smallint NOT NULL REFERENCES platform (id),
     name text NOT NULL,
 
-    num_sentences int NOT NULL DEFAULT 0,
-    num_tp_sentences int NOT NULL DEFAULT 0,
-
-    PRIMARY KEY (id, platform_id)
+    CONSTRAINT orig_id_platform_id_unique_community UNIQUE (orig_id, platform_id)
 );
 
 
 CREATE TABLE author (
-    id uuid NOT NULL,
+    id int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    orig_id uuid NOT NULL,
     platform_id smallint NOT NULL REFERENCES platform (id),
     name text NOT NULL,
 
     is_bot boolean NOT NULL,
     is_webhook boolean NOT NULL,
 
-    num_sentences int NOT NULL DEFAULT 0,
-    num_tp_sentences int NOT NULL DEFAULT 0,
-
-    PRIMARY KEY (id, platform_id)
+    CONSTRAINT orig_id_platform_id_unique_author UNIQUE (orig_id, platform_id)
 );
 
 
 CREATE TABLE message (
-    id uuid NOT NULL,
-    platform_id smallint NOT NULL REFERENCES platform (id),
-
-    author_id uuid NOT NULL,
-    community_id uuid NOT NULL,
+    id int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    orig_id uuid NOT NULL,
+    platform_id smallint NOT NULL REFERENCES platform (id) ON DELETE CASCADE,
+    author_id int NOT NULL REFERENCES author (id) ON DELETE CASCADE,
+    community_id int NOT NULL REFERENCES community (id) ON DELETE CASCADE,
     container_id bigint NOT NULL, -- for levels of organization beyond community
 
     postdate timestamptz NOT NULL,
@@ -84,11 +80,7 @@ CREATE TABLE message (
     score real NOT NULL,
     is_counted boolean NOT NULL,
 
-    PRIMARY KEY (id, platform_id),
-    CONSTRAINT message_id_community_unique UNIQUE (id, platform_id, community_id),
-
-    FOREIGN KEY (author_id, platform_id) REFERENCES author (id, platform_id) ON DELETE CASCADE,
-    FOREIGN KEY (community_id, platform_id) REFERENCES community (id, platform_id) ON DELETE CASCADE
+    CONSTRAINT orig_id_platform_id_unique_message UNIQUE (orig_id, platform_id)
 );
 CREATE INDEX message_is_counted_postdate_idx
 ON message (postdate)
@@ -105,16 +97,58 @@ CREATE INDEX sentence_len_idx ON sentence (len);
 
 
 CREATE TABLE message_sentence (
-    message_id uuid NOT NULL,
-    platform_id smallint NOT NULL,
+    message_id int NOT NULL REFERENCES message(id) ON DELETE CASCADE,
     sentence_id int NOT NULL REFERENCES sentence (id) ON DELETE CASCADE,
     idx smallint NOT NULL, -- order of sentences in message
     score real NOT NULL,
 
-    PRIMARY KEY (message_id, platform_id, idx),
-    FOREIGN KEY (message_id, platform_id) REFERENCES message (id, platform_id) ON DELETE CASCADE
+    PRIMARY KEY (message_id, idx)
 );
 CREATE INDEX message_sentence_score_idx ON message_sentence (score);
+
+
+CREATE MATERIALIZED VIEW community_sentence_stats AS
+SELECT 
+    c.id AS community_id,
+    c.name AS community_name,
+    COUNT(DISTINCT m.id) AS messages,
+    COUNT(ms.sentence_id) AS sentences,
+    COUNT(CASE WHEN ms.score >= 0.8 
+          AND m.score >= 0.1 
+          AND (s.len >= 3 OR m.score >= 0.3) 
+          THEN ms.sentence_id 
+          END) AS tp_sentences,
+    COUNT(DISTINCT m.author_id) AS authors
+FROM community c
+JOIN message m ON c.id = m.community_id AND m.is_counted = true
+LEFT JOIN message_sentence ms ON m.id = ms.message_id
+LEFT JOIN sentence s ON ms.sentence_id = s.id
+GROUP BY c.id, c.name;
+-- CREATE UNIQUE INDEX community_sentence_stats_id_idx ON community_sentence_stats (community_id);
+
+CREATE MATERIALIZED VIEW author_sentence_stats AS
+SELECT 
+    a.id AS author_id,
+    a.name AS author_name,
+    COUNT(DISTINCT m.id) AS messages,
+    COUNT(ms.sentence_id) AS sentences,
+    COUNT(CASE 
+          WHEN ms.score >= 0.8 
+          AND m.score >= 0.1 
+          AND (s.len >= 3 OR m.score >= 0.3) 
+          THEN 1 
+          END) AS tp_sentences
+    -- NOTE: I would put a community count here
+    -- but it's useless outside Discord since authors are per-platform
+FROM author a
+JOIN message m ON a.id = m.author_id AND m.is_counted = true
+LEFT JOIN message_sentence ms ON m.id = ms.message_id
+LEFT JOIN sentence s ON ms.sentence_id = s.id
+GROUP BY a.id, a.name;
+-- CREATE UNIQUE INDEX author_sentence_stats_id_idx ON author_sentence_stats (author_id);
+
+
+
 
 /* NOTE:
  * everything beyond here is calculated from the above.
@@ -125,67 +159,38 @@ CREATE INDEX message_sentence_score_idx ON message_sentence (score);
 
 
 CREATE TABLE term (
-    -- tracks a unique sequence of words as an ngram
     id int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     words text[] NOT NULL UNIQUE,
     len smallint GENERATED ALWAYS AS (cardinality(words)) STORED
-    -- hits int NOT NULL DEFAULT 0
-  -- NOTE: all counted+sufficiently scored times the term was used; computed after ingest
-  -- hits per term can be calculated from
-  -- SELECT f.term_id, SUM(fhits) FROM frequency f JOIN context c WHERE c.attr = 0 GROUP BY f.term_id
-);
--- CREATE INDEX term_hits_len_idx ON term (hits, len) INCLUDE (text); -- text fetchable from index
-
-CREATE TABLE term_author (
-    -- unrolled from `term` to make unique authors countable
-    term_id int NOT NULL REFERENCES term (id) ON DELETE CASCADE,
-    author_id uuid NOT NULL,
-    platform_id smallint NOT NULL,
-    hits int NOT NULL DEFAULT 0,
-    -- NOTE: same as hits in term but only for this author using this term
-    -- hits per author is not calculable from frequency+context; must be inserted
-
-    PRIMARY KEY (term_id, author_id, platform_id),
-    FOREIGN KEY (author_id, platform_id) REFERENCES author (id, platform_id) ON DELETE CASCADE
 );
 
 CREATE TABLE context (
     id int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    community_id uuid NOT NULL,
-    platform_id smallint NOT NULL,
+    community_id int NOT NULL REFERENCES community (id) ON DELETE CASCADE,
     day date NOT NULL,
     attr attribute NOT NULL,
 
-    CONSTRAINT context_unique UNIQUE (community_id, platform_id, day, attr),
-    FOREIGN KEY (community_id, platform_id) REFERENCES community (id, platform_id) ON DELETE CASCADE
+    CONSTRAINT context_unique UNIQUE (community_id, day, attr)
+);
+
+CREATE TABLE context_author (
+    id int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    context_id int NOT NULL REFERENCES context (id) ON DELETE CASCADE,
+    author_id int NOT NULL REFERENCES author (id) ON DELETE CASCADE
 );
 
 CREATE TABLE frequency (
-    id int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    context_id int NOT NULL REFERENCES context (id) ON DELETE CASCADE,
+    context_author_id int NOT NULL REFERENCES context_author (id) ON DELETE CASCADE,
     term_id int NOT NULL REFERENCES term (id) ON DELETE CASCADE,
     hits int NOT NULL,
 
-    CONSTRAINT context_term_unique UNIQUE (context_id, term_id)
-);
-CREATE INDEX frequency_term_idx ON frequency (term_id);
-
-CREATE TABLE frequency_author (
-    frequency_id int NOT NULL REFERENCES frequency (id) ON DELETE CASCADE,
-    author_id uuid NOT NULL,
-    platform_id smallint NOT NULL,
-    hits int NOT NULL,
-    -- NOTE: same as hits in term/term_author but now just in this context
-
-    PRIMARY KEY (frequency_id, author_id, platform_id),
-    FOREIGN KEY (author_id, platform_id) REFERENCES author (id, platform_id) ON DELETE CASCADE
+    PRIMARY KEY (context_author_id, term_id)
 );
 
 CREATE MATERIALIZED VIEW tp_user_sentence AS
 SELECT
     s.id,
     ms.message_id,
-    ms.platform_id,
     s.words,
     ms.score,
     s.len,
@@ -194,8 +199,8 @@ FROM message_sentence ms
 JOIN sentence s ON s.id = ms.sentence_id
 JOIN message m ON m.id = ms.message_id
 WHERE
-    ms.score >= 0.8
-    AND m.is_counted
+    m.is_counted
+    AND ms.score >= 0.8
     AND m.score > 0.1
     AND (
         s.len >= 3
@@ -206,21 +211,18 @@ CREATE MATERIALIZED VIEW non_tp_user_sentence AS
 SELECT
     s.id,
     ms.message_id,
-    ms.platform_id,
     s.words,
     ms.score,
     s.len,
     ms.idx
 FROM message_sentence ms
-JOIN sentence s
-    ON s.id = ms.sentence_id
-JOIN message m
-    ON m.id = ms.message_id
+JOIN sentence s ON s.id = ms.sentence_id
+JOIN message m ON m.id = ms.message_id
 WHERE
-    ms.score < 0.8
-    OR NOT m.is_counted
+    m.is_counted AND
+    (ms.score < 0.8
     OR m.score <= 0.1
     OR (
         s.len < 3
         AND m.score < 0.3
-    );
+    ));

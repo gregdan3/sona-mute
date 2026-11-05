@@ -75,14 +75,14 @@ class MessageDB:
             self.pool = None
 
     async def _fetchrow(
-        self, query: str, *args: UUID | int | bool | str
+        self, query: str, *args: UUID | int | bool | str | float | datetime
     ) -> asyncpg.Record | None:
         async with self.acquire() as conn:
             row = await conn.fetchrow(query, *args)
             return row
 
     async def _fetchrow_req(
-        self, query: str, *args: UUID | int | bool | str
+        self, query: str, *args: UUID | int | bool | str | float | datetime
     ) -> asyncpg.Record:
         row = await self._fetchrow(query, *args)
         assert row is not None
@@ -100,45 +100,43 @@ class MessageDB:
         return cast(int, row["id"])
 
     @alru_cache(maxsize=2**10)
-    async def insert_community(
-        self, id: UUID, platform_id: int, name: str
-    ) -> PlatObjKey:
+    async def insert_community(self, id: UUID, platform_id: int, name: str) -> int:
         query = """
-            INSERT INTO community (id, platform_id, name)
+            INSERT INTO community (orig_id, platform_id, name)
             VALUES ($1, $2, $3)
-            -- ON CONFLICT (id, platform_id) DO UPDATE SET name = COALESCE(EXCLUDED.name, community.name)
-            RETURNING id, platform_id;
+            -- ON CONFLICT (orig_id, platform_id) DO UPDATE SET name = COALESCE(EXCLUDED.name, community.name)
+            RETURNING id;
         """
         row = await self._fetchrow_req(query, id, platform_id, name)
-        return cast(UUID, row["id"]), cast(int, row["platform_id"])
+        return cast(int, row["id"])
 
     @alru_cache(maxsize=2**18)
     async def insert_author(
         self,
-        author_id: int,
+        author_id: UUID,
         platform_id: int,
         name: str,
         is_bot: bool,
         is_webhook: bool,
-    ) -> PlatObjKey:
+    ) -> int:
         # the above cache misses if the user has changed their name
         # but almost all records do not include a name change,
         # and even those that do will cache anyway to the same result
         query = """
-            INSERT INTO author (id, platform_id, name, is_bot, is_webhook)
+            INSERT INTO author (orig_id, platform_id, name, is_bot, is_webhook)
             VALUES ($1, $2, COALESCE($3, ''), $4, $5)
-            ON CONFLICT (id, platform_id) DO UPDATE SET
-                id = EXCLUDED.id,
+            ON CONFLICT (orig_id, platform_id) DO UPDATE SET
+                orig_id = EXCLUDED.orig_id,
                 platform_id = EXCLUDED.platform_id
                 -- name = EXCLUDED.name,
                 -- is_bot = EXCLUDED.is_bot,
                 -- is_webhook = EXCLUDED.is_webhook
-            RETURNING id, platform_id;
+            RETURNING id
         """
         row = await self._fetchrow_req(
             query, author_id, platform_id, name, is_bot, is_webhook
         )
-        return row["id"], row["platform_id"]
+        return cast(int, row["id"])
 
     async def insert_message(self, message: Message) -> None:
         author = message["author"]
@@ -147,12 +145,12 @@ class MessageDB:
         platform = community["platform"]
 
         platform_id = await self.insert_platform(platform["id"], platform["name"])
-        community_id, _ = await self.insert_community(
+        community_id = await self.insert_community(
             community["id"], platform_id, community["name"]
         )
         # author_id, _ = await self.author_in_db(author_id, platform_id)
         # if not author_id:
-        author_id, _ = await self.insert_author(
+        author_id = await self.insert_author(
             author["id"],
             platform_id,
             author["name"],
@@ -160,78 +158,71 @@ class MessageDB:
             author["is_webhook"],
         )
 
-        async with self.acquire() as conn:
-            async with conn.transaction():
-                _ = await conn.fetchrow(
-                    """
-                    INSERT INTO message (id, platform_id, author_id, community_id, container_id, postdate, content, score, is_counted)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                    -- ON CONFLICT (id, platform_id) DO NOTHING
-                    RETURNING id;
-                    """,
-                    message["id"],
-                    platform_id,
-                    author_id,
-                    community_id,
-                    message.get("container", 0),
-                    message["postdate"],
-                    message["content"],
-                    message["score"],
-                    message["is_counted"],
-                )
+        msg_insert = """
+        INSERT INTO message (orig_id, platform_id, author_id, community_id, container_id, postdate, content, score, is_counted)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        -- ON CONFLICT (orig_id, platform_id) DO NOTHING
+        RETURNING id;
+        """
+        row = await self._fetchrow_req(
+            msg_insert,
+            message["id"],
+            platform_id,
+            author_id,
+            community_id,
+            message.get("container", 0),
+            message["postdate"],
+            message["content"],
+            message["score"],
+            message["is_counted"],
+        )
+        message_id = cast(int, row["id"])
 
-                sentence_ids: dict[tuple[str, ...], int] = {}
-                for words in sorted({s["words"] for s in message["sentences"]}):
-                    sent_row = await conn.fetchrow(
-                        """
-                        INSERT INTO sentence (words)
-                        VALUES ($1)
-                        ON CONFLICT (words) DO NOTHING
-                        RETURNING id;
-                        """,
-                        words,
-                    )
-                    if sent_row is None:
-                        sent_row = await conn.fetchrow(
-                            "SELECT id FROM sentence WHERE words = $1",
-                            words,
-                        )
+        sent_insert = """
+        INSERT INTO sentence (words)
+        VALUES ($1)
+        ON CONFLICT (words) DO NOTHING
+        RETURNING id
+        """
+        sent_select = "SELECT id FROM sentence WHERE words = $1"
+        sentence_ids: dict[tuple[str, ...], int] = {}
+        for words in sorted({s["words"] for s in message["sentences"]}):
+            sent_row = await self._fetchrow(sent_insert, words)
+            if sent_row is None:
+                sent_row = await self._fetchrow_req(sent_select, words)
+            sentence_ids[words] = sent_row["id"]
 
-                    assert sent_row  # it necessarily exists now
-                    sentence_ids[words] = sent_row["id"]
+        msg_sent_insert = """
+        INSERT INTO message_sentence (message_id, sentence_id, idx, score)
+        VALUES ($1, $2, $3, $4)
+        -- ON CONFLICT (message_id, idx) DO NOTHING
+        """
+        for idx, sentence in enumerate(message["sentences"]):
+            _ = await self._fetchrow(
+                msg_sent_insert,
+                message_id,
+                sentence_ids[sentence["words"]],
+                idx,
+                sentence["score"],
+            )
 
-                for idx, sentence in enumerate(message["sentences"]):
-                    await conn.execute(
-                        """
-                        INSERT INTO message_sentence (message_id, platform_id, sentence_id, idx, score)
-                        VALUES ($1, $2, $3, $4, $5)
-                        -- ON CONFLICT (message_id, platform_id, idx) DO NOTHING
-                        """,
-                        message["id"],
-                        platform_id,
-                        sentence_ids[sentence["words"]],
-                        idx,
-                        sentence["score"],
-                    )
-
-    async def message_in_db(self, message: PreMessage) -> PlatObjKey | None:
-        query = "SELECT id, platform_id FROM message WHERE id = $1 AND platform_id = $2"
+    async def message_in_db(self, message: PreMessage) -> int | None:
+        query = "SELECT id FROM message WHERE orig_id = $1 AND platform_id = $2"
         row = await self._fetchrow(
             query,
             message["id"],
             message["community"]["platform"]["id"],
         )
         if row:
-            return row["id"], row["platform_id"]
+            return cast(int, row["id"])
 
     async def author_in_db(
         self, id: UUID, platform_id: int
     ) -> PlatObjKey | tuple[None, None]:
-        query = "SELECT id, platform_id FROM author WHERE id = $1 AND platform_id = $2"
+        query = "SELECT id FROM author WHERE origid = $1 AND platform_id = $2"
         row = await self._fetchrow(query, id, platform_id)
         if row:
-            return row["id"], row["platform_id"]
-        return None, None
+            return cast(int, row["id"])
 
     async def get_msg_date_range(self) -> tuple[datetime, datetime]:
         async with self.acquire() as conn:
