@@ -3,6 +3,7 @@ import os
 from typing import Literal, TypedDict, NotRequired, cast
 from datetime import UTC, datetime
 from collections.abc import Generator
+from uuid import UUID
 
 # PDM
 from typing_extensions import override
@@ -12,6 +13,7 @@ from sonamute.log import LOG
 from sonamute.file_io import try_load_json_file
 from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
 from sonamute.sources.generic import NULL_INT_ID, FileFetcher
+from sonamute.utils import fake_uuid, int_to_uuid
 
 # TODO: special handling?
 ONECHAT_BRIDGE_ID = 128026086
@@ -177,10 +179,9 @@ def coalesce_text(
 
 class TelegramFetcher(FileFetcher):
     platform: Platform = {
-        "_id": KnownPlatforms.Telegram.value,
+        "id": KnownPlatforms.Telegram.value,
         "name": KnownPlatforms.Telegram.name,
     }
-    __seen: set[str] = set()
 
     @override
     def get_files(self) -> Generator[TelegramJSON, None, None]:
@@ -206,24 +207,21 @@ class TelegramFetcher(FileFetcher):
 
     @override
     def get_community(self, raw_src: TelegramJSON) -> Community:
-        community_id = raw_src["id"]
-        community_name = raw_src["name"]
-
-        community: Community = {
-            "_id": community_id,
-            "name": community_name,
-            "platform": self.platform,
-        }
-        return community
+        return Community(
+            {
+                "id": int_to_uuid(raw_src["id"]),
+                "name": raw_src["name"],
+                "platform": self.platform,
+            }
+        )
 
     @override
     def get_author(self, raw_msg: TelegramPlainMessageJSON) -> Author:
         author_type, author_id, author_name = get_actor_metadata(raw_msg)
         # author type is either user or channel; no bot info
-
         author: Author = {
-            "_id": author_id,
-            "name": author_name,
+            "id": int_to_uuid(author_id),
+            "name": author_name or "",
             "platform": self.platform,
             "is_bot": False,  # we skip service messages, and otherwise can't know,
             "is_webhook": False,  # telegram has no analogue
@@ -239,44 +237,44 @@ class TelegramFetcher(FileFetcher):
                 if m["type"] == "service":
                     continue  # join notifs, channel edits, etc.
 
-                _id = int(m["id"])  # i don't trust it
-                _seen_id = f"{community['_id']}_{_id}"
-                # telegram IDs are per-chat, so we tack on community_id
-                if _seen_id in self.__seen:
+                id = int_to_uuid(m["id"])
+                # telegram IDs are per-chat, so we check both
+                if self.seen(id, community["id"]):
                     continue
-                self.__seen.add(_seen_id)
 
                 if "forwarded_from" in m:
                     # ignore forwards entirely
                     continue
 
                 author = self.get_author(m)
-                if author["_id"] == TPT_RULES_BOT_ID:
+                if author["id"].int == TPT_RULES_BOT_ID:
                     # this is the only known telegram bot that speaks toki pona
                     author["is_bot"] = True
-                if author["_id"] == ONECHAT_BRIDGE_ID and len(m["text_entities"]) > 1:
+                if (
+                    author["id"].int == ONECHAT_BRIDGE_ID
+                    and len(m["text_entities"]) > 1
+                ):
                     # we rewrite to reflect the actual author of the message
 
                     # NOTE: this is a bot, but we have no way to know
                     # is_bot and is_webhook are already false here
 
                     # name is first bc 1chat bridge always bolds it
-                    # assign new name over bot's name
+                    # assign new name and id over bot's
                     author["name"] = m["text_entities"][0]["text"]
-                    # omit name
+                    author["id"] = fake_uuid(author["name"])
+                    # omit name from msg content, and following colon+space
                     m["text_entities"] = m["text_entities"][1:]
-                    # and following colon+space
                     m["text_entities"][0]["text"] = m["text_entities"][0]["text"][2:]
                     # NOTE: one guy in 2018 broke the bot's formatting
-                    # his message is len=1
-                    # ... oh well idc
+                    # his message is len=1 ... oh well idc
 
                 timestamp = int(m["date_unixtime"])
                 postdate = datetime.fromtimestamp(timestamp, tz=UTC)
 
                 content: str = coalesce_text(m["text_entities"], do_format=True)
                 message: PreMessage = {
-                    "_id": _id,
+                    "id": id,
                     "content": content,
                     "container": NULL_INT_ID,
                     "community": community,
@@ -285,5 +283,3 @@ class TelegramFetcher(FileFetcher):
                 }
 
                 yield message
-
-        self.__seen = set()
