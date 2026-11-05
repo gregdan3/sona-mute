@@ -29,7 +29,7 @@ def is_countable(msg: PreMessage) -> bool:
     platform_id = msg["community"]["platform"]["id"]
 
     ignored_communities = IGNORED_COMMUNITIES_MAP.get(platform_id, set())
-    if msg["community"]["id"] in ignored_communities:
+    if msg["community"]["id"].int in ignored_communities:
         return False
 
     ignored_containers = IGNORED_CONTAINERS_MAP.get(platform_id, set())
@@ -37,13 +37,13 @@ def is_countable(msg: PreMessage) -> bool:
         return False
 
     ignored_authors = IGNORED_AUTHORS_MAP.get(platform_id, set())
-    if msg["author"]["id"] in ignored_authors:
+    if msg["author"]["id"].int in ignored_authors:
         return False
 
-    ignored_messages = IGNORED_MESSAGES_MAP.get(platform_id, dict())
-    ignored_ranges = ignored_messages.get(msg["container"], list())
+    ignored_messages = IGNORED_MESSAGES_MAP.get(platform_id, {})
+    ignored_ranges = ignored_messages.get(msg["container"], [])
     for low_id, high_id in ignored_ranges:
-        if low_id <= msg["id"] and msg["id"] <= high_id:
+        if low_id <= msg["id"].int and msg["id"].int <= high_id:
             return False
 
     is_bot = msg["author"]["is_bot"]
