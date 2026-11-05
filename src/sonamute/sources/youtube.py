@@ -243,7 +243,7 @@ class YouTubeFetcher(FileFetcher):
         # but they would be arbitrary with respect to the work I'm doing
         return Community(
             {
-                "id": self.platform["id"],
+                "id": int_to_uuid(self.platform["id"]),
                 "name": self.platform["name"],
                 "platform": self.platform,
             }
@@ -254,17 +254,17 @@ class YouTubeFetcher(FileFetcher):
 
         # video
         if "channel_id" in raw_msg:
-            _id = fetch_user_id(raw_msg, "channel_id")
+            id = fetch_user_id(raw_msg, "channel_id")
             name = fetch_video_author_name(raw_msg)
 
         # comment
         elif "author_id" in raw_msg:
-            _id = fetch_user_id(raw_msg, "author_id")
+            id = fetch_user_id(raw_msg, "author_id")
             name = clean_username(raw_msg["author"])
 
         return Author(
             {
-                "id": _id,
+                "id": int_to_uuid(id),
                 "name": name,
                 "platform": self.platform,
                 # youtube has neither
