@@ -245,7 +245,8 @@ class RedditFetcher(FileFetcher):
                             )
                             continue
 
-                        LOG.info(f"Reading reddit line {i} in {root}/{filename}")
+                        if (i % 1000) == 0:
+                            LOG.info(f"Reading reddit line {i} in {root}/{filename}")
                         yield data
 
     @override
