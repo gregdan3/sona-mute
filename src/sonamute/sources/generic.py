@@ -55,16 +55,18 @@ def is_countable(msg: PreMessage) -> bool:
 
 
 class PlatformFetcher:
-    __seen: set[int]
+    __seen: set[int | tuple[int, int]]
+    # really this is `set[int] | set[tuple[int, int]]` but it doesn't matter
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__()
         self.__seen = set()
 
-    def seen(self, id: UUID) -> bool:
-        if id.int in self.__seen:
+    def seen(self, id: UUID, community_id: UUID | None = None) -> bool:
+        key = id.int if community_id is None else (id.int, community_id.int)
+        if key in self.__seen:
             return True
-        self.__seen.add(id.int)
+        self.__seen.add(key)
         return False
 
     @abstractmethod
