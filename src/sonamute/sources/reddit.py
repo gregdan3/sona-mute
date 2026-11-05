@@ -251,14 +251,11 @@ class RedditFetcher(FileFetcher):
 
     @override
     def get_community(self, raw_src: RedditJSON) -> Community:
-        community_type, community_id = split_type_id(
-            raw_src["subreddit_id"]
-        )  # FIXME: incomplete
-        community_name = raw_src["subreddit"]
-
+        # FIXME: incomplete
+        community_type, community_id = split_type_id(raw_src["subreddit_id"])
         community: Community = {
-            "id": community_id,
-            "name": community_name,
+            "id": int_to_uuid(community_id),
+            "name": raw_src["subreddit"],
             "platform": self.platform,
         }
         return community
