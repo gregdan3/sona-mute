@@ -9,11 +9,10 @@ from collections.abc import Iterable, Iterator, Generator
 # LOCAL
 from sonamute.ilo import ILO
 from sonamute.smtypes import (
-    Stats,
+    Term,
     Message,
     Sentence,
     Attribute,
-    PlatObjKey,
     PreMessage,
     StatsCounter,
     SortedSentence,
@@ -162,7 +161,7 @@ def countables(
         yield {"words": sent, "author": (NULL_UUID, source.platform["id"])}
 
 
-def is_nonsense(sent_len: int, sent: tuple[str]) -> bool:
+def is_nonsense(sent_len: int, sent: Term) -> bool:
     """
     Skip a sentence if it is "nonsense," which means
     - "longer than 5x the average" and "mostly a single word", or
@@ -203,21 +202,19 @@ def get_sentence_stats(
     sents: Iterable[SortedSentence],
     max_term_len: int,
 ) -> StatsCounter:
-    freqs: StatsCounter = defaultdict(lambda: Stats({"hits": 0, "authors": set()}))
+    freqs: StatsCounter = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
 
     def add_freq(
-        term_len: int,
-        term: str,
+        term: Term,
         attr: Attribute,
-        author: PlatObjKey,
+        author: int,
     ):
-        freq = freqs[(term_len, term, attr)]
-        freq["hits"] += 1
-        freq["authors"].add(author)
+        # yield term, author, attr
+        freqs[term][author][attr] += 1
 
     for sent in sents:
-        words = sent["words"]
-        author = sent["author"]
+        words: Term = sent["words"]
+        author: int = sent["author_id"]
         sent_len = len(words)
         if not sent_len or is_nonsense(sent_len, words):
             continue
@@ -229,27 +226,26 @@ def get_sentence_stats(
             # if term_len >= 4, it follows that its sentence is long
             term_long = term_len >= LONG_SENTENCE_LEN
 
-            terms = window_iter_terms_range(words, term_len)
+            terms = window_iter_range(words, term_len)
             for term, (start, end) in terms:
                 sent_start = start == 0
                 sent_end = end == sent_len
                 sent_full = sent_start and sent_end
                 sent_inner = not sent_start and not sent_end
 
-                add_freq(term_len, term, Attribute.All, author)
+                add_freq(term, Attribute.All, author)
                 if sent_start:
-                    add_freq(term_len, term, Attribute.Start, author)
+                    add_freq(term, Attribute.Start, author)
                 if sent_end:
-                    add_freq(term_len, term, Attribute.End, author)
+                    add_freq(term, Attribute.End, author)
                 if sent_full:
-                    add_freq(term_len, term, Attribute.Full, author)
+                    add_freq(term, Attribute.Full, author)
                 if sent_inner:
-                    add_freq(term_len, term, Attribute.Inner, author)
+                    add_freq(term, Attribute.Inner, author)
                 if sent_long and not term_long:
                     # long terms are trivially in long sentences
-                    add_freq(term_len, term, Attribute.Long, author)
+                    add_freq(term, Attribute.Long, author)
                 if sent_short and not term_long:
                     # long terms cannot be in short sentences
-                    add_freq(term_len, term, Attribute.Short, author)
-
+                    add_freq(term, Attribute.Short, author)
     return freqs

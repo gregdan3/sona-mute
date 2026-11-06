@@ -16,7 +16,6 @@ from sonamute.log import configure
 from sonamute.utils import now, batch_iter, gather_batch, months_in_range
 from sonamute.smtypes import (
     ATTRIBUTE_IDS,
-    PlatObjKey,
     PreMessage,
     PGFrequency,
     CommSentence,
@@ -44,16 +43,16 @@ async def insert_raw_msg(db: MessageDB, msg: PreMessage) -> None:
 
 def sort_by_community(
     tagged_sents: list[CommSentence],
-) -> dict[PlatObjKey, list[SortedSentence]]:
-    output: dict[PlatObjKey, list[SortedSentence]] = {}
+) -> dict[int, list[SortedSentence]]:
+    output: dict[int, list[SortedSentence]] = {}
     for s in tagged_sents:
-        key: PlatObjKey = (s["community"]["id"], s["platform"]["id"])
+        key: int = s["community_id"]
         if key not in output:
-            output[key] = list()
+            output[key] = []
         output[key].append(
             {
                 "words": s["words"],
-                "author": (s["author"]["id"], s["platform"]["id"]),
+                "author_id": s["author_id"],
             }
         )
     return output
@@ -74,7 +73,6 @@ async def source_to_db(db: MessageDB, source: PlatformFetcher, batch_size: int):
 def format_stats(
     stats: StatsCounter,
     community_id: UUID = NULL_UUID,
-    platform_id: int = NULL_INT_ID,
     day: date | datetime | None = None,
 ) -> list[PGFrequency]:
     if day is None:
@@ -102,10 +100,16 @@ async def db_sents_to_freqs(db: MessageDB, batch_size: int, passing: bool):
         result = await db.counted_sents_in_range(start, end, passing)
         by_community = sort_by_community(result)
 
-        for (community_id, platform_id), sents in by_community.items():
+        for community_id, sents in by_community.items():
             stats = get_sentence_stats(sents, MAX_TERM_LEN)
-            formatted = format_stats(stats, community_id, platform_id, start)
-            _ = await gather_batch(db.insert_frequency, formatted, batch_size)
+            # await db.insert_frequencies(community_id, start, stats)
+
+            for words, auth_stats in stats.items():
+                for author_id, attr_stats in auth_stats.items():
+                    for attr, hits in attr_stats.items():
+                        await db.insert_frequency(
+                            words, start, community_id, author_id, attr, hits
+                        )
 
 
 def source_sents_to_freqs(source: PlatformFetcher) -> list[PGFrequency]:

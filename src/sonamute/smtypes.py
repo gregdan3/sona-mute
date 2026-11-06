@@ -49,16 +49,16 @@ ATTRIBUTE_IDS = {attribute: i for i, attribute in enumerate(Attribute)}
 
 PlatformKey = int  # int16
 ObjectKey = UUID
-PlatObjKey = tuple[ObjectKey, PlatformKey]
 
 
-# frequency generation
+# frequency generation for sqlite
 class Stats(TypedDict):
     hits: int
-    authors: set[PlatObjKey]
+    authors: set[int]
 
 
-StatsCounter = dict[tuple[int, str, Attribute], Stats]
+Term = tuple[str, ...]
+StatsCounter = dict[Term, dict[int, dict[Attribute, int]]]
 
 
 class KnownPlatforms(IntEnum):
@@ -109,14 +109,13 @@ class Sentence(TypedDict):
 
 class CommSentence(TypedDict):
     words: tuple[str, ...]
-    community: Community
-    platform: NotRequired[Platform]
-    author: Author
+    community_id: int
+    author_id: int
 
 
 class SortedSentence(TypedDict):
     words: tuple[str, ...]
-    author: PlatObjKey
+    author_id: int
 
 
 class PreMessage(TypedDict):
@@ -144,7 +143,7 @@ class PGFrequency(TypedDict):
     platform_id: int
     day: date
     hits: int
-    authors: list[PlatObjKey]
+    authors: list[int]
 
 
 # sqlite generation

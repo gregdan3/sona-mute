@@ -10,6 +10,8 @@ from collections.abc import Iterable, AsyncGenerator
 import asyncpg
 from async_lru import alru_cache
 
+from sonamute.smtypes import StatsCounter
+
 # LOCAL
 from sonamute.log import LOG
 from sonamute.utils import load_envvar
@@ -18,7 +20,7 @@ from sonamute.smtypes import (
     Stats,
     Message,
     Attribute,
-    PlatObjKey,
+    Term,
     PreMessage,
     PGFrequency,
     CommSentence,
@@ -216,23 +218,16 @@ class MessageDB:
         if row:
             return cast(int, row["id"])
 
-    async def author_in_db(
-        self, id: UUID, platform_id: int
-    ) -> PlatObjKey | tuple[None, None]:
-        query = "SELECT id FROM author WHERE origid = $1 AND platform_id = $2"
+    async def author_in_db(self, id: UUID, platform_id: int) -> int | None:
+        query = "SELECT id FROM author WHERE orig_id = $1 AND platform_id = $2"
         row = await self._fetchrow(query, id, platform_id)
         if row:
             return cast(int, row["id"])
 
     async def get_msg_date_range(self) -> tuple[datetime, datetime]:
-        async with self.acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT min(postdate) AS min_d, max(postdate) AS max_d FROM message;"
-            )
-            if not row or row["min_d"] is None or row["max_d"] is None:
-                now_dt = datetime.now()
-                return now_dt, now_dt
-            return row["min_d"], row["max_d"]
+        query = "SELECT min(postdate) AS min_d, max(postdate) AS max_d FROM message"
+        row = await self._fetchrow_req(query)
+        return row["min_d"], row["max_d"]
 
     async def refresh_materialized_views(self) -> None:
         views: tuple[str, ...] = (
@@ -247,7 +242,7 @@ class MessageDB:
         )
         async with self.acquire() as conn:
             for v in views:
-                await conn.execute(f"REFRESH MATERIALIZED VIEW {v};")
+                _ = await conn.execute(f"REFRESH MATERIALIZED VIEW {v};")
 
     async def counted_sents_in_range(
         self,
@@ -255,96 +250,104 @@ class MessageDB:
         end: datetime,
         passing: bool = True,
     ) -> list[CommSentence]:
-        view = "tp_user_sentence" if passing else "non_tp_user_sentence"
+        view: str = "message_sentence_tp" if passing else "message_sentence_nontp"
         query = f"""
             SELECT
-                v.words,
+                s.words,
                 m.community_id,
-                m.platform_id,
                 m.author_id
             FROM {view} v
-            JOIN message m ON m.id = v.message_id AND m.platform_id = v.platform_id
-            WHERE m.postdate >= $1 AND m.postdate < $2;
+            JOIN message m ON m.id = v.message_id
+            JOIN sentence s ON s.id = v.sentence_id
+            WHERE m.postdate >= $1 AND m.postdate < $2
+            ORDER BY m.community_id, m.author_id
         """
         async with self.acquire() as conn:
             rows = await conn.fetch(query, start, end)
             return [
                 CommSentence(
-                    words=[w.lower() for w in row["words"]],
+                    words=tuple(w.lower() for w in row["words"]),
                     community_id=row["community_id"],
-                    platform_id=row["platform_id"],
                     author_id=row["author_id"],
                 )
                 for row in rows
             ]
 
-    async def insert_frequency(self, freq: PGFrequency) -> None:
+    @alru_cache(maxsize=2**16)
+    async def insert_term(self, words: Term) -> int:
+        query = """
+        INSERT INTO term (words)
+        VALUES ($1)
+        -- ON CONFLICT (words) DO UPDATE SET words = EXCLUDED.words
+        RETURNING id;
+        """
+        row = await self._fetchrow_req(query, words)
+        return row["id"]
+
+    @alru_cache(maxsize=2**16)
+    async def insert_context(
+        self,
+        community_id: int,
+        day: datetime,
+        attr: Attribute,
+    ) -> int:
+        query = """
+        INSERT INTO context (community_id, day, attr)
+        VALUES ($1, $2, $3::attribute)
+        -- ON CONFLICT (community_id, day, attr) DO UPDATE SET community_id = EXCLUDED.community_id
+        RETURNING id;
+        """
+        row = await self._fetchrow_req(query, community_id, day, attr.value)
+        return row["id"]
+
+    @alru_cache(maxsize=2**16)
+    async def insert_context_author(
+        self,
+        context_id: int,
+        author_id: int,
+    ) -> int:
+        query = """
+        INSERT INTO context_author (context_id, author_id)
+        VALUES ($1, $2)
+        -- ON CONFLICT (context_id, author_id) DO UPDATE SET context_id = EXCLUDED.context_id
+        RETURNING id;
+        """
+        row = await self._fetchrow_req(
+            query,
+            context_id,
+            author_id,
+        )
+        return row["id"]
+
+    async def insert_frequencies(
+        self,
+        community_id: int,
+        day: datetime,
+        stats: StatsCounter,
+    ):
+        pass
+
+    async def insert_frequency(
+        self,
+        words: Term,
+        day: datetime,
+        community_id: int,
+        author_id: int,
+        attr: Attribute,
+        hits: int,
+    ) -> None:
+        term_id = await self.insert_term(words)
+        context_id = await self.insert_context(community_id, day, attr)
+        context_author_id = await self.insert_context_author(context_id, author_id)
+
+        query = """
+        INSERT INTO frequency (context_author_id, term_id, hits)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (context_author_id, term_id) DO UPDATE SET hits = frequency.hits + EXCLUDED.hits
+        """
+
         async with self.acquire() as conn:
-            async with conn.transaction():
-                # Upsert term (len is generated by the database)
-                term_row = await conn.fetchrow(
-                    """
-                    INSERT INTO term (words)
-                    VALUES ($1)
-                    -- ON CONFLICT (words) DO UPDATE SET words = EXCLUDED.words
-                    RETURNING id;
-                    """,
-                    freq["words"],
-                )
-                term_id = term_row["id"]
-
-                # Upsert context
-                day_val = (
-                    freq["day"] if isinstance(freq["day"], date) else freq["day"].date()
-                )
-                ctx_row = await conn.fetchrow(
-                    """
-                    INSERT INTO context (community_id, platform_id, day, attr)
-                    VALUES ($1, $2, $3, $4::attribute)
-                    -- ON CONFLICT (community_id, platform_id, day, attr)
-                    DO UPDATE SET community_id = EXCLUDED.community_id
-                    RETURNING id;
-                    """,
-                    freq["community_id"],
-                    freq["platform_id"],
-                    day_val,
-                    freq["attr"].value,
-                )
-                context_id = ctx_row["id"]
-
-                # Upsert frequency
-                freq_row = await conn.fetchrow(
-                    """
-                    INSERT INTO frequency (context_id, term_id, hits)
-                    VALUES ($1, $2, $3)
-                    -- ON CONFLICT (context_id, term_id)
-                    DO UPDATE SET hits = frequency.hits + EXCLUDED.hits
-                    RETURNING id;
-                    """,
-                    context_id,
-                    term_id,
-                    freq["hits"],
-                )
-                frequency_id = freq_row["id"]
-
-                # Frequency author records
-                author_hits: dict[PlatObjKey, int] = {}
-                for auth in freq["authors"]:
-                    author_hits[auth] = author_hits.get(auth, 0) + 1
-
-                for (author_id, platform_id), a_hits in author_hits.items():
-                    await conn.execute(
-                        """
-                        INSERT INTO frequency_author (frequency_id, author_id, platform_id, hits)
-                        VALUES ($1, $2, $3, $4)
-                        -- ON CONFLICT (frequency_id, author_id, platform_id)
-                        DO UPDATE SET hits = frequency_author.hits + EXCLUDED.hits;
-                        """,
-                        frequency_id,
-                        author_id,
-                        platform_id,
-                        a_hits,
-                    )
+            await conn.execute(query, context_author_id, term_id, hits)
 
     @alru_cache(maxsize=16384)
     async def is_author_counted(self, author_id: int, platform_id: int) -> bool:
@@ -360,7 +363,7 @@ class MessageDB:
             )
             return row is not None
 
-    async def count_nontrivial_authors(self, authors: Iterable[PlatObjKey]) -> int:
+    async def count_nontrivial_authors(self, authors: Iterable[int]) -> int:
         counted_authors = 0
         for author_id, platform_id in authors:
             if await self.is_author_counted(author_id, platform_id):
@@ -479,7 +482,7 @@ class MessageDB:
         """
         async with self.acquire() as conn:
             rows = await conn.fetch(query, term_len, attr.value, start_date, end_date)
-            unique_authors: set[PlatObjKey] = {
+            unique_authors: set[int] = {
                 (r["author_id"], r["platform_id"]) for r in rows
             }
             return await self.count_nontrivial_authors(unique_authors)
@@ -492,7 +495,7 @@ def format_freq_pg(
     platform_id: int,
     day: date | datetime,
     hits: int,
-    authors: set[PlatObjKey],
+    authors: set[int],
 ) -> PGFrequency:
     d = day.date() if isinstance(day, datetime) else day
     return PGFrequency(
