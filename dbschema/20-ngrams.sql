@@ -24,7 +24,9 @@ CREATE TABLE context (
 CREATE TABLE context_author (
     id int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     context_id int NOT NULL REFERENCES context (id) ON DELETE CASCADE,
-    author_id int NOT NULL REFERENCES author (id) ON DELETE CASCADE
+    author_id int NOT NULL REFERENCES author (id) ON DELETE CASCADE,
+
+    CONSTRAINT context_author_unique UNIQUE (context_id, author_id)
 );
 
 CREATE TABLE frequency (
