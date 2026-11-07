@@ -165,3 +165,67 @@ JOIN author_stats ast ON ca.author_id = ast.author_id
 GROUP BY
     t.len,
     c.attr;
+
+/* NOTE: the rest of this is experimental.
+ *
+ */
+
+-- shannon entropy
+CREATE VIEW shannon_entropy AS
+WITH author_terms AS (
+    SELECT
+        ca.author_id,
+        t.len,
+        -- c.attr,
+        f.term_id,
+        sum(f.hits)::double precision AS hits
+    FROM frequency f
+    JOIN context_author ca ON f.context_author_id = ca.id
+    JOIN context c ON ca.context_id = c.id
+    JOIN term t ON f.term_id = t.id
+    WHERE c.attr = 'All'
+    GROUP BY
+        ca.author_id,
+        t.len,
+        -- c.attr,
+        f.term_id
+),
+
+author_entropy AS (
+    SELECT
+        author_id,
+        len,
+        -- attr,
+        count(*) AS terms,
+        sum(hits) AS hits,
+        sum(
+            -(hits / total_hits) * ln(hits / total_hits)
+        ) AS entropy
+    FROM (
+        SELECT
+            *,
+            sum(hits) OVER (
+                PARTITION BY author_id, len -- , attr
+            ) AS total_hits
+        FROM author_terms
+    ) x
+    GROUP BY
+        author_id,
+        len -- ,
+        -- attr
+)
+
+SELECT
+    a.name,
+    x.len,
+    -- x.attr,
+    x.terms,
+    x.hits,
+    exp(x.entropy) AS effective_terms
+FROM author_entropy x
+JOIN author a ON x.author_id = a.id
+ORDER BY
+    x.len,
+    -- x.attr,
+    effective_terms DESC
+LIMIT 1000;
