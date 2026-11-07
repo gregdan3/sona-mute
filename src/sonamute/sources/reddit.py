@@ -170,12 +170,12 @@ def b36decode(b36id: str) -> int:
 
 
 def b36encode(n: int) -> str:
-    if n == 0:
-        return "0"
     result: list[str] = []
-    while n:
+    while True:
         n, remainder = divmod(n, 36)
         result.append(B36DIGITS[remainder])
+        if n == 0:
+            break
     return "".join(reversed(result))
 
 

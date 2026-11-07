@@ -1,19 +1,19 @@
 # STL
 import os
+from uuid import UUID
 from typing import Literal, TypedDict, NotRequired, cast
 from datetime import UTC, datetime
 from collections.abc import Generator
-from uuid import UUID
 
 # PDM
 from typing_extensions import override
 
 # LOCAL
 from sonamute.log import LOG
+from sonamute.utils import fake_uuid, int_to_uuid
 from sonamute.file_io import try_load_json_file
 from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
 from sonamute.sources.generic import NULL_INT_ID, FileFetcher
-from sonamute.utils import fake_uuid, int_to_uuid
 
 # TODO: special handling?
 ONECHAT_BRIDGE_ID = 128026086

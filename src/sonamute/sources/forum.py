@@ -10,6 +10,7 @@ from collections.abc import Generator
 from bs4.element import Tag
 
 # LOCAL
+from sonamute.log import LOG
 from sonamute.utils import T, fake_uuid, int_to_uuid
 from sonamute.file_io import try_load_html_file
 from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
@@ -129,18 +130,22 @@ class ForumFetcher(FileFetcher):
         for root, _, files in os.walk(self.root):
             for filename in files:
                 if not filename.startswith("viewtopic.php"):
+                    LOG.debug("Ignoring forum file {root}/{filename}; wrong name")
                     continue
 
                 data = try_load_html_file(os.path.join(root, filename))
                 if not data:
+                    LOG.debug("Ignoring forum file {root}/{filename}; no data")
                     continue
 
                 # there are, at most, 10 posts per page
                 # the content isn't going anywhere, so this is fine
                 posts = data.select(POST_SELECTOR, limit=10)
                 if not posts:
+                    LOG.debug("Ignoring forum file {root}/{filename}; no posts")
                     continue
 
+                LOG.info(f"Reading forum file {root}/{filename}")
                 yield from posts
 
     @override

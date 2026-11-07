@@ -9,11 +9,11 @@ from collections.abc import Generator
 import frontmatter
 
 # LOCAL
-from sonamute.constants import IGNORED_MESSAGES_MAP
 from sonamute.log import LOG
 from sonamute.utils import fake_uuid, int_to_uuid
 from sonamute.file_io import try_load_html
 from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
+from sonamute.constants import IGNORED_MESSAGES_MAP
 from sonamute.sources.generic import NULL_UUID, NULL_INT_ID, FileFetcher
 
 Original = TypedDict(
