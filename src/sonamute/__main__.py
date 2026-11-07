@@ -12,7 +12,7 @@ import asyncpg
 # LOCAL
 from sonamute.db import MessageDB, format_freq_pg, load_messagedb_from_env
 from sonamute.cli import SOURCES, menu_handler
-from sonamute.log import configure
+from sonamute.log import LOG, configure
 from sonamute.utils import now, batch_iter, gather_batch, months_in_range
 from sonamute.smtypes import (
     ATTRIBUTE_IDS,
@@ -26,7 +26,6 @@ from sonamute.counters import countables, process_msg, get_sentence_stats
 from sonamute.constants import MAX_TERM_LEN, MIN_HITS_NEEDED
 from sonamute.gen_sqlite import generate_sqlite
 from sonamute.sources.generic import NULL_UUID, NULL_INT_ID, PlatformFetcher
-from sonamute.log import LOG
 
 
 async def insert_raw_msg(db: MessageDB, msg: PreMessage) -> None:
@@ -102,14 +101,14 @@ async def db_sents_to_freqs(db: MessageDB, batch_size: int, passing: bool):
 
         for community_id, sents in by_community.items():
             stats = get_sentence_stats(sents, MAX_TERM_LEN)
-            # await db.insert_frequencies(community_id, start, stats)
+            await db.insert_frequencies(community_id, start, stats)
 
-            for words, auth_stats in stats.items():
-                for author_id, attr_stats in auth_stats.items():
-                    for attr, hits in attr_stats.items():
-                        await db.insert_frequency(
-                            words, start, community_id, author_id, attr, hits
-                        )
+            # for words, auth_stats in stats.items():
+            #     for author_id, attr_stats in auth_stats.items():
+            #         for attr, hits in attr_stats.items():
+            #             await db.insert_frequency(
+            #                 words, start, community_id, author_id, attr, hits
+            #             )
 
 
 def source_sents_to_freqs(source: PlatformFetcher) -> list[PGFrequency]:

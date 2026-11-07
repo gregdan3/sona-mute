@@ -11,8 +11,8 @@ SELECT
     COUNT(mst.sentence_id) AS sentences_tp,
     COUNT(DISTINCT mst.sentence_id) AS sentences_uniq_tp,
     SUM(st.len) AS words_tp,
-    ROUND(COUNT(mst.sentence_id)::numeric / GREATEST(COUNT(ms.sentence_id), 1) * 100, 2) AS pct_sentences_tp,
-    ROUND(SUM(st.len)::numeric / NULLIF(SUM(s.len), 0) * 100, 2) AS pct_words_tp
+    ROUND(GREATEST(COUNT(mst.sentence_id)::numeric, 0) / GREATEST(COUNT(ms.sentence_id), 1) * 100, 1) AS pct_sentences_tp,
+    ROUND(GREATEST(SUM(st.len)::numeric, 0) / GREATEST(SUM(s.len), 0) * 100, 1) AS pct_words_tp
 FROM author a
 JOIN message m ON a.id = m.author_id AND m.is_counted = true
 LEFT JOIN message_sentence ms 
@@ -37,8 +37,8 @@ SELECT
     COUNT(mst.sentence_id) AS sentences_tp,
     COUNT(DISTINCT mst.sentence_id) AS sentences_uniq_tp,
     SUM(st.len) AS words_tp,
-    ROUND(COUNT(mst.sentence_id)::numeric / GREATEST(COUNT(ms.sentence_id), 1) * 100, 2) AS pct_sentences_tp,
-    ROUND(SUM(st.len)::numeric / NULLIF(SUM(s.len), 0) * 100, 2) AS pct_words_tp
+    ROUND(GREATEST(COUNT(mst.sentence_id)::numeric, 0) / GREATEST(COUNT(ms.sentence_id), 1) * 100, 1) AS pct_sentences_tp,
+    ROUND(GREATEST(SUM(st.len)::numeric, 0) / GREATEST(SUM(s.len), 0) * 100, 1) AS pct_words_tp
 FROM community c
 JOIN message m ON c.id = m.community_id AND m.is_counted = true
 LEFT JOIN message_sentence ms ON m.id = ms.message_id
@@ -61,8 +61,8 @@ SELECT
     COUNT(mst.sentence_id) AS sentences_tp,
     COUNT(DISTINCT mst.sentence_id) AS sentences_uniq_tp,
     SUM(st.len) AS words_tp,
-    ROUND(COUNT(mst.sentence_id)::numeric / GREATEST(COUNT(ms.sentence_id), 1) * 100, 2) AS pct_sentences_tp,
-    ROUND(SUM(st.len)::numeric / NULLIF(SUM(s.len), 0) * 100, 2) AS pct_words_tp
+    ROUND(GREATEST(COUNT(mst.sentence_id)::numeric, 0) / GREATEST(COUNT(ms.sentence_id), 1) * 100, 1) AS pct_sentences_tp,
+    ROUND(GREATEST(SUM(st.len)::numeric, 0) / GREATEST(SUM(s.len), 0) * 100, 1) AS pct_words_tp
 FROM message m
 LEFT JOIN message_sentence ms 
        ON m.id = ms.message_id
@@ -87,8 +87,8 @@ SELECT
     COUNT(mst.sentence_id) AS sentences_tp,
     COUNT(DISTINCT mst.sentence_id) AS sentences_uniq_tp,
     SUM(st.len) AS words_tp,
-    ROUND(COUNT(mst.sentence_id)::numeric / GREATEST(COUNT(ms.sentence_id), 1) * 100, 2) AS pct_sentences_tp,
-    ROUND(SUM(st.len)::numeric / NULLIF(SUM(s.len), 0) * 100, 2) AS pct_words_tp
+    ROUND(GREATEST(COUNT(mst.sentence_id)::numeric, 0) / GREATEST(COUNT(ms.sentence_id), 1) * 100, 1) AS pct_sentences_tp,
+    ROUND(GREATEST(SUM(st.len)::numeric, 0) / GREATEST(SUM(s.len), 0) * 100, 1) AS pct_words_tp
 FROM message m
 LEFT JOIN community c ON m.community_id = c.id
 LEFT JOIN message_sentence ms 
@@ -112,8 +112,8 @@ SELECT
     COUNT(mst.sentence_id) AS sentences_tp,
     COUNT(DISTINCT mst.sentence_id) AS sentences_uniq_tp,
     SUM(st.len) AS words_tp,
-    ROUND(COUNT(mst.sentence_id)::numeric / GREATEST(COUNT(ms.sentence_id), 1) * 100, 2) AS pct_sentences_tp,
-    ROUND(SUM(st.len)::numeric / NULLIF(SUM(s.len), 0) * 100, 2) AS pct_words_tp
+    ROUND(GREATEST(COUNT(mst.sentence_id)::numeric, 0) / GREATEST(COUNT(ms.sentence_id), 1) * 100, 1) AS pct_sentences_tp,
+    ROUND(GREATEST(SUM(st.len)::numeric, 0) / GREATEST(SUM(s.len), 0) * 100, 1) AS pct_words_tp
 FROM message m
 LEFT JOIN message_sentence ms 
        ON m.id = ms.message_id
@@ -139,8 +139,8 @@ SELECT
     COUNT(mst.sentence_id) AS sentences_tp,
     COUNT(DISTINCT mst.sentence_id) AS sentences_uniq_tp,
     SUM(st.len) AS words_tp,
-    ROUND(COUNT(mst.sentence_id)::numeric / GREATEST(COUNT(ms.sentence_id), 1) * 100, 2) AS pct_sentences_tp,
-    ROUND(SUM(st.len)::numeric / NULLIF(SUM(s.len), 0) * 100, 2) AS pct_words_tp
+    ROUND(GREATEST(COUNT(mst.sentence_id)::numeric, 0) / GREATEST(COUNT(ms.sentence_id), 1) * 100, 1) AS pct_sentences_tp,
+    ROUND(GREATEST(SUM(st.len)::numeric, 0) / GREATEST(SUM(s.len), 0) * 100, 1) AS pct_words_tp
 FROM message m
 LEFT JOIN community c ON m.community_id = c.id
 LEFT JOIN message_sentence ms 

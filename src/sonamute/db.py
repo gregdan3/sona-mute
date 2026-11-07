@@ -1,7 +1,9 @@
 # STL
+import io
+import json
 import asyncio
-from typing import cast
 from uuid import UUID
+from typing import cast
 from datetime import date, datetime
 from contextlib import asynccontextmanager
 from collections.abc import Iterable, AsyncGenerator
@@ -10,23 +12,85 @@ from collections.abc import Iterable, AsyncGenerator
 import asyncpg
 from async_lru import alru_cache
 
-from sonamute.smtypes import StatsCounter
-
 # LOCAL
 from sonamute.log import LOG
 from sonamute.utils import load_envvar
 from sonamute.smtypes import (
     ATTRIBUTE_IDS,
+    Term,
     Stats,
     Message,
     Attribute,
-    Term,
     PreMessage,
     PGFrequency,
     CommSentence,
     SQLFrequency,
+    StatsCounter,
 )
 from sonamute.constants import MIN_HITS_NEEDED, MIN_SENTS_NEEDED
+
+INSERT_FREQUENCIES_SQL = """
+WITH input AS MATERIALIZED (
+    SELECT
+        $2::int AS community_id,
+        $3::date AS day,
+        x.words,
+        x.author_id,
+        x.attr::attribute AS attr,
+        x.hits
+    FROM jsonb_to_recordset($1::jsonb) AS x (
+        words text[],
+        author_id int,
+        attr text,
+        hits int
+    )
+),
+terms AS (
+    INSERT INTO term (words)
+    SELECT DISTINCT words
+    FROM input
+    ON CONFLICT (words)
+    DO UPDATE SET words = EXCLUDED.words
+    RETURNING id, words
+),
+contexts AS (
+    INSERT INTO context (community_id, day, attr)
+    SELECT DISTINCT community_id, day, attr
+    FROM input
+    ON CONFLICT (community_id, day, attr)
+    DO UPDATE SET community_id = EXCLUDED.community_id
+    RETURNING id, community_id, day, attr
+),
+context_authors AS (
+    INSERT INTO context_author (context_id, author_id)
+    SELECT DISTINCT c.id, i.author_id
+    FROM input i
+    JOIN contexts c
+        ON c.community_id = i.community_id
+        AND c.day = i.day
+        AND c.attr = i.attr
+    ON CONFLICT (context_id, author_id)
+    DO UPDATE SET context_id = EXCLUDED.context_id
+    RETURNING id, context_id, author_id
+)
+INSERT INTO frequency (context_author_id, term_id, hits)
+SELECT
+    ca.id,
+    t.id,
+    SUM(i.hits)::int
+FROM input i
+JOIN terms t ON t.words = i.words
+JOIN contexts c
+    ON c.community_id = i.community_id
+    AND c.day = i.day
+    AND c.attr = i.attr
+JOIN context_authors ca
+    ON ca.context_id = c.id
+    AND ca.author_id = i.author_id
+GROUP BY ca.id, t.id
+ON CONFLICT (context_author_id, term_id)
+DO UPDATE SET hits = frequency.hits + EXCLUDED.hits;
+"""
 
 
 class MessageDB:
@@ -260,7 +324,7 @@ class MessageDB:
             JOIN message m ON m.id = v.message_id
             JOIN sentence s ON s.id = v.sentence_id
             WHERE m.postdate >= $1 AND m.postdate < $2
-            ORDER BY m.community_id, m.author_id
+            ORDER BY m.community_id
         """
         async with self.acquire() as conn:
             rows = await conn.fetch(query, start, end)
@@ -324,8 +388,42 @@ class MessageDB:
         community_id: int,
         day: datetime,
         stats: StatsCounter,
-    ):
-        pass
+    ) -> None:
+        if not stats:
+            return
+
+        records = io.StringIO()
+        records.write("[")
+
+        first = True
+        for term, auth_stats in stats.items():
+            for author_id, attr_stats in auth_stats.items():
+                for attr, hits in attr_stats.items():
+                    if not first:
+                        records.write(",")
+
+                    records.write(
+                        json.dumps(
+                            {
+                                "words": term,
+                                "author_id": author_id,
+                                "attr": attr.value,
+                                "hits": hits,
+                            }
+                        )
+                    )
+
+                    first = False
+
+        records.write("]")
+
+        async with self.acquire() as conn:
+            await conn.execute(
+                INSERT_FREQUENCIES_SQL,
+                records.getvalue(),
+                community_id,
+                day.date(),
+            )
 
     async def insert_frequency(
         self,
