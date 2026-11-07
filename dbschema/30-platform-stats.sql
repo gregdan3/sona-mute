@@ -2,17 +2,17 @@ CREATE MATERIALIZED VIEW author_stats AS
 SELECT 
     a.id AS author_id,
     a.name AS author_name,
-    COUNT(DISTINCT m.community_id) AS communities,
-    COUNT(DISTINCT m.author_id) AS authors,
-    COUNT(DISTINCT m.id) AS messages,
-    COUNT(ms.sentence_id) AS sentences,
-    SUM(s.len) AS words,
-    COUNT(DISTINCT ms.sentence_id) AS sentences_uniq,
-    COUNT(mst.sentence_id) AS sentences_tp,
-    COUNT(DISTINCT mst.sentence_id) AS sentences_uniq_tp,
+    GREATEST(COUNT(DISTINCT m.community_id), 0) AS communities,
+    GREATEST(COUNT(DISTINCT m.author_id), 0) AS authors,
+    GREATEST(COUNT(DISTINCT m.id), 0) AS messages,
+    GREATEST(COUNT(ms.sentence_id), 0) AS sentences,
+    GREATEST(SUM(s.len), 0) AS words,
+    GREATEST(COUNT(DISTINCT ms.sentence_id), 0) AS sentences_uniq,
+    GREATEST(COUNT(mst.sentence_id), 0) AS sentences_tp,
+    GREATEST(COUNT(DISTINCT mst.sentence_id), 0) AS sentences_uniq_tp,
     SUM(st.len) AS words_tp,
     ROUND(GREATEST(COUNT(mst.sentence_id)::numeric, 0) / GREATEST(COUNT(ms.sentence_id), 1) * 100, 1) AS pct_sentences_tp,
-    ROUND(GREATEST(SUM(st.len)::numeric, 0) / GREATEST(SUM(s.len), 0) * 100, 1) AS pct_words_tp
+    ROUND(GREATEST(SUM(st.len)::numeric, 0) / GREATEST(SUM(s.len), 1) * 100, 1) AS pct_words_tp
 FROM author a
 JOIN message m ON a.id = m.author_id AND m.is_counted = true
 LEFT JOIN message_sentence ms 
@@ -28,17 +28,17 @@ CREATE MATERIALIZED VIEW community_stats AS
 SELECT 
     c.id AS community_id,
     c.name AS community_name,
-    COUNT(DISTINCT m.community_id) AS communities,
-    COUNT(DISTINCT m.author_id) AS authors,
-    COUNT(DISTINCT m.id) AS messages,
-    COUNT(ms.sentence_id) AS sentences,
-    SUM(s.len) AS words,
-    COUNT(DISTINCT ms.sentence_id) AS sentences_uniq,
-    COUNT(mst.sentence_id) AS sentences_tp,
-    COUNT(DISTINCT mst.sentence_id) AS sentences_uniq_tp,
+    GREATEST(COUNT(DISTINCT m.community_id), 0) AS communities,
+    GREATEST(COUNT(DISTINCT m.author_id), 0) AS authors,
+    GREATEST(COUNT(DISTINCT m.id), 0) AS messages,
+    GREATEST(COUNT(ms.sentence_id), 0) AS sentences,
+    GREATEST(SUM(s.len), 0) AS words,
+    GREATEST(COUNT(DISTINCT ms.sentence_id), 0) AS sentences_uniq,
+    GREATEST(COUNT(mst.sentence_id), 0) AS sentences_tp,
+    GREATEST(COUNT(DISTINCT mst.sentence_id), 0) AS sentences_uniq_tp,
     SUM(st.len) AS words_tp,
     ROUND(GREATEST(COUNT(mst.sentence_id)::numeric, 0) / GREATEST(COUNT(ms.sentence_id), 1) * 100, 1) AS pct_sentences_tp,
-    ROUND(GREATEST(SUM(st.len)::numeric, 0) / GREATEST(SUM(s.len), 0) * 100, 1) AS pct_words_tp
+    ROUND(GREATEST(SUM(st.len)::numeric, 0) / GREATEST(SUM(s.len), 1) * 100, 1) AS pct_words_tp
 FROM community c
 JOIN message m ON c.id = m.community_id AND m.is_counted = true
 LEFT JOIN message_sentence ms ON m.id = ms.message_id
@@ -52,17 +52,17 @@ GROUP BY c.id, c.name;
 CREATE MATERIALIZED VIEW monthly_stats AS
 SELECT 
     DATE_TRUNC('MONTH', m.postdate) AS date,
-    COUNT(DISTINCT m.community_id) AS communities,
-    COUNT(DISTINCT m.author_id) AS authors,
-    COUNT(DISTINCT m.id) AS messages,
-    COUNT(ms.sentence_id) AS sentences,
-    SUM(s.len) AS words,
-    COUNT(DISTINCT ms.sentence_id) AS sentences_uniq,
-    COUNT(mst.sentence_id) AS sentences_tp,
-    COUNT(DISTINCT mst.sentence_id) AS sentences_uniq_tp,
+    GREATEST(COUNT(DISTINCT m.community_id), 0) AS communities,
+    GREATEST(COUNT(DISTINCT m.author_id), 0) AS authors,
+    GREATEST(COUNT(DISTINCT m.id), 0) AS messages,
+    GREATEST(COUNT(ms.sentence_id), 0) AS sentences,
+    GREATEST(SUM(s.len), 0) AS words,
+    GREATEST(COUNT(DISTINCT ms.sentence_id), 0) AS sentences_uniq,
+    GREATEST(COUNT(mst.sentence_id), 0) AS sentences_tp,
+    GREATEST(COUNT(DISTINCT mst.sentence_id), 0) AS sentences_uniq_tp,
     SUM(st.len) AS words_tp,
     ROUND(GREATEST(COUNT(mst.sentence_id)::numeric, 0) / GREATEST(COUNT(ms.sentence_id), 1) * 100, 1) AS pct_sentences_tp,
-    ROUND(GREATEST(SUM(st.len)::numeric, 0) / GREATEST(SUM(s.len), 0) * 100, 1) AS pct_words_tp
+    ROUND(GREATEST(SUM(st.len)::numeric, 0) / GREATEST(SUM(s.len), 1) * 100, 1) AS pct_words_tp
 FROM message m
 LEFT JOIN message_sentence ms 
        ON m.id = ms.message_id
@@ -78,17 +78,17 @@ SELECT
     DATE_TRUNC('MONTH', m.postdate) AS date,
     c.id AS community_id,
     c.name AS community_name,
-    COUNT(DISTINCT m.community_id) AS communities,
-    COUNT(DISTINCT m.author_id) AS authors,
-    COUNT(DISTINCT m.id) AS messages,
-    COUNT(ms.sentence_id) AS sentences,
-    SUM(s.len) AS words,
-    COUNT(DISTINCT ms.sentence_id) AS sentences_uniq,
-    COUNT(mst.sentence_id) AS sentences_tp,
-    COUNT(DISTINCT mst.sentence_id) AS sentences_uniq_tp,
+    GREATEST(COUNT(DISTINCT m.community_id), 0) AS communities,
+    GREATEST(COUNT(DISTINCT m.author_id), 0) AS authors,
+    GREATEST(COUNT(DISTINCT m.id), 0) AS messages,
+    GREATEST(COUNT(ms.sentence_id), 0) AS sentences,
+    GREATEST(SUM(s.len), 0) AS words,
+    GREATEST(COUNT(DISTINCT ms.sentence_id), 0) AS sentences_uniq,
+    GREATEST(COUNT(mst.sentence_id), 0) AS sentences_tp,
+    GREATEST(COUNT(DISTINCT mst.sentence_id), 0) AS sentences_uniq_tp,
     SUM(st.len) AS words_tp,
     ROUND(GREATEST(COUNT(mst.sentence_id)::numeric, 0) / GREATEST(COUNT(ms.sentence_id), 1) * 100, 1) AS pct_sentences_tp,
-    ROUND(GREATEST(SUM(st.len)::numeric, 0) / GREATEST(SUM(s.len), 0) * 100, 1) AS pct_words_tp
+    ROUND(GREATEST(SUM(st.len)::numeric, 0) / GREATEST(SUM(s.len), 1) * 100, 1) AS pct_words_tp
 FROM message m
 LEFT JOIN community c ON m.community_id = c.id
 LEFT JOIN message_sentence ms 
@@ -103,17 +103,17 @@ GROUP BY DATE_TRUNC('MONTH', m.postdate), c.id, c.name;
 CREATE MATERIALIZED VIEW yearly_stats AS
 SELECT 
     (DATE_TRUNC('year', m.postdate - INTERVAL '7 months') + INTERVAL '7 months') AS date,
-    COUNT(DISTINCT m.community_id) AS communities,
-    COUNT(DISTINCT m.author_id) AS authors,
-    COUNT(DISTINCT m.id) AS messages,
-    COUNT(ms.sentence_id) AS sentences,
-    SUM(s.len) AS words,
-    COUNT(DISTINCT ms.sentence_id) AS sentences_uniq,
-    COUNT(mst.sentence_id) AS sentences_tp,
-    COUNT(DISTINCT mst.sentence_id) AS sentences_uniq_tp,
+    GREATEST(COUNT(DISTINCT m.community_id), 0) AS communities,
+    GREATEST(COUNT(DISTINCT m.author_id), 0) AS authors,
+    GREATEST(COUNT(DISTINCT m.id), 0) AS messages,
+    GREATEST(COUNT(ms.sentence_id), 0) AS sentences,
+    GREATEST(SUM(s.len), 0) AS words,
+    GREATEST(COUNT(DISTINCT ms.sentence_id), 0) AS sentences_uniq,
+    GREATEST(COUNT(mst.sentence_id), 0) AS sentences_tp,
+    GREATEST(COUNT(DISTINCT mst.sentence_id), 0) AS sentences_uniq_tp,
     SUM(st.len) AS words_tp,
     ROUND(GREATEST(COUNT(mst.sentence_id)::numeric, 0) / GREATEST(COUNT(ms.sentence_id), 1) * 100, 1) AS pct_sentences_tp,
-    ROUND(GREATEST(SUM(st.len)::numeric, 0) / GREATEST(SUM(s.len), 0) * 100, 1) AS pct_words_tp
+    ROUND(GREATEST(SUM(st.len)::numeric, 0) / GREATEST(SUM(s.len), 1) * 100, 1) AS pct_words_tp
 FROM message m
 LEFT JOIN message_sentence ms 
        ON m.id = ms.message_id
@@ -130,17 +130,17 @@ SELECT
     (DATE_TRUNC('year', m.postdate - INTERVAL '7 months') + INTERVAL '7 months') AS date,
     c.id AS community_id,
     c.name AS community_name,
-    COUNT(DISTINCT m.community_id) AS communities,
-    COUNT(DISTINCT m.author_id) AS authors,
-    COUNT(DISTINCT m.id) AS messages,
-    COUNT(ms.sentence_id) AS sentences,
-    SUM(s.len) AS words,
-    COUNT(DISTINCT ms.sentence_id) AS sentences_uniq,
-    COUNT(mst.sentence_id) AS sentences_tp,
-    COUNT(DISTINCT mst.sentence_id) AS sentences_uniq_tp,
+    GREATEST(COUNT(DISTINCT m.community_id), 0) AS communities,
+    GREATEST(COUNT(DISTINCT m.author_id), 0) AS authors,
+    GREATEST(COUNT(DISTINCT m.id), 0) AS messages,
+    GREATEST(COUNT(ms.sentence_id), 0) AS sentences,
+    GREATEST(SUM(s.len), 0) AS words,
+    GREATEST(COUNT(DISTINCT ms.sentence_id), 0) AS sentences_uniq,
+    GREATEST(COUNT(mst.sentence_id), 0) AS sentences_tp,
+    GREATEST(COUNT(DISTINCT mst.sentence_id), 0) AS sentences_uniq_tp,
     SUM(st.len) AS words_tp,
     ROUND(GREATEST(COUNT(mst.sentence_id)::numeric, 0) / GREATEST(COUNT(ms.sentence_id), 1) * 100, 1) AS pct_sentences_tp,
-    ROUND(GREATEST(SUM(st.len)::numeric, 0) / GREATEST(SUM(s.len), 0) * 100, 1) AS pct_words_tp
+    ROUND(GREATEST(SUM(st.len)::numeric, 0) / GREATEST(SUM(s.len), 1) * 100, 1) AS pct_words_tp
 FROM message m
 LEFT JOIN community c ON m.community_id = c.id
 LEFT JOIN message_sentence ms 
