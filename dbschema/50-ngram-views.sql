@@ -1,5 +1,6 @@
 CREATE VIEW monthly AS
 SELECT
+    x.term_id,
     t.words AS term,
     t.len,
     x.attr,
@@ -55,6 +56,7 @@ GROUP BY
 
 CREATE VIEW yearly AS
 SELECT
+    x.term_id,
     t.words AS term,
     t.len,
     x.attr,
@@ -118,6 +120,7 @@ GROUP BY
 
 CREATE VIEW alltime AS
 SELECT
+    x.term_id,
     t.words AS term,
     t.len,
     x.attr,
@@ -167,7 +170,6 @@ GROUP BY
     c.attr;
 
 /* NOTE: the rest of this is experimental.
- *
  */
 
 -- shannon entropy
