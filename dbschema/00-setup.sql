@@ -1,1 +1,2 @@
 ALTER DATABASE sonamute SET work_mem = '128MB';
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
