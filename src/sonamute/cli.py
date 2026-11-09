@@ -38,21 +38,12 @@ class SourceAction(TypedDict):
     output: str | None
 
 
-class SqliteAction(TypedDict):
-    filename: str
-    filename_trimmed: str
-    min_date: datetime
-    max_date: datetime
-    root: str
-
-
 class Actions(TypedDict):
     sources: list[SourceAction]
     frequency: bool
-    sqlite: SqliteAction | None
 
 
-ACTIONS: Actions = {"sources": [], "frequency": False, "sqlite": None}
+ACTIONS: Actions = {"sources": [], "frequency": False}
 
 
 def today_str():
@@ -163,29 +154,6 @@ def setup_frequency():
     CONSOLE.print("Will regenerate frequency data on next run")
 
 
-def setup_sqlite():
-    filename = get_filename("Base name for SQLite DB?", default=f"{today_str()}")
-    location = get_directory("Save to where?", default=".")
-    min_date = get_date("Minimum date? YYYY-MM", format="%Y-%m", default="2001-08")
-    max_date = get_date("Maximum date? YYYY-MM", format="%Y-%m", default="2025-08")
-
-    full_filename = filename + "-full.sqlite"
-    trimmed_filename = filename + "-trimmed.sqlite"
-
-    ACTIONS["sqlite"] = SqliteAction(
-        {
-            "filename": full_filename,
-            "filename_trimmed": trimmed_filename,
-            "min_date": min_date,
-            "max_date": max_date,
-            "root": location,
-        }
-    )
-    CONSOLE.print(
-        f"Will generate SQLite db at {location}/{full_filename} and {location}/{trimmed_filename} with data from {min_date} to {max_date}"
-    )
-
-
 def display_choices():
     if sources := ACTIONS["sources"]:
         for source in sources:
@@ -199,10 +167,6 @@ def display_choices():
     if ACTIONS["frequency"]:
         CONSOLE.print("Regenerating frequency data from database")
 
-    if sqlite := ACTIONS["sqlite"]:
-        path = os.path.join(sqlite["root"], sqlite["filename"])
-        CONSOLE.print(f"Building SQLite database {path}")
-
 
 def main_menu():
     display_choices()
@@ -210,7 +174,6 @@ def main_menu():
     options = [
         "Fetch new data",
         "Calculate Frequencies",
-        "Output to SQLite",
         "Start executing actions",
         "Cancel",
     ]
@@ -227,21 +190,16 @@ def main_menu():
     elif choice == 2:
         setup_frequency()
     elif choice == 3:
-        setup_sqlite()
-    elif choice == 4:
         return True
-    elif choice == 5:
+    elif choice == 4:
         CONSOLE.print("Shutting down!")
         sys.exit()
     return False
 
 
 def menu_handler():
-    while True:
-        if main_menu():
-            break
-        if not Confirm.ask("\nDo you want to perform another action?"):
-            break
+    while not main_menu():
+        pass
     return ACTIONS
 
 
