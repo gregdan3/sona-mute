@@ -29,7 +29,7 @@ from sonamute.smtypes import (
 )
 from sonamute.constants import MIN_HITS_NEEDED, MIN_SENTS_NEEDED
 
-INSERT_FREQUENCIES_SQL = """
+BULK_FREQ_IMPORT = """
 WITH input AS MATERIALIZED (
     SELECT
         $2::int AS community_id,
@@ -419,7 +419,7 @@ class MessageDB:
 
         async with self.acquire() as conn:
             await conn.execute(
-                INSERT_FREQUENCIES_SQL,
+                BULK_FREQ_IMPORT,
                 records.getvalue(),
                 community_id,
                 day.date(),
