@@ -292,13 +292,14 @@ class MessageDB:
     async def refresh_materialized_views(self) -> None:
         views: tuple[str, ...] = (
             "message_sentence_tp",
-            "message_sentence_nontp",
+            # "message_sentence_nontp",
             "author_stats",
             "community_stats",
             "monthly_stats",
             "monthly_community_stats",
             "yearly_stats",
             "yearly_community_stats",
+            "term_sqlite_map",
         )
         async with self.acquire() as conn:
             for v in views:

@@ -14,7 +14,7 @@ WHERE
 CREATE UNIQUE INDEX message_sentence_tp_pkey ON message_sentence_tp (message_id, idx);
 CREATE INDEX message_sentence_tp_sentence_id_idx ON message_sentence_tp (sentence_id);
 
-CREATE MATERIALIZED VIEW message_sentence_nontp AS
+CREATE VIEW message_sentence_nontp AS
 SELECT
     ms.message_id,
     ms.sentence_id,
