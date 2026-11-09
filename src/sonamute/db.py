@@ -239,14 +239,18 @@ class MessageDB:
             message["is_counted"],
         )
         message_id = cast(int, row["id"])
-
         sent_insert = """
-        INSERT INTO sentence (words)
-        VALUES ($1)
-        ON CONFLICT (words) DO NOTHING
-        RETURNING id
+            INSERT INTO sentence (words, words_hash)
+            VALUES ($1::text[], digest(($1::text[])::text, 'sha256'))
+            ON CONFLICT (words_hash) DO NOTHING
+            RETURNING id
         """
-        sent_select = "SELECT id FROM sentence WHERE words = $1"
+        sent_select = """
+            SELECT id
+            FROM sentence
+            WHERE words_hash = digest(($1::text[])::text, 'sha256')
+            AND words = $1::text[]
+        """
         sentence_ids: dict[tuple[str, ...], int] = {}
         for words in sorted({s["words"] for s in message["sentences"]}):
             sent_row = await self._fetchrow(sent_insert, words)

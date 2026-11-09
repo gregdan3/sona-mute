@@ -50,7 +50,8 @@ WHERE is_counted = true;
 CREATE TABLE sentence (
     -- tracks a unique sequence of words as spoken by a user
     id int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    words text[] NOT NULL UNIQUE,
+    words text[] NOT NULL,
+    words_hash bytea NOT NULL UNIQUE,
     len smallint GENERATED ALWAYS AS (cardinality(words)) STORED
 );
 CREATE INDEX sentence_len_idx ON sentence (len);
