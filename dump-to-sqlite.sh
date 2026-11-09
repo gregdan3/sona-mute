@@ -96,44 +96,12 @@ psql \
   --user "$PGUSER" \
   --dbname "$PGDATABASE" <<'SQL'
 
--- maps arbitrary term id of source to new term id ordered for table scan. 
--- seems weird, but my deployment (sqlite over http vfs) demands weird things
--- for performance. shouldn't matter if a covering index is used though
-CREATE TEMP TABLE term_export_map AS
-SELECT
-    id AS old_id,
-    row_number() OVER (
-        ORDER BY len ASC, hits DESC, id
-    ) AS new_id
-FROM (
-    SELECT
-        t.id,
-        t.len,
-        SUM(f.hits) AS hits
-    FROM term t
-    JOIN alltime f ON f.term_id = t.id
-    WHERE
-        f.hits >= 40
-        AND f.attr = 'All'
-    GROUP BY t.id, t.len
-) x;
-CREATE UNIQUE INDEX term_export_map_old_id_idx ON term_export_map (old_id);
-ANALYZE term_export_map;
-
--- dumping terms view
-\copy (SELECT m.new_id AS id, t.len, array_to_string(t.words, ' ') AS text FROM term t JOIN term_export_map m ON m.old_id = t.id ORDER BY m.new_id) TO PROGRAM 'sqlite3 "$SQLITE_DB" ".bail on" ".mode csv" "PRAGMA foreign_keys=ON;" ".import --skip 1 /dev/stdin term"' WITH (FORMAT CSV, HEADER);
-
--- monthly data
-\copy (SELECT m.new_id AS term_id, array_position(enum_range(NULL::attribute), x.attr) - 1 AS attr, EXTRACT(EPOCH FROM (x.day AT TIME ZONE 'UTC'))::bigint AS day, x.hits, x.authors_nt AS authors FROM monthly x JOIN term_export_map m ON m.old_id = x.term_id) TO PROGRAM 'sqlite3 "$SQLITE_DB" ".bail on" ".mode csv" "PRAGMA foreign_keys=ON;" ".import --skip 1 /dev/stdin monthly"' WITH (FORMAT CSV, HEADER);
-
--- yearly and alltime special rows
-\copy (SELECT m.new_id AS term_id, array_position(enum_range(NULL::attribute), x.attr) - 1 AS attr, EXTRACT(EPOCH FROM (x.day AT TIME ZONE 'UTC'))::bigint AS day, x.hits, x.authors_nt AS authors FROM yearly x JOIN term_export_map m ON m.old_id = x.term_id UNION ALL SELECT m.new_id AS term_id, array_position(enum_range(NULL::attribute), x.attr) - 1 AS attr, 0 AS day, x.hits, x.authors_nt AS authors FROM alltime x JOIN term_export_map m ON m.old_id = x.term_id) TO PROGRAM 'sqlite3 "$SQLITE_DB" ".bail on" ".mode csv" "PRAGMA foreign_keys=ON;" ".import --skip 1 /dev/stdin yearly"' WITH (FORMAT CSV, HEADER);
-
--- monthly totals
-\copy (SELECT x.len AS term_len, array_position(enum_range(NULL::attribute), x.attr) - 1 AS attr, EXTRACT(EPOCH FROM (x.day AT TIME ZONE 'UTC'))::bigint AS day, x.hits, x.authors_nt AS authors FROM total_monthly x) TO PROGRAM 'sqlite3 "$SQLITE_DB" ".bail on" ".mode csv" ".import --skip 1 /dev/stdin total_monthly"' WITH (FORMAT CSV, HEADER);
-
--- yearly totals and alltime totals special rows
-\copy (SELECT x.len AS term_len, array_position(enum_range(NULL::attribute), x.attr) - 1 AS attr, EXTRACT(EPOCH FROM (x.day AT TIME ZONE 'UTC'))::bigint AS day, x.hits, x.authors_nt AS authors FROM total_yearly x UNION ALL SELECT x.len AS term_len, array_position(enum_range(NULL::attribute), x.attr) - 1 AS attr, 0 AS day, x.hits, x.authors_nt AS authors FROM total_alltime x) TO PROGRAM 'sqlite3 "$SQLITE_DB" ".bail on" ".mode csv" ".import --skip 1 /dev/stdin total_yearly"' WITH (FORMAT CSV, HEADER);
+-- 
+\copy (SELECT * FROM term_sqlite ORDER BY id) TO PROGRAM 'sqlite3 "$SQLITE_DB" ".bail on" ".mode csv" "PRAGMA foreign_keys=ON;" ".import --skip 1 /dev/stdin term"' WITH (FORMAT CSV, HEADER);
+\copy (SELECT * FROM monthly_sqlite) TO PROGRAM 'sqlite3 "$SQLITE_DB" ".bail on" ".mode csv" "PRAGMA foreign_keys=ON;" ".import --skip 1 /dev/stdin monthly"' WITH (FORMAT CSV, HEADER);
+\copy (SELECT * FROM yearly_sqlite) TO PROGRAM 'sqlite3 "$SQLITE_DB" ".bail on" ".mode csv" "PRAGMA foreign_keys=ON;" ".import --skip 1 /dev/stdin yearly"' WITH (FORMAT CSV, HEADER);
+\copy (SELECT * FROM total_monthly_sqlite) TO PROGRAM 'sqlite3 "$SQLITE_DB" ".bail on" ".mode csv" ".import --skip 1 /dev/stdin total_monthly"' WITH (FORMAT CSV, HEADER);
+\copy (SELECT * FROM total_yearly_sqlite) TO PROGRAM 'sqlite3 "$SQLITE_DB" ".bail on" ".mode csv" ".import --skip 1 /dev/stdin total_yearly"' WITH (FORMAT CSV, HEADER);
 
 SQL
 
