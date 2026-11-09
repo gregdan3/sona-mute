@@ -26,18 +26,20 @@ CREATE TABLE yearly (
             PRIMARY KEY (term_id, attr, day),
             FOREIGN KEY (term_id) REFERENCES term(id)
         ) WITHOUT ROWID;
+
 CREATE TABLE total_monthly (
-            day INTEGER NOT NULL,
-            attr INTEGER NOT NULL,
             term_len INTEGER NOT NULL,
+            attr INTEGER NOT NULL,
+            day INTEGER NOT NULL,
             hits INTEGER NOT NULL,
             authors INTEGER NOT NULL,
             PRIMARY KEY (day, term_len, attr)
         ) WITHOUT ROWID;
+
 CREATE TABLE total_yearly (
-            day INTEGER NOT NULL,
-            attr INTEGER NOT NULL,
             term_len INTEGER NOT NULL,
+            attr INTEGER NOT NULL,
+            day INTEGER NOT NULL,
             hits INTEGER NOT NULL,
             authors INTEGER NOT NULL,
             PRIMARY KEY (day, term_len, attr)
