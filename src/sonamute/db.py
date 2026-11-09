@@ -6,7 +6,7 @@ from uuid import UUID
 from typing import cast
 from datetime import date, datetime
 from contextlib import asynccontextmanager
-from collections.abc import Iterable, AsyncGenerator
+from collections.abc import AsyncGenerator
 
 # PDM
 import asyncpg
@@ -16,18 +16,14 @@ from async_lru import alru_cache
 from sonamute.log import LOG
 from sonamute.utils import load_envvar
 from sonamute.smtypes import (
-    ATTRIBUTE_IDS,
     Term,
-    Stats,
     Message,
     Attribute,
     PreMessage,
     PGFrequency,
     CommSentence,
-    SQLFrequency,
     StatsCounter,
 )
-from sonamute.constants import MIN_HITS_NEEDED, MIN_SENTS_NEEDED
 
 BULK_FREQ_IMPORT = """
 WITH input AS MATERIALIZED (
@@ -447,144 +443,6 @@ class MessageDB:
         async with self.acquire() as conn:
             await conn.execute(query, context_author_id, term_id, hits)
 
-    @alru_cache(maxsize=16384)
-    async def is_author_counted(self, author_id: int, platform_id: int) -> bool:
-        async with self.acquire() as conn:
-            row = await conn.fetchrow(
-                """
-                SELECT 1 FROM author
-                WHERE id = $1 AND platform_id = $2 AND num_tp_sentences >= $3;
-                """,
-                author_id,
-                platform_id,
-                MIN_SENTS_NEEDED,
-            )
-            return row is not None
-
-    async def count_nontrivial_authors(self, authors: Iterable[int]) -> int:
-        counted_authors = 0
-        for author_id, platform_id in authors:
-            if await self.is_author_counted(author_id, platform_id):
-                counted_authors += 1
-        return counted_authors
-
-    async def select_freqs_in_range(
-        self,
-        term_len: int,
-        attr: Attribute,
-        start: datetime,
-        end: datetime,
-    ) -> list[SQLFrequency]:
-        start_date = start.date() if isinstance(start, datetime) else start
-        end_date = end.date() if isinstance(end, datetime) else end
-
-        query = f"""
-            SELECT
-                array_to_string(t.words, ' ') AS text,
-                f.hits,
-                fa.author_id,
-                fa.platform_id
-            FROM frequency f
-            JOIN context c ON c.id = f.context_id
-            JOIN term t ON t.id = f.term_id
-            LEFT JOIN frequency_author fa ON fa.frequency_id = f.id
-            WHERE t.len = $1
-              AND c.attr = $2::attribute
-              AND c.day >= $3
-              AND c.day < $4
-              AND (
-                  SELECT SUM(f_sub.hits)
-                  FROM frequency f_sub
-                  WHERE f_sub.term_id = t.id
-              ) >= {MIN_HITS_NEEDED};
-        """
-        async with self.acquire() as conn:
-            rows = await conn.fetch(query, term_len, attr.value, start_date, end_date)
-
-        merged: dict[str, Stats] = {}
-        for r in rows:
-            txt = r["text"]
-            if txt not in merged:
-                merged[txt] = {"hits": 0, "authors": set()}
-            merged[txt]["hits"] += r["hits"]
-            if r["author_id"] is not None:
-                merged[txt]["authors"].add((r["author_id"], r["platform_id"]))
-
-        output: list[SQLFrequency] = []
-        for text, result in merged.items():
-            counted_authors = await self.count_nontrivial_authors(result["authors"])
-            formatted = format_freq_sqlite(
-                text=text,
-                attr=attr,
-                day=start,
-                hits=result["hits"],
-                authors=counted_authors,
-            )
-            output.append(formatted)
-        return output
-
-    async def total_hits_in_range(
-        self,
-        term_len: int,
-        attr: Attribute,
-        start: datetime,
-        end: datetime,
-    ) -> int:
-        start_date = start.date() if isinstance(start, datetime) else start
-        end_date = end.date() if isinstance(end, datetime) else end
-
-        query = f"""
-            SELECT COALESCE(SUM(f.hits), 0) AS total_hits
-            FROM frequency f
-            JOIN context c ON c.id = f.context_id
-            JOIN term t ON t.id = f.term_id
-            WHERE t.len = $1
-              AND c.attr = $2::attribute
-              AND c.day >= $3
-              AND c.day < $4
-              AND (
-                  SELECT SUM(f_sub.hits)
-                  FROM frequency f_sub
-                  WHERE f_sub.term_id = t.id
-              ) >= {MIN_HITS_NEEDED};
-        """
-        async with self.acquire() as conn:
-            val = await conn.fetchval(query, term_len, attr.value, start_date, end_date)
-            return int(val or 0)
-
-    async def total_authors_in_range(
-        self,
-        term_len: int,
-        attr: Attribute,
-        start: datetime,
-        end: datetime,
-    ) -> int:
-        start_date = start.date() if isinstance(start, datetime) else start
-        end_date = end.date() if isinstance(end, datetime) else end
-
-        query = f"""
-            SELECT DISTINCT fa.author_id, fa.platform_id
-            FROM frequency_author fa
-            JOIN frequency f ON f.id = fa.frequency_id
-            JOIN context c ON c.id = f.context_id
-            JOIN term t ON t.id = f.term_id
-            WHERE t.len = $1
-              AND c.attr = $2::attribute
-              AND c.day >= $3
-              AND c.day < $4
-              AND (
-                  SELECT SUM(f_sub.hits)
-                  FROM frequency f_sub
-                  WHERE f_sub.term_id = t.id
-              ) >= {MIN_HITS_NEEDED};
-        """
-        async with self.acquire() as conn:
-            rows = await conn.fetch(query, term_len, attr.value, start_date, end_date)
-            unique_authors: set[int] = {
-                (r["author_id"], r["platform_id"]) for r in rows
-            }
-            return await self.count_nontrivial_authors(unique_authors)
-
 
 def format_freq_pg(
     text: str,
@@ -608,26 +466,6 @@ def format_freq_pg(
             "authors": list(authors),
         }
     )
-
-
-def format_freq_sqlite(
-    text: str,
-    attr: Attribute,
-    day: datetime,
-    hits: int,
-    authors: int,
-) -> SQLFrequency:
-    d: SQLFrequency = {
-        "term": {
-            "text": text,
-            "len": len(text.split()),
-        },
-        "attr": ATTRIBUTE_IDS[attr],
-        "day": int(day.timestamp()),
-        "hits": hits,
-        "authors": authors,
-    }
-    return d
 
 
 def load_messagedb_from_env() -> MessageDB:

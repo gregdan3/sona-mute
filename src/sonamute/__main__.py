@@ -1,5 +1,4 @@
 # STL
-import os
 import json
 import asyncio
 import argparse
@@ -13,7 +12,7 @@ import asyncpg
 from sonamute.db import MessageDB, format_freq_pg, load_messagedb_from_env
 from sonamute.cli import SOURCES, menu_handler
 from sonamute.log import LOG, configure
-from sonamute.utils import now, batch_iter, gather_batch, months_in_range
+from sonamute.utils import now, batch_iter, months_in_range
 from sonamute.smtypes import (
     ATTRIBUTE_IDS,
     PreMessage,
@@ -24,8 +23,7 @@ from sonamute.smtypes import (
 )
 from sonamute.counters import countables, process_msg, get_sentence_stats
 from sonamute.constants import MAX_TERM_LEN, MIN_HITS_NEEDED
-from sonamute.gen_sqlite import generate_sqlite
-from sonamute.sources.generic import NULL_UUID, NULL_INT_ID, PlatformFetcher
+from sonamute.sources.generic import NULL_UUID, PlatformFetcher
 
 
 async def insert_raw_msg(db: MessageDB, msg: PreMessage) -> None:
@@ -148,9 +146,7 @@ async def amain(argv: argparse.Namespace):
 
     batch_size: int = argv.batch_size
     needs_db = (
-        any(source["to_db"] for source in actions["sources"])
-        or actions["frequency"]
-        or actions["sqlite"]
+        any(source["to_db"] for source in actions["sources"]) or actions["frequency"]
     )
     db = load_messagedb_from_env() if needs_db else None
     did_write = False
@@ -188,24 +184,6 @@ async def amain(argv: argparse.Namespace):
             assert db is not None
             await db_sents_to_freqs(db, batch_size, True)
 
-        if actions["sqlite"]:
-            root = actions["sqlite"]["root"]
-            filename = actions["sqlite"]["filename"]
-            dbpath = os.path.join(root, filename)
-            trimmed_filename = actions["sqlite"]["filename_trimmed"]
-            min_date = actions["sqlite"]["min_date"]
-            max_date = actions["sqlite"]["max_date"]
-
-            LOG.info(f"Dumping frequency data to {dbpath}")
-            assert db is not None
-            await generate_sqlite(
-                db,
-                dbpath,
-                trimmed_filename,
-                min_date,
-                max_date,
-                MAX_TERM_LEN,
-            )
     finally:
         if db is not None:
             await db.close()

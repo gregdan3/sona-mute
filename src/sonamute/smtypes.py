@@ -144,19 +144,3 @@ class PGFrequency(TypedDict):
     day: date
     hits: int
     authors: list[int]
-
-
-# sqlite generation
-class SQLTerm(TypedDict):
-    text: str
-    len: int
-
-
-class SQLFrequency(TypedDict):
-    # NOTE: exactly one of term or term_id are required.
-    term: SQLTerm
-    term_id: NotRequired[int]
-    attr: int
-    day: int
-    hits: int
-    authors: int
