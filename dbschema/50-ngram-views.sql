@@ -229,5 +229,4 @@ JOIN author a ON x.author_id = a.id
 ORDER BY
     x.len,
     -- x.attr,
-    effective_terms DESC
-LIMIT 1000;
+    effective_terms DESC;
