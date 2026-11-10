@@ -11,6 +11,8 @@ import orjson
 from bs4 import BeautifulSoup
 from typing_extensions import override
 
+from sonamute.log import LOG
+
 JSON = str | int | float | Mapping["JSON", "JSON"] | Iterable["JSON"]
 JSONable = JSON | tuple[JSON, ...]
 
@@ -41,19 +43,19 @@ class GelDBEncoder(json.JSONEncoder):
 
 
 def try_load_json(data: str) -> JSON | None:
-    content = None
     try:
-        content = cast(JSON, orjson.loads(data))
+        return cast(JSON, orjson.loads(data))
     except orjson.JSONDecodeError:
-        # TODO: print failing file? log leve?
-        pass
-    return content
+        return None
 
 
 def try_load_json_file(filename: str) -> JSON | None:
-    with open(filename, "r") as f:
-        content = try_load_json(f.read())
-    return content
+    try:
+        with open(filename, "r") as f:
+            return try_load_json(f.read())
+    except (OSError, UnicodeDecodeError) as e:
+        LOG.warning("Couldn't load JSON file %s", filename, exc_info=True)
+        return None
 
 
 def try_load_html(data: str):
