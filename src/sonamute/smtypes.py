@@ -5,7 +5,7 @@ from typing import TypedDict, NotRequired
 from datetime import date, datetime
 
 
-# Copy of Attribute enum in GelDB and PostgreSQL
+# Copy of Attribute enum in PostgreSQL
 # see also db/default.esdl, db/default.sql
 class Attribute(Enum):
     All = "All"

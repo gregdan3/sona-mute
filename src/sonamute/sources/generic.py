@@ -18,11 +18,7 @@ from sonamute.constants import (
 NULL_INT_ID = 0
 NULL_UUID = int_to_uuid(0)
 # I know this is a sin.
-# But GelDB is doing that thing where nulls are implicitly omitted from any `filter`,
-# even `NOT` filters for which nulls should intuitively match.
-# Tacking on an `OR exists` made the query significantly slower,
-# so now I'm using 0 for null.
-# May god have mercy on my soul.
+# But databases implicitly omit null from filters, which is even less desirable.
 
 
 def is_countable(msg: PreMessage) -> bool:

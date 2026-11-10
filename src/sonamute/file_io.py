@@ -32,16 +32,6 @@ class TupleJSONEncoder(json.JSONEncoder):
         return super().encode(o)
 
 
-class GelDBEncoder(json.JSONEncoder):
-    @override
-    def default(self, o: JSONable) -> str:
-        if isinstance(o, UUID):
-            return str(o)
-        if isinstance(o, datetime):
-            return o.isoformat()
-        return super(GelDBEncoder, self).default(o)
-
-
 def try_load_json(data: str) -> JSON | None:
     try:
         return cast(JSON, orjson.loads(data))
