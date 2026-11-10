@@ -2,23 +2,23 @@ include .env
 export
 MAIN=docker compose
 
-logs:
-	${MAIN} logs
-
 build:
-	${MAIN} build
+	${MAIN} build postgres
 
 up:
-	${MAIN} up -d
+	${MAIN} up -d postgres
 
 stop:
-	${MAIN} stop
+	${MAIN} stop postgres
 
 down:
 	${MAIN} down
 
 destroy:
 	${MAIN} down -v
+
+logs:
+	${MAIN} logs
 
 dump:
 	PGPASSWORD=$(POSTGRES_PASSWORD) ./dump-to-sqlite.sh "$(POSTGRES_HOST)" "$(POSTGRES_PORT)" "$(POSTGRES_USER)" "$(POSTGRES_DB)" "$$(date +%Y-%m-%d).sqlite"

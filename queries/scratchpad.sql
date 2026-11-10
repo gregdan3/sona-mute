@@ -163,3 +163,5 @@ ORDER BY
     -- x.attr,
     effective_terms DESC
 limit 1000;
+
+select date_trunc('day', m.postdate) as date, count(1) as msgs, count(1) FILTER (where m.score >= 0.8) as tp_msgs, count(distinct author_id) as authors, count(distinct author_id) filter (where m.score >= 0.8) from message m where m.container_id = 301377942062366741 and is_counted group by date_trunc('day', m.postdate) order by date asc; 
