@@ -1,4 +1,5 @@
 # STL
+from hashlib import sha256
 import io
 import json
 import asyncio
@@ -150,7 +151,7 @@ class MessageDB:
         assert row is not None
         return row
 
-    @alru_cache(maxsize=2**6)
+    @alru_cache(maxsize=2**6, key=lambda self, id, name: id)
     async def insert_platform(self, id: int, name: str) -> int:
         query = """
             INSERT INTO platform (id, name)
@@ -161,7 +162,9 @@ class MessageDB:
         row = await self._fetchrow_req(query, id, name)
         return cast(int, row["id"])
 
-    @alru_cache(maxsize=2**10)
+    @alru_cache(
+        maxsize=2**10, key=lambda self, id, platform_id, name: (id, platform_id)
+    )
     async def insert_community(self, id: UUID, platform_id: int, name: str) -> int:
         query = """
             INSERT INTO community (orig_id, platform_id, name)
@@ -172,7 +175,13 @@ class MessageDB:
         row = await self._fetchrow_req(query, id, platform_id, name)
         return cast(int, row["id"])
 
-    @alru_cache(maxsize=2**18)
+    @alru_cache(
+        maxsize=2**18,
+        key=lambda self, author_id, platform_id, name, is_bot, is_webhook: (
+            author_id,
+            platform_id,
+        ),
+    )
     async def insert_author(
         self,
         author_id: UUID,
@@ -338,7 +347,7 @@ class MessageDB:
                 for row in rows
             ]
 
-    @alru_cache(maxsize=2**16)
+    @alru_cache(maxsize=2**16, key=lambda self, words: sha256("".join(words).encode()))
     async def insert_term(self, words: Term) -> int:
         query = """
         INSERT INTO term (words)
