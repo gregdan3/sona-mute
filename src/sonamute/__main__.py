@@ -183,6 +183,7 @@ async def amain(argv: argparse.Namespace):
             LOG.info("Regenerating frequency data")
             assert db is not None
             await db_sents_to_freqs(db, batch_size, True)
+            await db.refresh_materialized_views()
 
     finally:
         if db is not None:
