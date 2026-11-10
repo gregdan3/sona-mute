@@ -156,9 +156,11 @@ class MessageDB:
         query = """
             INSERT INTO platform (id, name)
             VALUES ($1, $2)
-            -- ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
+            ON CONFLICT (id) DO UPDATE SET name = COALESCE(EXCLUDED.name, platform.name)
             RETURNING id;
         """
+        # the on-conflict allows safely re-running
+        # and the cache prevents the on-conflict from wasting a bunch of time
         row = await self._fetchrow_req(query, id, name)
         return cast(int, row["id"])
 
@@ -169,7 +171,7 @@ class MessageDB:
         query = """
             INSERT INTO community (orig_id, platform_id, name)
             VALUES ($1, $2, $3)
-            -- ON CONFLICT (orig_id, platform_id) DO UPDATE SET name = COALESCE(EXCLUDED.name, community.name)
+            ON CONFLICT (orig_id, platform_id) DO UPDATE SET name = COALESCE(EXCLUDED.name, community.name)
             RETURNING id;
         """
         row = await self._fetchrow_req(query, id, platform_id, name)
@@ -196,10 +198,7 @@ class MessageDB:
         query = """
             INSERT INTO author (orig_id, platform_id, name, is_bot, is_webhook)
             VALUES ($1, $2, COALESCE($3, ''), $4, $5)
-            ON CONFLICT (orig_id, platform_id) DO UPDATE SET
-                orig_id = EXCLUDED.orig_id,
-                platform_id = EXCLUDED.platform_id
-                -- name = EXCLUDED.name,
+            ON CONFLICT (orig_id, platform_id) DO UPDATE SET name = EXCLUDED.name
                 -- is_bot = EXCLUDED.is_bot,
                 -- is_webhook = EXCLUDED.is_webhook
             RETURNING id
@@ -219,8 +218,6 @@ class MessageDB:
         community_id = await self.insert_community(
             community["id"], platform_id, community["name"]
         )
-        # author_id, _ = await self.author_in_db(author_id, platform_id)
-        # if not author_id:
         author_id = await self.insert_author(
             author["id"],
             platform_id,
@@ -288,12 +285,6 @@ class MessageDB:
             message["id"],
             message["community"]["platform"]["id"],
         )
-        if row:
-            return cast(int, row["id"])
-
-    async def author_in_db(self, id: UUID, platform_id: int) -> int | None:
-        query = "SELECT id FROM author WHERE orig_id = $1 AND platform_id = $2"
-        row = await self._fetchrow(query, id, platform_id)
         if row:
             return cast(int, row["id"])
 
