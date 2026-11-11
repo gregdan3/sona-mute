@@ -279,7 +279,8 @@ class YouTubeFetcher(FileFetcher):
             video_id = int_to_uuid(youtube_id_to_int(video["id"]))
             community = self.get_community(video)
 
-            if not self.seen(video_id):
+            if not self.seen(video_id) and "timestamp" in video:
+                # TODO: there is a backup upload_date that is exactly YYYYMMDD
                 video_postdate = datetime.fromtimestamp(video["timestamp"], tz=UTC)
                 video_content = format_video_content(video)
                 video_author = self.get_author(video)
