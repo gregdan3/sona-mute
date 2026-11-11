@@ -237,7 +237,14 @@ class TelegramFetcher(FileFetcher):
                 if m["type"] == "service":
                     continue  # join notifs, channel edits, etc.
 
-                id = int_to_uuid(m["id"])
+                id = m["id"]
+                if id < 0:
+                    # some old formerly private chats started from -1bil
+                    # why? who knows. but uuid hates it
+                    # we could also just add 1bil to every id, but then we risk
+                    # collisions in low range
+                    id = abs(id)
+                id = int_to_uuid(id)
                 # telegram IDs are per-chat, so we check both
                 if self.seen(id, community["id"]):
                     continue
