@@ -45,6 +45,10 @@ IGNORED_AUTHORS_MAP: dict[int, set[int]] = {
     KnownPlatforms.Telegram.value: {
         307460571,  # old welcome bot in telegram
     },
+    KnownPlatforms.Reddit.value: {
+        11063919,  # u/AutoModerator
+        2217047718867,  # u/tokipona-ModTeam
+    },
 }
 # platform to container, then container to message ID range
 IGNORED_MESSAGES_MAP: dict[

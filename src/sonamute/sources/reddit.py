@@ -8,11 +8,12 @@ from collections.abc import Generator
 from typing_extensions import override
 
 # LOCAL
+from sonamute.constants import IGNORED_AUTHORS_MAP
 from sonamute.log import LOG
 from sonamute.utils import fake_uuid, int_to_uuid
 from sonamute.file_io import try_load_json
 from sonamute.smtypes import Author, Platform, Community, PreMessage, KnownPlatforms
-from sonamute.sources.generic import NULL_UUID, NULL_INT_ID, FileFetcher
+from sonamute.sources.generic import NULL_INT_ID, FileFetcher
 
 
 class RedditSubmission(TypedDict):
@@ -269,12 +270,17 @@ class RedditFetcher(FileFetcher):
         if author_fullname:
             _, author_id = split_type_id(author_fullname)
             author_id = int_to_uuid(author_id)
+
+        is_bot = False
+        if author_id.int in IGNORED_AUTHORS_MAP[KnownPlatforms.Reddit]:
+            is_bot = True
+
         author: Author = {
             "id": author_id,
             "name": author_name,
             "platform": self.platform,
             # there are bots but resp doesn't tell us
-            "is_bot": False,
+            "is_bot": is_bot,
             "is_webhook": False,
         }
         return author
