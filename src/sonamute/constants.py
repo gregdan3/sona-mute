@@ -29,6 +29,7 @@ IGNORED_CONTAINERS_MAP: dict[int, set[int]] = {
         1279459569160163440,  # mapona/toki-suli/musi Ako nanpa tu
         1366284542834376755,  # mapona/toki-suli/o ike e sona ilo
         1510089529246224455,  # mapona/toki-suli/toki Gibberish
+        1509549970368364638,  # mapona/toki-suli/Empire of Xednov
     }
 }
 
